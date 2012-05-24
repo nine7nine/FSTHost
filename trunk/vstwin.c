@@ -5,7 +5,6 @@
 #include <wine/exception.h>
 #include <pthread.h>
 #include <signal.h>
-#include <glib.h>
 
 #include "fst.h"
 
@@ -19,19 +18,9 @@ struct ERect{
     short right;
 };
 
-static pthread_mutex_t plugin_mutex;
 static FST* fst_first = NULL;
-const char magic[] = "FST Plugin State v002";
-
-DWORD  gui_thread_id = 0;
-
-extern boolean g_quit;
-
-
-
 
 #define DELAYED_WINDOW 1
-
 
 static LRESULT WINAPI 
 my_window_proc (HWND w, UINT msg, WPARAM wp, LPARAM lp)
@@ -51,8 +40,8 @@ my_window_proc (HWND w, UINT msg, WPARAM wp, LPARAM lp)
 	case WM_CLOSE:
 		//printf("wtf.\n" );
 		PostQuitMessage (0);
-	case WM_DESTROY:
 	case WM_NCDESTROY:
+	case WM_DESTROY:
 		/* we should never get these */
 		//return 0;
 		break;
@@ -96,17 +85,26 @@ static FST*
 fst_new ()
 {
 	FST* fst = (FST*) calloc (1, sizeof (FST));
+	int i;
+
 	pthread_mutex_init (&fst->lock, NULL);
+	pthread_mutex_init (&fst->event_call_lock, NULL);
 	pthread_cond_init (&fst->window_status_change, NULL);
+	pthread_cond_init (&fst->program_change, NULL);
 	pthread_cond_init (&fst->plugin_dispatcher_called, NULL);
 	fst->want_program = -1;
-	return fst;
-}
+	fst->event_call = RESET;
+	for (i=0; i<128; i++ )
+		fst->midi_map[i] = -1;
 
-static FSTHandle* 
-fst_handle_new ()
-{
-	FSTHandle* fst = (FSTHandle*) calloc (1, sizeof (FSTHandle));
+	if (fst_first == NULL) {
+		fst_first = fst;
+	} else {
+		FST* p = fst_first;
+		while (p->next) p = p->next;
+		p->next = fst;
+	}
+
 	return fst;
 }
 
@@ -114,14 +112,23 @@ DWORD WINAPI gui_event_loop (LPVOID param)
 {
 	MSG msg;
 	FST* fst;
-	char c;
+	struct AEffect* plugin;
 	HMODULE hInst;
 	HWND window;
+	DWORD gui_thread_id;
+	HANDLE* h_thread;
 
 	gui_thread_id = GetCurrentThreadId ();
+	h_thread = GetCurrentThread ();
+
+	//SetPriorityClass ( h_thread, REALTIME_PRIORITY_CLASS);
+	SetPriorityClass ( h_thread, ABOVE_NORMAL_PRIORITY_CLASS);
+	//SetThreadPriority ( h_thread, THREAD_PRIORITY_TIME_CRITICAL);
+	SetThreadPriority ( h_thread, THREAD_PRIORITY_ABOVE_NORMAL);
+	printf ("W32 GUI EVENT Thread Class: %d\n", GetPriorityClass (h_thread));
+	printf ("W32 GUI EVENT Thread Priority: %d\n", GetThreadPriority(h_thread));
 
 	/* create a dummy window for timer events */
-
 	if ((hInst = GetModuleHandleA (NULL)) == NULL) {
 		fst_error ("can't get module handle");
 		return 1;
@@ -137,78 +144,76 @@ DWORD WINAPI gui_event_loop (LPVOID param)
 		fst_error ("cannot create dummy timer window");
 	}
 
-	if (!SetTimer (window, 1000, 20, NULL)) {
+	if (!SetTimer (window, 1000, 20, NULL))
 		fst_error ("cannot set timer on dummy window");
-	}
 
 	while (GetMessageA (&msg, NULL, 0,0)) {
-		TranslateMessage( &msg );
-		DispatchMessageA (&msg);
+	   TranslateMessage( &msg );
+	   DispatchMessageA (&msg);
 
-		/* handle window creation requests, destroy requests, 
-		   and run idle callbacks 
-		*/
-		
+	   /* handle window creation requests, destroy requests, 
+	      and run idle callbacks 
+	   */
+	   if ( msg.message != WM_TIMER )
+		continue;
 
-		if( msg.message == WM_TIMER  ) {
-		    pthread_mutex_lock (&plugin_mutex);
-again:
-		    for (fst = fst_first; fst; fst = fst->next) {
+	   for (fst = fst_first; fst; fst = fst->next) {
+	      plugin = fst->plugin;
 
-			if (fst->destroy) {
-			    if (fst->window) {
-				fst->plugin->dispatcher( fst->plugin, effEditClose, 0, 0, NULL, 0.0 );
-				CloseWindow (fst->window);
-				fst->window = NULL;
-				fst->destroy = FALSE;
-			    }
-			    fst_event_loop_remove_plugin (fst);
-			    fst->been_activated = FALSE;
-			    pthread_mutex_lock (&fst->lock);
-			    pthread_cond_signal (&fst->window_status_change);
-			    pthread_mutex_unlock (&fst->lock);
-			    goto again;
-			} 
+	      switch (fst->event_call) {
+	      case EDITOR_OPEN:		
+	         pthread_mutex_lock (&fst->lock);
+	         if (fst->window == NULL) {
+	            if (! fst_create_editor (fst))
+	               fst_error ("cannot create editor for plugin %s", fst->handle->name);
+	         }
+	         fst->event_call = RESET;
+	         pthread_cond_signal (&fst->window_status_change);
+	         pthread_mutex_unlock (&fst->lock);
+	         break;
+	      case EDITOR_CLOSE:
+	        pthread_mutex_lock (&fst->lock);
+		if (fst->window != NULL)
+		   plugin->dispatcher( plugin, effEditClose, 0, 0, NULL, 0.0f );
+	        fst->event_call = RESET;
+	        pthread_cond_signal (&fst->window_status_change);
+	        pthread_mutex_unlock (&fst->lock);
+	        break;
 
-			if (fst->window == NULL) {
-			    pthread_mutex_lock (&fst->lock);
-			    if (fst_create_editor (fst)) {
-				fst_error ("cannot create editor for plugin %s", fst->handle->name);
-				fst_event_loop_remove_plugin (fst);
-				pthread_cond_signal (&fst->window_status_change);
-				pthread_mutex_unlock (&fst->lock);
-				goto again;
-			    }
-			    /* condition/unlock handled when we receive WM_ACTIVATE */
-			    /* XXX: not true. its unlocked in fst_create_editor()   */
-			}
-			if(fst->want_program != -1 ) {
-				fst->plugin->dispatcher (fst->plugin, effSetProgram, 0, fst->want_program, NULL, 0);
-				fst->want_program = -1; 
-			}
-			
-			if(fst->dispatcher_wantcall) {
+	      case PROGRAM_CHANGE:
+	         pthread_mutex_lock (&fst->lock);
+	         if (fst->want_program != -1) {
+	             plugin->dispatcher (plugin, effBeginSetProgram, 0, fst->want_program, NULL, 0);
+	             plugin->dispatcher (plugin, effSetProgram, 0, fst->want_program, NULL, 0);
+	             plugin->dispatcher (plugin, effEndSetProgram, 0, fst->want_program, NULL, 0);
+	             fst->want_program = -1; 
+	         }
+	         fst->event_call = RESET;
+	         pthread_cond_signal (&fst->program_change);
+	         pthread_mutex_unlock (&fst->lock);
+	         break;
 
-				pthread_mutex_lock (&fst->lock);
-				fst->dispatcher_retval = fst->plugin->dispatcher( fst->plugin, fst->dispatcher_opcode,
-										  fst->dispatcher_index,
-										  fst->dispatcher_val,
-										  fst->dispatcher_ptr,
-										  fst->dispatcher_opt );
-				fst->dispatcher_wantcall = 0;
-				pthread_cond_signal (&fst->plugin_dispatcher_called);
-				pthread_mutex_unlock (&fst->lock);
-			}
+	      case DISPATCHER:
+	         pthread_mutex_lock (&fst->lock);
+	         fst->dispatcher_retval = fst->plugin->dispatcher( plugin, fst->dispatcher_opcode,
+	                                                           fst->dispatcher_index,
+	                                                           fst->dispatcher_val,
+	                                                           fst->dispatcher_ptr,
+	                                                           fst->dispatcher_opt );
+	         fst->event_call = RESET;
+	         pthread_cond_signal (&fst->plugin_dispatcher_called);
+	         pthread_mutex_unlock (&fst->lock);
+	         break;
+	      }
 
-			pthread_mutex_lock (&fst->lock);
-			fst->plugin->dispatcher (fst->plugin, effEditIdle, 0, 0, NULL, 0);
-			if( fst->wantIdle ) {
-				fst->plugin->dispatcher (fst->plugin, 53, 0, 0, NULL, 0);
-			}
-			pthread_mutex_unlock (&fst->lock);
-		    }
-		    pthread_mutex_unlock (&plugin_mutex);
-		}
+	      if (fst->wantIdle)
+	         plugin->dispatcher (plugin, effIdle, 0, 0, NULL, 0);  
+
+	      if (fst->window)
+	         plugin->dispatcher (plugin, effEditIdle, 0, 0, NULL, 0);  
+
+	      fst->current_program = plugin->dispatcher( plugin, effGetProgram, 0, 0, NULL, 0.0f );
+	   }
 	}
 	//printf( "quit........\n" );
 	//exit(0);
@@ -216,84 +221,58 @@ again:
 }
 
 int
-fst_init (HMODULE hInst)
+start_gui_event_loop (HMODULE hInst)
 {
 	WNDCLASSEX wclass;
+	HANDLE t_thread; 
 	//HMODULE hInst;
 
 	//if ((hInst = GetModuleHandleA (NULL)) == NULL) {
 	//	fst_error ("can't get module handle");
 	//	return -1;
 	//}
-    wclass.cbSize = sizeof(WNDCLASSEX);
-    wclass.style = 0;
-    wclass.lpfnWndProc = my_window_proc;
-    wclass.cbClsExtra = 0;
-    wclass.cbWndExtra = 0;
-    wclass.hInstance = hInst;
-    wclass.hIcon = LoadIcon(hInst, "FST");
-    wclass.hCursor = LoadCursor(0, IDI_APPLICATION);
+	wclass.cbSize = sizeof(WNDCLASSEX);
+	wclass.style = 0;
+//	wclass.style = (CS_HREDRAW | CS_VREDRAW);
+	wclass.lpfnWndProc = my_window_proc;
+	wclass.cbClsExtra = 0;
+	wclass.cbWndExtra = 0;
+	wclass.hInstance = hInst;
+	wclass.hIcon = LoadIcon(hInst, "FST");
+	wclass.hCursor = LoadCursor(0, IDI_APPLICATION);
 //    wclass.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
-    wclass.lpszMenuName = "MENU_FST";
-    wclass.lpszClassName = "FST";
-    wclass.hIconSm = 0;
-
-#if 0
-	wc.style = 0;
-	wc.lpfnWndProc = my_window_proc;
-	wc.cbClsExtra = 0;
-	wc.cbWndExtra = 0;
-	wc.hInstance = hInst;
-	wc.hIcon = LoadIconA( hInst, "FST");
-	wc.hCursor = LoadCursorA( NULL, IDI_APPLICATION );
-	wc.hbrBackground = GetStockObject( BLACK_BRUSH );
-	wc.lpszMenuName = "FSTMENU";
-	wc.lpszClassName = "FST";
-	//wc.hIconSm = 0;
-#endif
+	wclass.lpszMenuName = "MENU_FST";
+	wclass.lpszClassName = "FST";
+	wclass.hIconSm = 0;
 
 	if (!RegisterClassExA(&wclass)){
 		printf( "Class register failed :(\n" );
-		return -1;
+		return 0;
 	}
-
+	
 	if (CreateThread (NULL, 0, gui_event_loop, NULL, 0, NULL) == NULL) {
 		fst_error ("could not create new thread proxy");
-		return -1;
+		return 0;
 	}
-	return 0;
+
+
+	return 1;
 }
 
-int
+int 
 fst_run_editor (FST* fst)
 {
-	pthread_mutex_lock (&plugin_mutex);
+	/* wait for the plugin editor window to be created (or not) */
+	pthread_mutex_lock (&fst->event_call_lock);
+	pthread_mutex_lock (&fst->lock);
 
-	if (fst_first == NULL) {
-		fst_first = fst;
-	} else {
-		FST* p = fst_first;
-		while (p->next) {
-			p = p->next;
-		}
-		p->next = fst;
+	if (!fst->window) {
+		fst->event_call = EDITOR_OPEN;
+		pthread_cond_wait (&fst->window_status_change, &fst->lock);
 	}
 
-	//printf( "gui_thread_id = %d\n", gui_thread_id );
-//	if (!PostThreadMessageA (gui_thread_id, WM_USER, 0, 0)) {
-//		fst_error ("could not post message to gui thread");
-//		return -1;
-//	}
-
-	pthread_mutex_unlock (&plugin_mutex);
-
-	/* wait for the plugin editor window to be created (or not) */
-
-	pthread_mutex_lock (&fst->lock);
-	if (!fst->window) {
-		pthread_cond_wait (&fst->window_status_change, &fst->lock);
-	} 
 	pthread_mutex_unlock (&fst->lock);
+	pthread_mutex_unlock (&fst->event_call_lock);
 
 	if (!fst->window) {
 		fst_error ("no window created for VST plugin editor");
@@ -304,17 +283,35 @@ fst_run_editor (FST* fst)
 }
 
 int
-fst_call_dispatcher(FST *fst, int opcode, int index, int val, void *ptr, float opt ) {
+fst_program_change (FST *fst, int want_program)
+{
+        pthread_mutex_lock (&fst->event_call_lock);
+	pthread_mutex_lock (&fst->lock);
+	
+	fst->want_program = want_program;
+        fst->event_call = PROGRAM_CHANGE;
+
+        pthread_cond_wait (&fst->program_change, &fst->lock);
+
+        pthread_mutex_unlock (&fst->lock);
+        pthread_mutex_unlock (&fst->event_call_lock);
+}
+
+int 
+fst_call_dispatcher(FST *fst, int opcode, int index, int val, void *ptr, float opt )
+{
+	pthread_mutex_lock (&fst->event_call_lock);
 	pthread_mutex_lock (&fst->lock);
 	fst->dispatcher_opcode = opcode;
 	fst->dispatcher_index = index;
 	fst->dispatcher_val = val;
 	fst->dispatcher_ptr = ptr;
 	fst->dispatcher_opt = opt;
-	fst->dispatcher_wantcall = 1;
+	fst->event_call = DISPATCHER;
 
 	pthread_cond_wait (&fst->plugin_dispatcher_called, &fst->lock);
 	pthread_mutex_unlock (&fst->lock);
+	pthread_mutex_unlock (&fst->event_call_lock);
 
 	return fst->dispatcher_retval;
 }
@@ -333,12 +330,12 @@ fst_create_editor (FST* fst)
 
 	if (!(fst->plugin->flags & effFlagsHasEditor)) {
 		fst_error ("Plugin \"%s\" has no editor", fst->handle->name);
-		return -1;
+		return 0;
 	}
 
 	if ((hInst = GetModuleHandleA (NULL)) == NULL) {
 		fst_error ("can't get module handle");
-		return 1;
+		return 0;
 	}
 	
 //	if ((window = CreateWindowExA (WS_EX_TOOLWINDOW | WS_EX_TRAYWINDOW, "FST", fst->handle->name,
@@ -351,7 +348,7 @@ fst_create_editor (FST* fst)
 				       hInst,
 				       NULL)) == NULL) {
 		fst_error ("cannot create editor window");
-		return 1;
+		return 0;
 	}
 
 	if (!SetPropA (window, "fst_ptr", fst)) {
@@ -361,10 +358,6 @@ fst_create_editor (FST* fst)
 	fst->window = window;
 //	fst->xid = (int) GetPropA (window, "__wine_x11_whole_window");
 
-
-
-
-
 	//printf( "effEditOpen......\n" );
 	fst->plugin->dispatcher (fst->plugin, effEditOpen, 0, 0, fst->window, 0 );
 	fst->plugin->dispatcher (fst->plugin, effEditGetRect, 0, 0, &er, 0 );
@@ -373,38 +366,43 @@ fst_create_editor (FST* fst)
 	fst->height =  er->bottom-er->top;
 	//printf( "get rect ses... %d,%d\n", fst->width, fst->height );
 
-	//SetWindowPos (fst->window, 0, 9999, 9999, er->right-er->left+8, er->bottom-er->top+26, 0);
+//	SetWindowPos (fst->window, 0, 0, 0, fst->width, fst->height + 24, 0);
 	SetWindowPos (fst->window, 0, 9999, 9999, 2, 2, 0);
 	ShowWindow (fst->window, SW_SHOWNA);
 	//SetWindowPos (fst->window, 0, 0, 0, er->right-er->left+8, er->bottom-er->top+26, SWP_NOMOVE|SWP_NOZORDER);
 
 	fst->xid = (int) GetPropA (window, "__wine_x11_whole_window");
 	printf( "And xid = %x\n", fst->xid );
-					fst->been_activated = TRUE;
-					pthread_cond_signal (&fst->window_status_change);
-					pthread_mutex_unlock (&fst->lock);
 
-	return 0;
+	return 1;
 }
 
 void
 fst_destroy_editor (FST* fst)
 {
-	FST* p;
-	FST* prev;
-
+	pthread_mutex_lock (&fst->event_call_lock);
 	pthread_mutex_lock (&fst->lock);
 	if (fst->window) {
-		fst->destroy = TRUE;
-		//if (!PostThreadMessageA (gui_thread_id, WM_USER, 0, 0)) {
-		//if (!PostThreadMessageA (gui_thread_id, WM_QUIT, 0, 0)) {
-		//	fst_error ("could not post message to gui thread");
-		//}
+		fst->event_call = EDITOR_CLOSE;
 		pthread_cond_wait (&fst->window_status_change, &fst->lock);
-
+		DestroyWindow(fst->window);
+		fst->window = NULL;
 	}
 	pthread_mutex_unlock (&fst->lock);
+	pthread_mutex_unlock (&fst->event_call_lock);
 }
+
+void
+fst_suspend (FST *fst) {
+	fst_call_dispatcher (fst, effStopProcess, 0, 0, NULL, 0.0f);
+	fst_call_dispatcher (fst, effMainsChanged, 0, 0, NULL, 0.0f);
+} 
+ 
+void
+fst_resume (FST *fst) { 
+	fst_call_dispatcher (fst, effMainsChanged, 0, 1, NULL, 0.0f);
+	fst_call_dispatcher (fst, effStartProcess, 0, 0, NULL, 0.0f);
+} 
 
 void
 fst_event_loop_remove_plugin (FST* fst)
@@ -413,130 +411,16 @@ fst_event_loop_remove_plugin (FST* fst)
 	FST* prev;
 
 	for (p = fst_first, prev = NULL; p->next; prev = p, p = p->next) {
-		if (p == fst) {
-			if (prev) {
-				prev->next = p->next;
-			}
-		}
+		if (p == fst && prev)
+			prev->next = p->next;
 	}
 
-	if (fst_first == fst) {
+	if (fst_first == fst)
 		fst_first = fst_first->next;
-	}
-
 }
-
-#if 0
-int gui_event_loop (FST *fst)
-{
-	printf( "in gui loop\n" );
-	MSG msg;
-	char c;
-	HMODULE hInst;
-	HWND window;
-
-	if ((hInst = GetModuleHandleA (NULL)) == NULL) {
-		fst_error ("can't get module handle");
-		return 1;
-	}
-
-	while (GetMessageA (&msg, NULL, 0,0)) {
-		TranslateMessage( &msg );
-		DispatchMessageA (&msg);
-
-	printf( "in gui loop\n" );
-
-	}
-}
-
-void
-fst_set_focus (FST* fst)
-{
-	if (fst->window) {
-		SetFocus (fst->window);
-	}
-}
-
-int
-fst_run_editor (FST* fst, HMODULE hInst)
-{
-	//HMODULE hInst;
-	char class[20];
-	HWND window;
-	struct ERect *er;
-
-
-	if (!(fst->plugin->flags & effFlagsHasEditor)) {
-		fst_error ("Plugin \"%s\" has no editor", fst->handle->name);
-		return -1;
-	}
-
-	
-	//if ((hInst = GetModuleHandleA (NULL)) == NULL) {
-	//	fst_error ("can't get module handle");
-	//	return 1;
-	//}
-	
-
-
-	fst->plugin->dispatcher (fst->plugin, effEditGetRect, 0, 0, &er, 0 );
-
-	fst->width =  er->right-er->left;
-	fst->height =  er->bottom-er->top;
-	printf( "get rect ses... %d,%d\n", fst->width, fst->height );
-
-	//SetWindowPos (fst->window, 0, 0, 0, er->right-er->left+8, er->bottom-er->top+26, SWP_SHOWWINDOW);
-
-//	if ((window = CreateWindowExA (WS_EX_TOOLWINDOW | WS_EX_TRAYWINDOW, "FST", fst->handle->name,
-	if ((window = CreateWindowExA (0, "FST", fst->handle->name,
-				       (WS_OVERLAPPEDWINDOW | WS_THICKFRAME & ~WS_MAXIMIZEBOX),
-				       CW_USEDEFAULT, CW_USEDEFAULT,
-				       fst->width+8, fst->height+26,
-				       NULL, NULL,
-				       hInst,
-				       NULL)) == NULL) {
-		fst_error ("cannot create editor window");
-		return 1;
-	}
-
-
-	if (!SetPropA (window, "fst_ptr", fst)) {
-		fst_error ("cannot set fst_ptr on window");
-	}
-
-	printf( "Trying to open Editor\n" );
-	fst->plugin->dispatcher (fst->plugin, effEditOpen, 0, 0, window, 0 );
-	printf( "effEditOpen returned\n" );
-	ShowWindow (window, SW_SHOW);
-
-	if (!SetTimer (window, 1000, 100, NULL)) {
-		fst_error ("cannot set timer on dummy window");
-	}
-
-	fst->window = window;
-	fst->xid = (int) GetPropA (window, "__wine_x11_whole_window");
-
-//	XChangeWindowAttributes( XOpenDisplay(NULL), fst->xid, CWOverrideRedirect, ~0 );
-
-
-	return 0;
-}
-
-
-void
-fst_destroy_editor (FST* fst)
-{
-	if (fst->window) {
-		if (!PostMessageA (fst->window, WM_QUIT, 0, 0)) {
-			fst_error ("could not post message to gui thread");
-		}
-	}
-}
-#endif
 
 HMODULE
-fst_load_vst_library(const char * path)
-{
+fst_load_vst_library(FSTHandle* fhandle, const char * path) {
 	HMODULE dll;
 	char * full_path;
 	char * envdup;
@@ -545,13 +429,13 @@ fst_load_vst_library(const char * path)
 	size_t len2;
 
 	if ((dll = LoadLibraryA (path)) != NULL) {
+		fhandle->path = strdup(path);
 		return dll;
 	}
 
 	envdup = getenv ("VST_PATH");
-	if (envdup == NULL) {
+	if (envdup == NULL)
 		return NULL;
-	}
 
 	envdup = strdup (envdup);
 	if (envdup == NULL) {
@@ -571,68 +455,54 @@ fst_load_vst_library(const char * path)
 		memcpy(full_path + len1 + 1, path, len2);
 		full_path[len1 + 1 + len2] = '\0';
 
-		if ((dll = LoadLibraryA (full_path)) != NULL) {
+		if ((dll = LoadLibraryA (full_path)) != NULL)
 			break;
-		}
 
+		free(full_path);
 		vst_path = strtok (NULL, ":");
 	}
 
 	free(envdup);
 
+	fhandle->path = full_path;
 	return dll;
 }
 
 FSTHandle*
-fst_load (const char *path)
-{
-	char* buf, *buf2;
+fst_load (const char * path) {
+	char * buf;
+	char * mypath;
+	char * period;
+	WCHAR* wbuf;
 	FSTHandle* fhandle;
-	char* period;
+	LPWSTR dos_file_name;
 
-	fhandle = fst_handle_new ();
-	
-	// XXX: Would be nice to find the correct call for this.
-	//      if the user does not configure Z: to be / we are doomed :(
+	mypath = strdup(path);
+	if (strstr (path, ".dll") == NULL)
+		sprintf (mypath, "%s.dll", path);
 
-	if (strstr (path, ".dll") == NULL) {
-
-		buf = (char *) malloc (strlen (path) + 7);
-
-		if( path[0] == '/' ) {
-		    sprintf (buf, "Z:%s.dll", path);
-		} else {
-		    sprintf (buf, "%s.dll", path);
-		}
-
-		fhandle->nameptr = strdup (path);
-
-	} else {
-
-		buf = (char *) malloc (strlen (path) + 3);
-
-		if( path[0] == '/' ) {
-		    sprintf (buf, "Z:%s", path);
-		} else {
-		    sprintf (buf, "%s", path);
-		}
-
-		fhandle->nameptr = strdup (path);
-	}
-	
-	fhandle->name = basename (fhandle->nameptr);
+	fhandle = (FSTHandle*) calloc (1, sizeof (FSTHandle));
+	fhandle->name = basename (strdup(mypath));
 
 	/* strip off .dll */
-
-	if ((period = strrchr (fhandle->name, '.')) != NULL) {
+	if ((period = strrchr (fhandle->name, '.')) != NULL)
 		*period = '\0';
-	}
 
-	if ((fhandle->dll = fst_load_vst_library (buf)) == NULL) {
+	// Get wine path
+	buf = (char *) malloc (MAX_PATH);
+	printf("UnixPath: %s\n", mypath);
+	wbuf = wine_get_dos_file_name(mypath);
+	free(mypath);
+	WideCharToMultiByte(CP_UNIXCP, 0, wbuf, -1, buf, MAX_PATH, NULL, NULL);
+	printf("WinePath: %s\n", buf);
+
+	if ((fhandle->dll = fst_load_vst_library (fhandle, buf)) == NULL) {
+		free(buf);
 		fst_unload (fhandle);
 		return NULL;
 	}
 
+	free(buf);
 	if ((fhandle->main_entry = (main_entry_t) GetProcAddress (fhandle->dll, "main")) == NULL) {
 		fst_unload (fhandle);
 		return NULL;
@@ -644,17 +514,16 @@ fst_load (const char *path)
 int
 fst_unload (FSTHandle* fhandle)
 {
-	if (fhandle->plugincnt) {
+	if (fhandle->plugincnt)
 		return -1;
-	}
 
 	if (fhandle->dll) {
 		FreeLibrary (fhandle->dll);
 		fhandle->dll = NULL;
 	}
 
-	if (fhandle->nameptr) {
-		free (fhandle->nameptr);
+	if (fhandle->path) {
+		free (fhandle->path);
 		fhandle->name = NULL;
 	}
 	
@@ -666,6 +535,8 @@ FST*
 fst_instantiate (FSTHandle* fhandle, audioMasterCallback amc, void* userptr)
 {
 	FST* fst = fst_new ();
+	int i;
+	char ParamName[32];
 
 	if( fhandle == NULL ) {
 	    fst_error( "the handle was NULL\n" );
@@ -677,7 +548,7 @@ fst_instantiate (FSTHandle* fhandle, audioMasterCallback amc, void* userptr)
 		free (fst);
 		return NULL;
 	}
-	
+
 	fst->handle = fhandle;
 	fst->plugin->user = userptr;
 		
@@ -686,12 +557,11 @@ fst_instantiate (FSTHandle* fhandle, audioMasterCallback amc, void* userptr)
 		free (fst);
 		return NULL;
 	}
-	
-	fst->plugin->dispatcher (fst->plugin, effOpen, 0, 0, 0, 0);
-	//fst->plugin->dispatcher (fst->plugin, effMainsChanged, 0, 0, NULL, 0);
+
+	fst->plugin->dispatcher (fst->plugin, effOpen, 0, 0, NULL, 0.0f);
 
 	fst->handle->plugincnt++;
-	fst->wantIdle = 0;
+	fst->event_call = RESET;
 
 	return fst;
 }
@@ -699,218 +569,57 @@ fst_instantiate (FSTHandle* fhandle, audioMasterCallback amc, void* userptr)
 void
 fst_close (FST* fst)
 {
+	void * mywin = fst->window;
+
+	fst_suspend(fst);
+
 	fst_destroy_editor (fst);
+	DestroyWindow(mywin);
 
-	fst->plugin->dispatcher (fst->plugin, effMainsChanged, 0, 0, NULL, 0);
-	fst->plugin->dispatcher (fst->plugin, effClose, 0, 0, 0, 0);
+	fst_event_loop_remove_plugin (fst);
 
-	if (fst->handle->plugincnt) {
+	fst->plugin->dispatcher (fst->plugin, effClose, 0, 0, NULL, 0.0f);
+
+	if (fst->handle->plugincnt)
 		--fst->handle->plugincnt;
-	}
 }
 
 int
-fst_get_XID (FST* fst)
+fst_load_state (FST * fst, char * filename)
 {
-	return fst->xid;
-}
+	char * file_ext = strrchr(filename, '.');
 
-float htonf (float v)
-{
-      float result;
-      char * fin = (char*)&v;
-      char * fout = (char*)&result;
-      fout[0] = fin[3];
-      fout[1] = fin[2];
-      fout[2] = fin[1];
-      fout[3] = fin[0];
-      return result;
-}
-
-#if 0
-int fst_load_state (FST * fst, char * filename)
-{
-	FILE * f = fopen (filename, "rb");
-	if (f) {
-		char testMagic[sizeof (magic)];
-		fread (&testMagic, sizeof (magic), 1, f);
-		if (strcmp (testMagic, magic)) {
-			printf ("File corrupt\n");
-			return FALSE;
-		}
-
-		char productString[64];
-		char vendorString[64];
-		char effectName[64];
-		char testString[64];
-		unsigned length;
-		int success;
-
-		fread (&length, sizeof (unsigned), 1, f);
-		length = htonl (length);
-		fread (productString, length, 1, f);
-		productString[length] = 0;
-		printf ("Product string: %s\n", productString);
-
-		success = fst_call_dispatcher( fst, effGetProductString, 0, 0, testString, 0 );
-		if (success == 1) {
-			if (strcmp (testString, productString) != 0) {
-				printf ("Product string mismatch! Plugin has: %s\n", testString);
-				fclose (f);
-				return FALSE;
-			}
-		} else if (length != 0) {
-			printf ("Product string mismatch! Plugin has none.\n", testString);
-			fclose (f);
-			return FALSE;
-		}
-
-		fread (&length, sizeof (unsigned), 1, f);
-		length = htonl (length);
-		fread (effectName, length, 1, f);
-		effectName[length] = 0;
-		printf ("Effect name: %s\n", effectName);
-
-		success = fst_call_dispatcher( fst, effGetEffectName, 0, 0, testString, 0 );
-		if (success == 1) {
-			if (strcmp (testString, effectName) != 0) {
-				printf ("Effect name mismatch! Plugin has: %s\n", testString);
-				fclose (f);
-				return FALSE;
-			}
-		} else if (length != 0) {
-			printf ("Effect name mismatch! Plugin has none.\n", testString);
-			fclose (f);
-			return FALSE;
-		}
-
-		fread (&length, sizeof (unsigned), 1, f);
-		length = htonl (length);
-		fread (vendorString, length, 1, f);
-		vendorString[length] = 0;
-		printf ("Vendor string: %s\n", vendorString);
-
-		success = fst_call_dispatcher( fst, effGetVendorString, 0, 0, testString, 0 );
-		if (success == 1) {
-			if (strcmp (testString, vendorString) != 0) {
-				printf ("Vendor string mismatch! Plugin has: %s\n", testString);
-				fclose (f);
-				return FALSE;
-			}
-		} else if (length != 0) {
-			printf ("Vendor string mismatch! Plugin has none.\n", testString);
-			fclose (f);
-			return FALSE;
-		}
-
-		int numParam;
-		unsigned i;
-		fread (&numParam, sizeof (int), 1, f);
-		numParam = htonl (numParam);
-		for (i = 0; i < numParam; ++i) {
-			float val;
-			fread (&val, sizeof (float), 1, f);
-			val = htonf (val);
-
-			pthread_mutex_lock( &fst->lock );
-			fst->plugin->setParameter( fst->plugin, i, val );
-			pthread_mutex_unlock( &fst->lock );
-		}
-
-		int bytelen;
-		fread (&bytelen, sizeof (int), 1, f);
-		bytelen = htonl (bytelen);
-		if (bytelen) {
-			char * buf = malloc (bytelen);
-			fread (buf, bytelen, 1, f);
-
-			fst_call_dispatcher( fst, 24, 0, bytelen, buf, 0 );
-			free (buf);
-		}
+	if ( (strcmp(file_ext, ".fxp") == 0) || 
+	     (strcmp(file_ext, ".FXP") == 0) ||
+	     (strcmp(file_ext, ".fxb") == 0) ||
+	     (strcmp(file_ext, ".FXB") == 0)
+	) {    
+		fst_load_fxfile(fst, filename);
+	} else if (strcmp(file_ext, ".fps") == 0) {
+		fst_load_fps(fst, filename);
 	} else {
-		printf ("Could not open state file\n");
-		return FALSE;
+		printf("Unkown file type\n");
+		return 0;
 	}
-	return TRUE;
 
+	return 1;
 }
-#endif
 
-int fst_save_state (FST * fst, char * filename)
+int
+fst_save_state (FST * fst, char * filename)
 {
-	FILE * f = fopen (filename, "wb");
-	if (f) {
-		int bytelen;
-		int numParams = fst->plugin->numParams;
-		unsigned i;
-		char productString[64];
-		char effectName[64];
-		char vendorString[64];
-		int success;
-		unsigned length;
+	char * file_ext = strrchr(filename, '.');
 
-		// write header
-		fprintf( f, "<plugin_state>\n" );
-
-		success = fst_call_dispatcher( fst, effGetProductString, 0, 0, productString, 0 );
-		if( success == 1 ) {
-			fprintf (f, "  <check field=\"productString\" value=\"%s\"/>\n", productString);
-		} else {
-			printf ("No product string\n");
-		}
-
-		success = fst_call_dispatcher( fst, effGetEffectName, 0, 0, effectName, 0 );
-		if( success == 1 ) {
-			fprintf (f, "  <check field=\"effectName\" value=\"%s\"/>\n", effectName);
-			printf ("Effect name: %s\n", effectName);
-		} else {
-			printf ("No effect name\n");
-		}
-
-		success = fst_call_dispatcher( fst, effGetVendorString, 0, 0, vendorString, 0 );
-		if( success == 1 ) {
-			fprintf (f, "  <check field=\"vendorString\" value=\"%s\"/>\n", vendorString);
-			printf ("Vendor string: %s\n", vendorString);
-		} else {
-			printf ("No vendor string\n");
-		}
-
-
-		if( fst->plugin->flags & 32 ) {
-			numParams = 0;
-		}
-
-		for( i=0; i<numParams; i++ ) {
-			float val;
-			
-			pthread_mutex_lock( &fst->lock );
-			val = fst->plugin->getParameter( fst->plugin, i );
-			pthread_mutex_unlock( &fst->lock );
-			fprintf( f, "  <param index=\"%d\" value=\"%f\"/>\n", i, val );
-		}
-
-		if( fst->plugin->flags & 32 ) {
-			printf( "getting chunk...\n" );
-			void * chunk;
-			bytelen = fst_call_dispatcher( fst, 23, 0, 0, &chunk, 0 );
-			printf( "got tha chunk..\n" );
-			if( bytelen ) {
-				if( bytelen < 0 ) {
-					printf( "Chunke len < 0 !!! Not saving chunk.\n" );
-				} else {
-					char *encoded = g_base64_encode( chunk, bytelen );
-					fprintf( f, "  <chunk size=\"%d\">\n    %s\n  </chunk>\n", bytelen, encoded );
-					g_free( encoded );
-				}
-			}
-		} 
-
-		fprintf( f, "</plugin_state>\n" );
-		fclose( f );
+	if ( (strcmp(file_ext, ".fxp") == 0) || (strcmp(file_ext, ".FXP") == 0) ) {
+		fst_save_fxfile(fst, filename, 0);
+	} else if ( (strcmp(file_ext, ".fxb") == 0) || (strcmp(file_ext, ".FXB") == 0)) {
+		fst_save_fxfile(fst, filename, 1);
+	} else if (strcmp(file_ext, ".fps") == 0) {
+		fst_save_fps(fst, filename);
 	} else {
-		printf ("Could not open state file\n");
-		return FALSE;
+		printf("Unkown file type\n");
+		return 0;
 	}
-	return TRUE;
+	
+	return 1;
 }
-

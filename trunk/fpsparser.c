@@ -1,271 +1,254 @@
-
 #include <glib.h>
 #include <stdio.h>
 #include <string.h>
 
+#include <libxml/parser.h>
+#include <libxml/tree.h>
+
 #include <fst.h>
 
-typedef struct PluginParserState {
-	gsize chunk_size;
-	gsize chunk_pos;
-	gint  base64_state;
-	guint base64_save;
-	guchar  *chunk_data;
-	FST *fst;
-} PluginParserState;
+// From: http://stackoverflow.com/questions/122616/how-do-i-trim-leading-trailing-whitespace-in-a-standard-way
+// With small modifications
+char *
+trim(char * s) {
+    char * p = s;
+    int l = strlen(p);
 
-PluginParserState *pstate_new( FST *fst ) {
-	PluginParserState *retval = g_malloc0( sizeof( PluginParserState ) );
-	retval->fst = fst;
-	return retval;
+    while(! isgraph(p[l - 1])) p[--l] = 0;
+    while(* p && ! isgraph(* p)) ++p, --l;
+
+    memmove(s, p, l + 1);
+
+    return s;
+}
+// -----------------------------------
+
+char *
+int2str(char *str, int *integer) {
+   sprintf(str, "%d", *integer);
+   return str;
 }
 
-void g_markup_collect_attr( const gchar *element_name, 
-		     const gchar        **attribute_names, 
-		     const gchar        **attribute_values, 
-		     GError             **error,
-		     const gchar	*attr_name,
-		     const gchar	**dst ) 
+char *
+float2str(char *str, float *floating) {
+   sprintf(str, "%f", *floating);
+   return str;
+}
+
+int
+fps_check_this(FST *fst, char *field, char *value) {
+   int success;
+   char testString[64];
+
+   printf("Check %s : %s == ", field, value);
+   if ( strcmp(  field, "productString" ) == 0 ) {
+      success = fst_call_dispatcher( fst, effGetProductString, 0, 0, testString, 0 );
+   } else if( strcmp( field, "effectName" ) == 0 ) {
+      success = fst_call_dispatcher( fst, effGetEffectName, 0, 0, testString, 0 );
+   } else if( strcmp( field, "vendorString" ) == 0 ) {
+      success = fst_call_dispatcher( fst, effGetVendorString, 0, 0, testString, 0 );
+   }
+
+   if (success == 1) {
+      if (strcmp (testString, value) == 0) {
+         printf("%s [PASS]\n", testString);
+         return 1;
+      }
+
+      printf("%s [FAIL]\nstring mismatch!\n", testString);
+   } else {
+      printf("empty [FAIL]\nCan't get plugin string\n");
+   }
+
+   return 0;
+}
+
+int
+process_node(FST *fst, xmlNode *a_node)
 {
-	int i;
-	for (i = 0; attribute_names[i]; i++) {
-		if( strcmp( attribute_names[i], attr_name ) )
-			continue;
+    xmlNode *cur_node = NULL;
 
-		*dst = attribute_values[i];
-		return;
-	}
+    for (cur_node = a_node; cur_node; cur_node = cur_node->next) {
+       if (cur_node->type != XML_ELEMENT_NODE)
+           continue;
 
-	// If we are here we didnt find it.
-	g_set_error (error, G_MARKUP_ERROR,
-		     G_MARKUP_ERROR_INVALID_CONTENT,
-		     "element '%s' requires attribute '%s'",
-		     element_name, attr_name);
+       // Check
+       if (strcmp(cur_node->name, "check") == 0) {
+          char *field = xmlGetProp(cur_node, "field");
+          char *value = xmlGetProp(cur_node, "value");
+
+          fps_check_this(fst, field, value);
+       // Map
+       } else if (strcmp(cur_node->name, "map") == 0) {
+          int cc = strtol(xmlGetProp(cur_node, "cc"), NULL, 10);
+          int index = strtol(xmlGetProp(cur_node, "index"), NULL, 10);
+          char *name = (char *) xmlGetProp(cur_node, "name");
+
+          printf( "Got map %d = %d (%s)\n", cc, index, name );
+          if ( cc < 0 || cc >= 128 || index < 0 || index >= fst->plugin->numParams )
+             continue;
+
+          fst->midi_map[cc] = index;
+       // Param
+       } else if (strcmp(cur_node->name, "param") == 0) {
+          if (fst->plugin->flags & effFlagsProgramChunks) {
+             printf("FPS: skip param - plugin do expect chunk\n");
+             continue;
+          }
+
+          int index = strtol(xmlGetProp(cur_node, "index"), NULL, 10);
+	  float val = strtof(xmlGetProp(cur_node, "value"), NULL);
+
+	  pthread_mutex_lock( &fst->lock );
+	  fst->plugin->setParameter( fst->plugin, index, val );
+	  pthread_mutex_unlock( &fst->lock );
+
+       // Chunk
+       } else if (strcmp(cur_node->name, "chunk") == 0) {
+          if (! fst->plugin->flags & effFlagsProgramChunks) {
+             printf("FPS: skip chunk - plugin expect params\n");
+             continue;
+          }
+
+          gsize out_len;
+          int  chunk_size;
+          void *chunk_data;
+          char *chunk_base64;
+
+          chunk_size = strtoul(xmlGetProp(cur_node, "size"), NULL, 0);
+          if ( ! chunk_size > 0 ) {
+             printf("Error: chunk size: %d", chunk_size);
+             return 0;
+          }
+
+          printf("Load %dB chunk .. ", chunk_size);
+          chunk_base64 = trim((char *) cur_node->children->content);
+          chunk_data = g_base64_decode(chunk_base64, &out_len);
+
+          if (chunk_size != out_len) {
+             printf("[ERROR]\n");
+             printf ("Problem while decode base64. DecodedChunkSize: %d\n", (int) out_len);
+             return 0;
+          }
+          fst_call_dispatcher( fst, effSetChunk, 0, chunk_size, chunk_data, 0 );
+          printf("[DONE]\n");
+
+          g_free(chunk_data);
+       } else {
+          process_node(fst, cur_node->children);
+       }
+    }
+
+    return 1;
 }
 
+int
+fst_load_fps ( FST *fst, char *filename ) {
+   xmlDoc *doc = NULL;
+   xmlNode *plugin_state_node = NULL;
 
+   printf("Try load: %s\n", filename);
 
-void start_check (   const gchar	* element_name,
-		     const gchar        **attribute_names, 
-		     const gchar        **attribute_values, 
-		     PluginParserState  *pstate, 
-		     GError             **error)
-{
-	const gchar *field_string;
-	const gchar *val_string;
-	char testString[64];
-	int success;
-	FST *fst = pstate->fst;
+   doc = xmlReadFile(filename, NULL, 0);
 
+   if (doc == NULL) {
+      printf("error: could not parse file %s\n", filename);
+      return 0;
+   }
 
-	g_markup_collect_attr( element_name, attribute_names, attribute_values, error, "field", &field_string );
-	if( *error != NULL )
-		return;
+   plugin_state_node = xmlDocGetRootElement(doc);
+   process_node(fst, plugin_state_node);
 
-	g_markup_collect_attr( element_name, attribute_names, attribute_values, error, "value", &val_string );
-	if( *error != NULL )
-		return;
+   xmlFreeDoc(doc);
 
-
-	printf( "got check %s = %s\n", field_string, val_string );
-
-	if( strcmp( field_string, "productString" ) == 0 ) {
-		success = fst_call_dispatcher( fst, effGetProductString, 0, 0, testString, 0 );
-	}
-	else if( strcmp( field_string, "effectName" ) == 0 ) {
-		success = fst_call_dispatcher( fst, effGetEffectName, 0, 0, testString, 0 );
-	}
-	else if( strcmp( field_string, "vendorString" ) == 0 ) {
-		success = fst_call_dispatcher( fst, effGetVendorString, 0, 0, testString, 0 );
-	}
-
-	if (success == 1) {
-		if (strcmp (testString, val_string) != 0) {
-			g_set_error (error, G_MARKUP_ERROR,
-					G_MARKUP_ERROR_INVALID_CONTENT,
-					"file is for another plugin" );
-			printf ("string mismatch! Plugin has: %s\n", testString);
-			return;
-		}
-	} else {
-		g_set_error (error, G_MARKUP_ERROR,
-				G_MARKUP_ERROR_INVALID_CONTENT,
-				"file is for another plugin" );
-		printf ("string mismatch! Plugin has none.\n");
-		return;
-	}
-
+   return 1;
 }
 
-void start_param (   const gchar	* element_name,
-		     const gchar        **attribute_names, 
-		     const gchar        **attribute_values, 
-		     PluginParserState  *pstate, 
-		     GError             **error)
-{
-	const gchar *index_string;
-	const gchar *val_string;
-	int index;
-	float val;
-	FST *fst = pstate->fst;
+// SAVE --------------
+int
+xml_add_check (FST *fst, xmlNode *node, int opcode, const char *field) {
+   char tString[64];
+   xmlNode *myNode;
 
-	if( fst->plugin->flags & 32 )
-		return;
+   if (fst_call_dispatcher( fst, opcode, 0, 0, tString, 0 )) {
+      myNode = xmlNewChild(node, NULL, "check", NULL);
+      xmlNewProp(myNode, "field", "productString");
+      xmlNewProp(myNode, "value", tString);
+      return 1;
+   } else {
+      printf ("No product string\n");
+      return 0;
+   }
+} 
 
-	g_markup_collect_attr( element_name, attribute_names, attribute_values, error, "index", &index_string );
-	if( *error != NULL )
-		return;
+int
+fst_save_fps (FST * fst, char * filename) {
+   int paramIndex;
+   unsigned int cc;
+   char tString[64];
+   xmlNode *cur_node;
 
-	g_markup_collect_attr( element_name, attribute_names, attribute_values, error, "value", &val_string );
-	if( *error != NULL )
-		return;
+   FILE * f = fopen (filename, "wb");
+   if (! f) {
+      printf ("Could not open state file\n");
+      return FALSE;
+   }
 
-	index = (int) g_ascii_strtoull( index_string, NULL, 10 );
-	val = (float) g_ascii_strtod( val_string, NULL );
+   xmlDoc  *doc = xmlNewDoc("1.0");
+   xmlNode *plugin_state_node = xmlNewDocRawNode(doc, NULL, "plugin_state", NULL);
+   xmlDocSetRootElement(doc, plugin_state_node);
 
-	pthread_mutex_lock( &fst->lock );
-	fst->plugin->setParameter( fst->plugin, index, val );
-	pthread_mutex_unlock( &fst->lock );
+   // Check
+   xml_add_check(fst, plugin_state_node, effGetProductString, "productString");
+   xml_add_check(fst, plugin_state_node, effGetVendorString, "vendorString");
+   xml_add_check(fst, plugin_state_node, effGetEffectName, "effectName");
+
+   // Midi Map
+   for (cc = 0; cc < 128; cc++ ) {
+      paramIndex = fst->midi_map[cc];
+      if( paramIndex < 0 || paramIndex >= fst->plugin->numParams )
+          continue;
+
+      fst->plugin->dispatcher( fst->plugin, effGetParamName, paramIndex, 0, tString, 0 );
+
+      cur_node = xmlNewChild(plugin_state_node, NULL, "map", NULL);
+      xmlNewProp(cur_node, "name", tString);
+      xmlNewProp(cur_node, "cc", int2str(tString, &cc));
+      xmlNewProp(cur_node, "index", int2str(tString, &paramIndex));
+   }
+
+   // Chunk
+   if ( fst->plugin->flags & effFlagsProgramChunks ) {
+      int chunk_size;
+      void * chunk_data;
+      printf( "getting chunk ... " );
+      chunk_size = fst_call_dispatcher( fst, effGetChunk, 0, 0, &chunk_data, 0 );
+      printf( "[DONE]\n" );
+
+      if ( chunk_size <= 0 ) {
+         printf( "Chunke len =< 0 !!! Not saving chunk.\n" );
+         return FALSE;
+      }
+
+      char *encoded = g_base64_encode( chunk_data, chunk_size );
+      cur_node = xmlNewChild(plugin_state_node, NULL, "chunk", encoded);
+      xmlNewProp(cur_node, "size", int2str(tString, &chunk_size));
+      g_free( encoded );
+   // Params
+   } else {
+      float val;
+      for ( paramIndex=0; paramIndex < fst->plugin->numParams; paramIndex++ ) {
+         val = fst->plugin->getParameter( fst->plugin, paramIndex );
+         cur_node = xmlNewChild(plugin_state_node, NULL, "param", NULL);
+         xmlNewProp(cur_node, "index", int2str(tString, &paramIndex));
+         xmlNewProp(cur_node, "value", float2str(tString, &val));
+      }
+   }
+
+   xmlDocFormatDump(f, doc, TRUE);
+   fclose(f);
+
+   xmlFreeDoc(doc);
+
+   return TRUE;
 }
-
-void start_chunk (   const gchar	* element_name,
-		     const gchar        **attribute_names, 
-		     const gchar        **attribute_values, 
-		     PluginParserState  *pstate, 
-		     GError             **error)
-{
-	const gchar *size_string;
-	FST *fst = pstate->fst;
-
-	if( ! (fst->plugin->flags & 32) ) {
-
-		return;
-	}
-	g_markup_collect_attr( element_name, attribute_names, attribute_values, error, "size", &size_string );
-
-	if( *error != NULL )
-		return;
-
-	pstate->chunk_size = g_ascii_strtoull( size_string, NULL, 10 );
-	if( pstate->chunk_size == 0 ) {
-		// TODO: set error.
-		g_set_error (error, G_MARKUP_ERROR,
-				G_MARKUP_ERROR_INVALID_CONTENT,
-				"chunk size is 0 or invalid" );
-		return;
-	}
-
-	pstate->chunk_data = g_malloc0( pstate->chunk_size );
-	if( pstate->chunk_data == NULL ) {
-		g_set_error (error, G_MARKUP_ERROR,
-				G_MARKUP_ERROR_INVALID_CONTENT,
-				"cant allocate memory" );
-		return;
-	}
-
-	pstate->base64_state = 0;
-	pstate->base64_save = 0;
-}
-
-void end_chunk(         PluginParserState             *pstate,
-                        GError             **error)
-{
-	// Set Chunk to plug here.
-	FST *fst = pstate->fst;
-	fst_call_dispatcher( fst, 24, 0, pstate->chunk_size, pstate->chunk_data, 0 );
-	
-	g_free( pstate->chunk_data );
-	pstate->chunk_data = NULL;
-	pstate->chunk_size = 0;
-
-}
-
-void start_element (GMarkupParseContext *context, 
-		     const gchar         *element_name, 
-		     const gchar        **attribute_names, 
-		     const gchar        **attribute_values, 
-		     gpointer		user_data, 
-		     GError             **error)
-{
-	PluginParserState *pstate = (PluginParserState *) user_data;
-
-	if( strcmp( element_name, "chunk" ) == 0 ) {
-		start_chunk( element_name, attribute_names, attribute_values, pstate, error );
-	}
-	if( strcmp( element_name, "check" ) == 0 ) {
-		start_check( element_name, attribute_names, attribute_values, pstate, error );
-	}
-	if( strcmp( element_name, "param" ) == 0 ) {
-		start_param( element_name, attribute_names, attribute_values, pstate, error );
-	}
-}
-
-  /* Called for close tags </foo> */
-void end_element    (GMarkupParseContext *context,
-                        const gchar         *element_name,
-                        gpointer             user_data,
-                        GError             **error)
-{
-	if( strcmp( element_name, "chunk" )==0 ) {
-		end_chunk( user_data, error );
-	}
-}
-
-  /* Called for character data */
-  /* text is not nul-terminated */
-void mytext           (GMarkupParseContext *context,
-                        const gchar         *text,
-                        gsize                text_len,  
-                        gpointer	     user_data,
-                        GError             **error)
-{
-	PluginParserState *pstate = (PluginParserState *) user_data;
-	if( strcmp( g_markup_parse_context_get_element( context ), "chunk" ) == 0 ) 
-	{
-		gsize num_bytes = g_base64_decode_step( text, text_len, pstate->chunk_data + pstate->chunk_pos, &pstate->base64_state, &pstate->base64_save );
-		pstate->chunk_pos += num_bytes;
-	}
-}
-
-#define BUFFER_SIZE 256
-
-int fst_load_state( FST *fst, char *filename ) 
-{
-	char buf[BUFFER_SIZE];
-	int i;
-	GError *err = NULL;
-
-	GIOChannel *chan = g_io_channel_new_file( filename, "r", &err );
-
-	GMarkupParser parser = { NULL, NULL, NULL, NULL, NULL };
-	parser.start_element = start_element;
-	parser.end_element = end_element;
-	parser.text = mytext;
-
-	PluginParserState *pstate = pstate_new( fst );
-
-
-	GMarkupParseContext *context = g_markup_parse_context_new( &parser, 0, pstate, NULL );
-
-	while(1) {
-		gsize bytes;
-		GIOStatus status = g_io_channel_read_chars( chan, buf, BUFFER_SIZE, &bytes, &err );
-		if( status == G_IO_STATUS_ERROR )
-			break;
-		if( status == G_IO_STATUS_EOF )
-			break;
-
-		g_markup_parse_context_parse( context, buf, bytes, &err );
-		if( err != NULL )
-			break;
-	}
-
-	if( err != NULL )
-		g_markup_parse_context_end_parse( context, &err ); 
-	g_markup_parse_context_free( context );
-	if( err != NULL )
-		return 0;
-
-	return 1;
-}
-

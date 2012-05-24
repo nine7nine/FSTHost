@@ -29,6 +29,7 @@ void fst_set_error_function (void (*func)(const char *));
 typedef struct _FST FST;
 typedef struct _FSTHandle FSTHandle;
 typedef struct _FSTInfo FSTInfo;
+typedef struct _FXHeader FXHeader;
 
 struct _FSTInfo 
 {
@@ -57,29 +58,43 @@ struct _FSTHandle
 {
     void*    dll;
     char*    name;
-    char*    nameptr; /* ptr returned from strdup() etc. */
+    char*    path; /* ptr returned from strdup() etc. */
     //struct AEffect* (*main_entry)(audioMasterCallback);
     main_entry_t main_entry;
 
     int plugincnt;
 };
 
+enum EventCall {
+	RESET,
+	DISPATCHER,
+	EDITOR_OPEN,
+	EDITOR_CLOSE,
+	PROGRAM_CHANGE
+};
+
 struct _FST 
 {
-    struct AEffect*    plugin;
+    struct	AEffect*    plugin;
     void*       window; /* win32 HWND */
-    int         xid; /* X11 XWindow */
+    int         xid;    /* X11 XWindow */
     FSTHandle*  handle;
     int 	width;
     int 	height;
-    int		wantIdle;
-    int         destroy;
+    int         wantIdle;
+
+    enum EventCall event_call;
 
     int		want_program;
+    int         current_program;
     float      *want_params;
     float      *set_params;
 
-    int         dispatcher_wantcall;
+    int            midi_map[128];
+    volatile int   midi_learn;
+    volatile int   midi_learn_CC;
+    volatile int   midi_learn_PARAM;
+
     int         dispatcher_opcode;
     int         dispatcher_index;
     int         dispatcher_val;
@@ -89,26 +104,36 @@ struct _FST
 
     struct _FST* next;
     pthread_mutex_t lock;
+    pthread_mutex_t event_call_lock;
+    pthread_cond_t  program_change;
     pthread_cond_t  window_status_change;
     pthread_cond_t  plugin_dispatcher_called;
-    int             been_activated;
+};
+
+struct _FXHeader {
+        unsigned int chunkMagic;
+        unsigned int byteSize;
+        unsigned int fxMagic;
+        unsigned int version;
+        unsigned int fxID;
+        unsigned int fxVersion;
+        unsigned int numPrograms;
 };
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-extern int        fst_init (HMODULE hInst);
+extern int        start_gui_event_loop (HMODULE hInst);
 
-extern FSTHandle* fst_load (const char*);
+extern FSTHandle* fst_load (const char * );
 extern int        fst_unload (FSTHandle*);
 
 extern FST*       fst_instantiate (FSTHandle*, audioMasterCallback amc, void* userptr);
 extern void       fst_close (FST*);
 
-extern int  fst_run_editor (FST*);
+extern int   fst_run_editor (FST*);
 extern void  fst_destroy_editor (FST*);
-extern int  fst_get_XID (FST*);
 
 extern FSTInfo *fst_get_info (char *dllpathname);
 extern void fst_free_info (FSTInfo *info);
@@ -118,7 +143,8 @@ extern int fst_call_dispatcher(FST *fst, int opcode, int index, int val, void *p
 /**
  * Load a plugin state from a file.
  */
-extern int fst_load_state (FST * fst, char * filename);
+extern int fst_load_fps (FST * fst, char * filename);
+extern int fst_load_fxfile (FST * fst, char * filename);
 
 /**
  * Save a plugin state to a file.

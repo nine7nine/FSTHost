@@ -20,10 +20,13 @@
 #include <sys/types.h>
 #include <string.h>
 #include <stdio.h>
-#include <fst.h>
+#include <unistd.h>
 #include <glib.h>
 #include <semaphore.h>
 #include <vestige/aeffectx.h>
+
+#include <fst.h>
+#include <windows.h>
 
 #include "jackvst.h"
 #include "jack/midiport.h"
@@ -31,7 +34,6 @@
 #ifdef HAVE_LASH
 #include <lash/lash.h>
 #endif
-#include <windows.h>
 
 /* audiomaster.c */
 
@@ -110,6 +112,8 @@ void process_midi_output(JackVST* jvst, jack_nframes_t nframes)
 		return;
 	}
 
+	jack_midi_clear_buffer(port_buffer);
+
 	ringbuffer = jvst->ringbuffer;
 	while (jack_ringbuffer_read_space(ringbuffer)) {
 		read = jack_ringbuffer_peek(ringbuffer, (char*)&ev, sizeof(ev));
@@ -136,6 +140,56 @@ void process_midi_output(JackVST* jvst, jack_nframes_t nframes)
 		}
 
 		memcpy(buffer, ev.data, ev.len);
+	}
+}
+
+void process_midi_input(JackVST* jvst, jack_nframes_t nframes)
+{
+	struct AEffect* plugin = jvst->fst->plugin;
+
+	void *port_buffer = jack_port_get_buffer( jvst->midi_inport, nframes );
+	jack_nframes_t num_jackevents = jack_midi_get_event_count( port_buffer );
+	jack_midi_event_t jackevent;
+	int i,j,stuffed_events = 0;
+
+	if( num_jackevents >= MIDI_EVENT_MAX )
+		num_jackevents = MIDI_EVENT_MAX;
+
+	for( i=0; i < num_jackevents; i++ ) {
+		if ( jack_midi_event_get( &jackevent, port_buffer, i ) != 0 )
+			break;
+
+		// Midi channel
+		if ( (jvst->channel != -1 )
+			&&  ( jackevent.buffer[0] >= 0x80 && jackevent.buffer[0] <= 0xEF)
+			&&  ( (jackevent.buffer[0] & 0x0f) != jvst->channel ) )
+			continue;
+
+		// Mapping MIDI
+		if ( (jackevent.buffer[0] & 0xf0) == 0xb0 && jvst->fst->midi_learn ) {
+			jvst->fst->midi_learn_CC = jackevent.buffer[1];
+		// handle MIDI mapped
+		} else if( (jackevent.buffer[0] & 0xf0) == 0xb0 && jvst->fst->midi_map[jackevent.buffer[1]] != -1 ) {
+			int parameter = jvst->fst->midi_map[jackevent.buffer[1]];
+			float value = 1.0/127.0 * (float) jackevent.buffer[2];
+			plugin->setParameter( plugin, parameter, value );
+		// .. let's play
+		} else if( jvst->want_midi_in ) {
+			jvst->event_array[stuffed_events].type = kVstMidiType;
+			jvst->event_array[stuffed_events].byteSize = 24;
+			jvst->event_array[stuffed_events].deltaFrames = jackevent.time;
+
+			for( j=0; (j<4); j++ ) {
+				jvst->event_array[stuffed_events].midiData[j] = 
+					(j<jackevent.size) ? jackevent.buffer[j] : 0;
+			}
+			stuffed_events += 1;
+		}
+	}
+
+	if ( stuffed_events > 0 ) {
+		jvst->events->numEvents = stuffed_events;
+		plugin->dispatcher (plugin, effProcessEvents, 0, 0, jvst->events, 0.0f);
 	}
 }
 
@@ -210,117 +264,75 @@ int process_callback( jack_nframes_t nframes, void* data)
 
 	audio_thread = pthread_self();
 
-	if( !jvst->resume_called ) {
-	    jvst->resume_called = TRUE;
-	    plugin->dispatcher (plugin, effMainsChanged, 0, 1, NULL, 0.0f);
-	}
-	for (i = 0; i < plugin->numInputs; ++i) {
+	// Initialize JackAudio-input buffers
+	for (i = 0; i < plugin->numInputs; ++i)
 		jvst->ins[i]  = (float *) jack_port_get_buffer (jvst->inports[i], nframes);
-	}
 
-	for (i = 0; i < plugin->numOutputs; ++i) {
-		jvst->outs[i]  = (float *) jack_port_get_buffer (jvst->outports[i], nframes);
-	}
-
-	if (jvst->bypassed) {
-
-		if (plugin->numInputs) {
-			for (o = 0, i = 0; o < plugin->numOutputs; ++o) {
-				memcpy (jvst->outs[o], jvst->ins[i], sizeof (float) * nframes);
-				
-				if (i < plugin->numOutputs - 1) {
-					++i;
-				}
-			}
+	// Initialize JackAudio-output buffers
+	for (o = 0, i = 0; o < plugin->numOutputs; ++o) {
+		jvst->outs[o]  = (float *) jack_port_get_buffer (jvst->outports[o], nframes);
+	
+		// If bypassed then copy In's to Out's
+		if ( (jvst->bypassed) &&
+		   (plugin->numInputs) &&
+		   (i < plugin->numOutputs - 1) 
+		) {
+			memcpy (jvst->outs[o], jvst->ins[i], sizeof (float) * nframes);
+			++i;
+		// Zeroing buffers
 		} else {
-			for (o = 0, i = 0; o < plugin->numOutputs; ++o) {
-				if (jvst->outs[o]) {
-					memset (jvst->outs[o], 0, sizeof (float) * nframes);
-				}
-			}
+			memset (jvst->outs[o], 0, sizeof (float) * nframes);
 		}
-		
-	} else if (jvst->muted) {
+	}
 
-		for (o = 0, i = 0; o < plugin->numOutputs; ++o) {
-			if (jvst->outs[o]) {
-				memset (jvst->outs[o], 0, sizeof (float) * nframes);
-			}
-		}
-		
+	// Bypass - because all audio jobs are done  - simply return
+	if (jvst->bypassed)
+		return 0;
+
+	// Normal process
+	if (jvst->midi_inport) 
+		process_midi_input(jvst, nframes);
+
+	if (plugin->flags & effFlagsCanReplacing) {
+		plugin->processReplacing (plugin, jvst->ins, jvst->outs, nframes);
 	} else {
-
-		if (jvst->midi_outport) {
-			void *port_buffer = jack_port_get_buffer(jvst->midi_outport, nframes);
-			if (port_buffer == NULL) {
-				fst_error("jack_port_get_buffer failed, cannot send anything.");
-				return;
-			}
-			jack_midi_clear_buffer(port_buffer);
-		}
-
-		if (jvst->midi_inport) {
-			void *port_buffer = jack_port_get_buffer( jvst->midi_inport, nframes );
-			jack_nframes_t num_jackevents = jack_midi_get_event_count( port_buffer );
-			jack_midi_event_t jackevent;
-			int j,stuffed_events = 0;
-
-			if( num_jackevents >= MIDI_EVENT_MAX )
-				num_jackevents = MIDI_EVENT_MAX;
-
-			for( i=0; i<num_jackevents; i++ ) {
-				if( jack_midi_event_get( &jackevent, port_buffer, i ) != 0 )
-					break;
-
-				if( (jackevent.buffer[0] & 0xf0) == 0xb0 && jvst->midi_learn ) {
-					jvst->midi_learn_CC = jackevent.buffer[1];
-				} else if( (jackevent.buffer[0] & 0xf0) == 0xb0 && jvst->midi_map[jackevent.buffer[1]] != -1 ) {
-					// midi mapped.
-					int parameter = jvst->midi_map[jackevent.buffer[1]];
-					float value = 1.0/127.0 * (float) jackevent.buffer[2];
-					plugin->setParameter( plugin, parameter, value );
-
-				} else if( jvst->want_midi_in ) {
-					jvst->event_array[stuffed_events].type = kVstMidiType;
-					jvst->event_array[stuffed_events].byteSize = 24;
-					jvst->event_array[stuffed_events].deltaFrames = jackevent.time;
-
-					for( j=0; (j<4); j++ ) {
-						jvst->event_array[stuffed_events].midiData[j] = 
-							(j<jackevent.size) ? jackevent.buffer[j] : 0;
-					}
-					stuffed_events += 1;
-				}
-			}
-
-			if( stuffed_events > 0 ) {
-				jvst->events->numEvents = stuffed_events;
-				plugin->dispatcher (plugin, effProcessEvents, 0, 0, jvst->events, 0.0f);
-			}
-		}
-
-		jvst->current_program = plugin->dispatcher( plugin, effGetProgram, 0, 0, NULL, 0.0f );
-
-		if (plugin->flags & effFlagsCanReplacing) {
-			
-			for (i = 0; i < plugin->numOutputs; ++i) {
-				memset (jvst->outs[i], 0, sizeof (float) * nframes);
-			}
-			plugin->processReplacing (plugin, jvst->ins, jvst->outs, nframes);
-			
-		} else {
-			
-			for (i = 0; i < plugin->numOutputs; ++i) {
-				memset (jvst->outs[i], 0, sizeof (float) * nframes);
-			}
-			plugin->process (plugin, jvst->ins, jvst->outs, nframes);
-		}
-		if (jvst->midi_outport) {
-			process_midi_output(jvst, nframes);
-		}
+		plugin->process (plugin, jvst->ins, jvst->outs, nframes);
 	}
+
+	if (jvst->midi_outport)
+		process_midi_output(jvst, nframes);
 
 	return 0;      
+}
+
+int session_callback( void *arg )
+{
+	printf("session callback\n");
+
+        JackVST* jvst = (JackVST*) arg;
+        jack_session_event_t *event = jvst->session_event;
+
+        char retval[256];
+        char filename[MAX_PATH];
+
+        snprintf( filename, sizeof(filename), "%sstate.fps", event->session_dir );
+        fst_save_state( jvst->fst, filename );
+        snprintf( retval, sizeof(retval), "fst -u %s -s ${SESSION_DIR}state.fps %s", event->client_uuid, jvst->handle->path );
+        event->command_line = strdup( retval );
+
+        jack_session_reply( jvst->client, event );
+
+        jack_session_event_free( event );
+
+        return 0;
+}
+
+void session_callback_aux( jack_session_event_t *event, void *arg )
+{
+        JackVST* jvst = (JackVST*) arg;
+        jvst->session_event = event;
+
+        g_idle_add( session_callback, arg );
 }
 
 enum ParseMode {
@@ -332,6 +344,7 @@ enum ParseMode {
     MODE_EOL
 
 };
+
 void create_argc_argv_from_cmdline( char *cmdline, char *argv0, int *argc, char ***argv ) {
     // first count argc
     char *pos = cmdline;
@@ -636,6 +649,36 @@ int canDo(struct AEffect* plugin, char* feature)
 	return (plugin->dispatcher(plugin, effCanDo, 0, 0, (void*)feature, 0.0f) > 0);
 }
 
+int
+jvst_connect(JackVST *jvst, const char *myname, const char *connect_to)
+{
+	int i,j;
+	char pname[strlen(myname) + 16];
+	const char *ptype;
+
+	const char **jports = jack_get_ports(jvst->client, connect_to, NULL, JackPortIsInput);
+	if (jports == NULL) {
+		printf("Can't find any ports for %s\n", connect_to);
+		return 0;
+	}
+
+	for (i=0, j=0; jports[i] != NULL && j < jvst->fst->plugin->numOutputs; i++) {
+		ptype = jack_port_type(jack_port_by_name(jvst->client, jports[i]));
+
+		if (strcmp(ptype, JACK_DEFAULT_AUDIO_TYPE) != 0) {
+			printf("Skip incompatibile port: %s\n", ptype);
+			continue;
+		}
+
+		sprintf(pname, "%s:out%d", myname, ++j);
+		jack_connect(jvst->client, pname, jports[i]);
+		printf("Connect: %s -> %s\n", pname, jports[i]);
+	}
+	jack_free(jports);
+
+	return 1;
+}
+
 int WINAPI
 WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 //int 
@@ -644,13 +687,16 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	JackVST* jvst;
 	struct AEffect* plugin;
 	int i;
-	char* client_name = 0;
+	char *client_name = 0;
 	char* period;
-	int with_editor = 1;
-	int resume_not_rt = 1;
 	int load_state = 0;
-	char * state_file = 0;
-	char *plug;
+	int opt_with_editor = 2;
+	int opt_uuid = 0;
+	int opt_bypassed = FALSE;
+	int opt_channel = -1;
+	const char *connect_to = NULL;
+	const char *state_file = 0;
+	const char *plug;
 	int vst_version;
 
 	float sample_rate = 0;
@@ -662,61 +708,63 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	create_argc_argv_from_cmdline( cmdline, "./fst", &argc, &argv );
 
 #ifdef HAVE_LASH
-
 	lash_event_t *event;
 	lash_args_t *lash_args;
 
 	lash_args = lash_extract_args(&argc, &argv);
 #endif
 
-	if (argc < 2) {
-		fprintf (stderr, "usage: %s <plugin>\n", argv[0]);
-		return 1;
-	}
-
-	printf( "yo... lets see...\n" );
-	//setpgrp();
-
-	gui_init (&argc, &argv);
-
-	for (i = 1; i < argc; ++i) {
-		if (argv[i][0] == '-') {
-			if (argv[i][1] == 'n') {
-				with_editor = 0;
-			}
-			if (argv[i][1] == 'r') {
-				resume_not_rt = 0;
-			}
-			if (argv[i][1] == 's') {
+        // Parse command line options
+	int c;
+	while ( (c = getopt (argc, argv, "bners:c:k:j:u:")) != -1) {
+		switch (c) {
+			case 'b':
+				opt_bypassed = TRUE;
+				break;
+			case 'e':
+				opt_with_editor = 1;
+				break;
+			case 'n':
+				opt_with_editor = 0;
+				break;
+			case 's':
 				load_state = 1;
-				state_file = argv[i+1];
-				i++;
-				if (i + 2 >= argc) {
-					fprintf (stderr, "usage: %s <plugin>\n", argv[0]);
-					return 1;
-				}
-			}
-			if (argv[i][1] == 'c') {
-				client_name = argv[i+1];
-				i++;
-				if (i + 2 >= argc) {
-					fprintf (stderr, "usage: %s <plugin>\n", argv[0]);
-					return 1;
-				}
-			}
-		} else {
-			plug = argv[i];
-			break;
+                                state_file = optarg;
+				break;
+			case 'c':
+				client_name = optarg;
+				break;
+			case 'k':
+				opt_channel = strtol(optarg, NULL, 10) - 1;
+				if (opt_channel < 0 || opt_channel > 15)
+					opt_channel = -1;
+				break;
+			case 'j':
+				connect_to = optarg;
+				break;
+			case 'u':
+				opt_uuid = (int) optarg;
+				break;
+			default:
+				fprintf (stderr, "usage: %s <plugin>\n", argv[0]);
+				return 1;
 		}
 	}
 
-	if (fst_init (hInst)) {
+	if (optind >= argc) {
+		fprintf (stderr, "usage: [ -b | -n | -e | -s state_file | -j connect_to | -c client_name ] %s <plugin>\n", argv[0]);
 		return 1;
 	}
+	plug = argv[optind];
 
+	// Init VST
 	jvst = (JackVST*) calloc (1, sizeof (JackVST));
-	for (i=0; i<128; i++ )
-		jvst->midi_map[i] = -1;
+	jvst->bypassed = opt_bypassed;
+	jvst->channel = opt_channel;
+	jvst->with_editor = opt_with_editor;
+	jvst->uuid = opt_uuid;
+//	for (i=0; i<128; i++ )
+//		jvst->fst->midi_map[i] = -1;
 
 	if (!client_name) {
 		client_name = g_path_get_basename(strdup (plug));
@@ -725,13 +773,9 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 		}
 	}
 
-
+	printf( "yo... lets see...\n" );
 	if ((jvst->handle = fst_load (plug)) == NULL) {
 		fst_error ("can't load plugin %s", plug);
-		return 1;
-	}
-	if ((jvst->client = jack_client_open (client_name, JackNullOption, NULL )) == 0) {
-		fst_error ("can't connect to JACK");
 		return 1;
 	}
 
@@ -742,7 +786,17 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 		return 1;
 	}
 
+	printf("Start GUI/Event thread ...\n");
+	if (! start_gui_event_loop (hInst))
+		return 1;
+
 	plugin = jvst->fst->plugin;
+
+	printf("Start Jack thread ...\n");
+	if ((jvst->client = jack_client_open (client_name, JackSessionID, NULL, jvst->uuid )) == 0) {
+		fst_error ("can't connect to JACK");
+		return 1;
+	}
 
 	/* set rate and blocksize */
 	sample_rate = (float)jack_get_sample_rate(jvst->client);
@@ -756,18 +810,12 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	plugin->dispatcher (plugin, effSetBlockSize, 0, 
 			    jack_get_buffer_size (jvst->client), NULL, 0.0f);
 
-	if( resume_not_rt ) {
-	    jvst->resume_called = TRUE;
-	    plugin->dispatcher (plugin, effMainsChanged, 0, 1, NULL, 0.0f);
-	}
-	
 	// ok.... plugin is running... lets bind to lash...
 	
 #ifdef HAVE_LASH
 	int flags = LASH_Config_Data_Set;
 
-	lash_client =
-		lash_init(lash_args, client_name, flags, LASH_PROTOCOL(2, 0));
+	lash_client = lash_init(lash_args, client_name, flags, LASH_PROTOCOL(2, 0));
 
 	if (!lash_client) {
 	    fprintf(stderr, "%s: could not initialise lash\n", __FUNCTION__);
@@ -795,11 +843,8 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	 */
 
 
-	jvst->midi_inport = jack_port_register(jvst->client,
-										   "midi-in",
-										   JACK_DEFAULT_MIDI_TYPE,
-										   JackPortIsInput,
-										   0);
+	jvst->midi_inport = 
+		jack_port_register(jvst->client, "midi-in", JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
 
 	vst_version = plugin->dispatcher (plugin, effGetVstVersion, 0, 0, NULL, 0.0f);
 	if (vst_version >= 2) {
@@ -831,8 +876,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 
 			/* Initialise dynamic array of MIDI_EVENT_MAX VstMidiEvents */
 			/* and point the VstEvents events array of pointers to it   */
-			jvst->event_array = (VstMidiEvent*)calloc(MIDI_EVENT_MAX,
-													  sizeof (VstMidiEvent));
+			jvst->event_array = (VstMidiEvent*)calloc(MIDI_EVENT_MAX, sizeof (VstMidiEvent));
 			for (i = 0; i < MIDI_EVENT_MAX; i++) {
 				jvst->events->events[i] = (VstEvent*)&(jvst->event_array[i]);
 			}
@@ -848,11 +892,8 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 
 			jack_ringbuffer_mlock(jvst->ringbuffer);
 
-			jvst->midi_outport = jack_port_register(jvst->client,
-													"midi-out",
-													JACK_DEFAULT_MIDI_TYPE,
-													JackPortIsOutput,
-													0);
+			jvst->midi_outport =
+				jack_port_register(jvst->client, "midi-out", JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
 		}
 	}
 
@@ -877,22 +918,15 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	}
 
 	jack_set_thread_creator (wine_pthread_create);
-	
-	jack_set_process_callback (jvst->client, (JackProcessCallback) process_callback, jvst); 
 
-	printf( "Calling Jack activate\n" );
-	jack_activate (jvst->client);
+	// Start process audio
+	jack_set_process_callback (jvst->client, (JackProcessCallback) process_callback, jvst);
 
-	if (with_editor) {
-		printf( "open Editor\n" );
+        if (jack_set_session_callback) {
+             printf( "Setting up session callback\n" );
+             jack_set_session_callback( jvst->client, session_callback_aux, jvst );
+        }
 
-		if (fst_run_editor (jvst->fst)) {
-			fst_error ("cannot create editor");
-			return 1;
-		}
-	} else {
-		printf( "no Editor\n" );
-	}
 
 #ifdef HAVE_LASH
 	if( lash_enabled( lash_client ) ) {
@@ -903,26 +937,34 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 #endif
 
         /* load state if requested */
-
-	if (load_state) {
-		if (!fst_load_state (jvst->fst, state_file)) {
-			printf ("ERROR: Could not load state file %s\n", state_file);
-			jack_deactivate( jvst->client );
-			return 1;
-		}
+	if ( load_state && ! fst_load_state (jvst->fst, state_file)) {
+		jack_deactivate( jvst->client );
+		return 1;
 	}
-	
+
+	if (! jvst->bypassed) {
+		printf("Activate plugin\n");
+		fst_resume(jvst->fst);
+	}
+
+	printf( "Calling Jack activate\n" );
+	jack_activate (jvst->client);
+
+	if (connect_to)
+		jvst_connect(jvst, client_name, connect_to);
 
 	printf( "Entering main loop\n" );
-	if (with_editor) {
+	if (jvst->with_editor) {
+		gui_init (&argc, &argv);
 		printf( "ok.... RockNRoll\n" );
 		manage_vst_plugin (jvst);
 	} else {
-	    while( 1 )
-		sleep (10);
+		printf("Editor Disabled\n");
+		while( 1 ) sleep (10);
+
+		jack_deactivate( jvst->client );
+		fst_close(jvst->fst);
 	}
-	
-	jack_deactivate( jvst->client );
+
 	return 0;
 }
-
