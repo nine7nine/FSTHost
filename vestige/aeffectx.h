@@ -80,10 +80,16 @@
 #define audioMasterGetInputSpeakerArrangement 49 // currently unused
 
 #define effFlagsHasEditor 1
-// very likely
+#define effFlagsHasClip (1 << 1) // depracted
+#define effFlagsHasVu (1 << 2) // depracted
+#define effFlagsCanMono (1 << 3) // depracted
 #define effFlagsCanReplacing (1 << 4)
-// currently unused
+#define effFlagsProgramChunks (1 << 5)
 #define effFlagsIsSynth (1 << 8)
+#define effFlagsNoSoundInStop (1 << 9)
+#define effFlagsExtIsAsync (1 << 10) // depracted
+#define effFlagsExtHasBuffer (1 << 11) // depracted
+#define effFlagsCanDoubleReplacing (1 << 12) // v2.4 only
 
 #define effOpen 0
 //currently unused
@@ -92,9 +98,10 @@
 #define effSetProgram 2
 // currently unused
 #define effGetProgram 3
-// currently unused
+#define effSetProgramName 4
 #define effGetProgramName 5
 #define effGetParamLabel 6
+#define effGetParamDisplay 7
 // currently unused
 #define effGetParamName 8
 // this is a guess
@@ -105,7 +112,10 @@
 #define effEditOpen 14
 #define effEditClose 15
 #define effEditIdle 19
+#define effGetChunk 23
+#define effSetChunk 24
 #define effProcessEvents 25
+#define effGetProgramNameIndexed 29
 #define effGetEffectName 45
 // missing
 #define effGetParameterProperties 47
@@ -115,7 +125,15 @@
 // currently unused
 #define effCanDo 51
 // currently unused
+#define effIdle 53
 #define effGetVstVersion 58
+#define effGetVstVersion 58
+#define effBeginSetProgram 67
+#define effEndSetProgram 68
+#define effStartProcess 71
+#define effStopProcess 72
+#define effBeginLoadBank 75
+#define effBeginLoadProgram 76
 
 #ifdef WORDS_BIGENDIAN
 // "VstP"
@@ -235,19 +253,18 @@ typedef struct AEffect
 	// Zeroes 2c-2f 30-33 34-37 38-3b
 	char empty3[4 + 4 + 4 + 4];
 	// 1.0f 3c-3f
-	float unkown_float;
+	float ioRatio;
 	// An object? pointer 40-43
 	char empty4[4];
 	// Zeroes 44-47
 	char empty5[4];
 	// Id 48-4b
-	char unused_id[4];
+	int uniqueID;
 	// Don't know 4c-4f
-	char unknown1[4];
+	int version;
 	// processReplacing 50-53
 	void (* processReplacing)( struct AEffect * , float * * , float * * , int );
 
- int uniqueID;
 
 } AEffect;
 
@@ -277,8 +294,14 @@ typedef struct VstTimeInfo
 
 } VstTimeInfo;
 
-
-
+typedef struct VstPatchChunkInfo
+{
+	unsigned int version;         // Format Version (should be 1)
+	unsigned int pluginUniqueID;  // UniqueID of the plug-in
+	unsigned int pluginVersion;   // Plug-in Version
+	unsigned int numElements;     // Number of Programs (Bank) or Parameters (Program)
+	char future[48];              // Reserved for future use
+} VstPatchChunkInfo;
 
 typedef long int (* audioMasterCallback)( AEffect * , long int , long int ,
 						long int , void * , float );

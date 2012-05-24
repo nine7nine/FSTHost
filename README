@@ -2,11 +2,13 @@
 Whats This ?
 ------------
 
+This is official fork of FST, well what is fst ?
 This is a linux vst host. Runs as a jack client.
 Uses jack midi input.
 Only works for GUI plugins currently.
 
-Supports LASH.
+Supports load/save state to LASH, JackSessions, FXP/FXP files, FPS (XML files)
+Supports JackTransport.
 
 Getting Started
 ---------------
@@ -15,6 +17,7 @@ Getting Started
 
    gtk-devel
    jack-devel
+   libxml2
    lash-devel (optional)
 
 2) Type 'make'. If everything works correctly this should create an
@@ -54,17 +57,10 @@ License
 fst is licenced under the GNU General Public License version 2. See
 file 'COPYING' for details.
 
-
 Authors / contributors
 ----------------------
 torbenh@gmx.de, Paul Davis, Kjetil S. Matheussen / Notam, Mark Williamson
 Joe Button, Nedko Arnaudov
 
-This thing is the best vst soft, as it interprets transport info
-correctly.
-
-Over and out.
-
-If you like this, then update the README.
-And mail torbenh@gmx.de
+Current maintainer of this fork: Pawel Piatek <xj@wp.pl>
 

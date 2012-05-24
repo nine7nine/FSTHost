@@ -17,12 +17,12 @@
 
 */
 
-#include <stdbool.h>
 #include <stdio.h>
+#include <math.h>
+
+#include <vestige/aeffectx.h>
 
 #include "jackvst.h"
-#include <vestige/aeffectx.h>
-#include <math.h>
 
 /* The following audioMaster opcode handlings are copied
  * (with a light modification) from the vst tilde source
@@ -59,8 +59,8 @@ long jack_host_callback (struct AEffect* effect,
 		SHOW_CALLBACK ("amc: audioMasterAutomate\n");
 		// index, value, returns 0
 		//effect->setParameter (effect, index, opt);
-		if( jackvst && jackvst->midi_learn ) {
-			jackvst->midi_learn_PARAM = index;
+		if( jackvst && jackvst->fst->midi_learn ) {
+			jackvst->fst->midi_learn_PARAM = index;
 		}
 		return 0;
 
@@ -190,8 +190,9 @@ long jack_host_callback (struct AEffect* effect,
 	case audioMasterNeedIdle:
 		SHOW_CALLBACK ("amc: audioMasterNeedIdle\n");
 		// plug needs idle calls (outside its editor window)
-		if( jackvst )
-		    jackvst->fst->wantIdle = 1;
+                if( jackvst )
+                    jackvst->fst->wantIdle = 1;
+		
 		return 1;
 
 	case audioMasterSizeWindow:

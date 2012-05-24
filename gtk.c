@@ -1,7 +1,4 @@
-
-
 #include "jackvst.h"
-
 #include <gtk/gtk.h>
 #include <gdk/gdkx.h>
 #include <gdk/gdkevents.h>
@@ -14,7 +11,7 @@
 extern lash_client_t *lash_client;
 #endif
 
-gboolean g_quit = FALSE;
+
 gboolean quit = FALSE;
 
 static	GtkWidget* window;
@@ -22,13 +19,14 @@ static	GtkWidget* gtk_socket;
 static	GtkWidget* vpacker;
 static	GtkWidget* hpacker;
 static	GtkWidget* bypass_button;
-static	GtkWidget* remove_button;
-static	GtkWidget* mute_button;
+static	GtkWidget* editor_button;
+static	GtkWidget* channel_listbox;
 static  GtkWidget* event_box;
 static  GtkWidget* preset_listbox;
 static	GtkWidget* midi_learn_toggle;
 static	GtkWidget* load_button;
 static	GtkWidget* save_button;
+static	gulong preset_listbox_signal;
 
 
 static void
@@ -36,13 +34,20 @@ learn_handler (GtkToggleButton *but, gboolean ptr)
 {
 	JackVST* jvst = (JackVST*) ptr;
 	
-	if( gtk_toggle_button_get_active (but) ) {
-		jvst->midi_learn = 1;
-		jvst->midi_learn_CC = -1;
-		jvst->midi_learn_PARAM = -1;
-	} else {
-		jvst->midi_learn = 0;
+	if ( ! gtk_toggle_button_get_active (but) ) {
+		jvst->fst->midi_learn = 0;
+		gtk_widget_grab_focus( gtk_socket );
+		return;
 	}
+
+
+	pthread_mutex_lock( &(jvst->fst->lock) );		
+	jvst->fst->midi_learn = 1;
+	jvst->fst->midi_learn_CC = -1;
+	jvst->fst->midi_learn_PARAM = -1;
+	pthread_mutex_unlock( &(jvst->fst->lock) );		
+
+
 	gtk_widget_grab_focus( gtk_socket );
 }
 
@@ -50,16 +55,14 @@ static void
 bypass_handler (GtkToggleButton *but, gboolean ptr)
 {
 	JackVST* jvst = (JackVST*) ptr;
-	
 	jvst->bypassed = gtk_toggle_button_get_active (but);
-	gtk_widget_grab_focus( gtk_socket );
-}
-
-static void
-mute_handler (GtkToggleButton *but, gboolean ptr)
-{
-	JackVST* jvst = (JackVST*) ptr;
-	jvst->muted = gtk_toggle_button_get_active (but);
+	
+	if ( jvst->bypassed ) {
+		fst_suspend(jvst->fst);
+	} else {
+		fst_resume(jvst->fst);
+	}
+	
 	gtk_widget_grab_focus( gtk_socket );
 }
 
@@ -82,6 +85,11 @@ save_handler (GtkToggleButton *but, gboolean ptr)
 	GtkFileFilter * ff = gtk_file_filter_new();
 	gtk_file_filter_set_name(ff,"FST Plugin State");
 	gtk_file_filter_add_pattern(ff,"*.fps");
+	gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog),ff);
+
+	ff = gtk_file_filter_new();
+	gtk_file_filter_set_name(ff,"FXB Bank");
+	gtk_file_filter_add_pattern(ff,"*.fxb");
 	gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog),ff);
 
 	gtk_file_chooser_set_do_overwrite_confirmation (GTK_FILE_CHOOSER (dialog), TRUE);
@@ -129,9 +137,25 @@ load_handler (GtkToggleButton *but, gboolean ptr)
 			GTK_STOCK_OPEN, GTK_RESPONSE_ACCEPT,
 			NULL);
 
+	// All supported
 	GtkFileFilter * ff = gtk_file_filter_new();
+	gtk_file_filter_set_name(ff,"All supported files");
+	gtk_file_filter_add_pattern(ff,"*.fps");
+	gtk_file_filter_add_pattern(ff,"*.fxb");
+	gtk_file_filter_add_pattern(ff,"*.fxp");
+	gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog),ff);
+
+	// FST internal format
+	ff = gtk_file_filter_new();
 	gtk_file_filter_set_name(ff,"FST Plugin State");
 	gtk_file_filter_add_pattern(ff,"*.fps");
+	gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog),ff);
+
+	// FX Files
+	ff = gtk_file_filter_new();
+	gtk_file_filter_set_name(ff,"FX Files (fxb/fxp)");
+	gtk_file_filter_add_pattern(ff,"*.fxb");
+	gtk_file_filter_add_pattern(ff,"*.fxp");
 	gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog),ff);
 
 	if (gtk_dialog_run (GTK_DIALOG (dialog)) == GTK_RESPONSE_ACCEPT) {
@@ -149,19 +173,21 @@ load_handler (GtkToggleButton *but, gboolean ptr)
 			gtk_widget_destroy (errdialog);
 		}
 
+		printf("File %s loaded\n", filename);
 		g_free (filename);
 	}
 	gtk_widget_destroy (dialog);
 	gtk_widget_grab_focus( gtk_socket );
-}
 
-static void
-remove_handler (GtkToggleButton *but, gboolean ptr)
-{
-	JackVST* jvst = (JackVST*) ptr;
-	
-	jack_deactivate (jvst->client);
-	fst_destroy_editor (jvst->fst);
+	// update preset combo
+	g_signal_handler_block (preset_listbox, preset_listbox_signal);
+	GtkTreeModel *store = gtk_combo_box_get_model( GTK_COMBO_BOX (preset_listbox ));
+	gtk_list_store_clear( GTK_LIST_STORE( store ) );
+	create_preset_store( store, jvst->fst );
+        g_signal_handler_unblock (preset_listbox, preset_listbox_signal);
+
+	// Set first program
+	fst_program_change(jvst->fst, 0);
 }
 
 static gboolean
@@ -206,6 +232,40 @@ configure_handler (GtkWidget* widget, GdkEventConfigure* ev, GtkSocket *sock)
 	return FALSE;
 }
 
+static void
+editor_handler (GtkToggleButton *but, gboolean ptr)
+{
+	JackVST* jvst = (JackVST*) ptr;
+
+	if (gtk_toggle_button_get_active (but)) {
+		// Create GTK Socket (Widget)
+		gtk_socket = gtk_socket_new ();
+		GTK_WIDGET_SET_FLAGS(gtk_socket, GTK_CAN_FOCUS);
+
+		// Add Widget socket to vBox
+		gtk_box_pack_start (GTK_BOX(vpacker), gtk_socket, TRUE, FALSE, 0);
+
+		if (fst_run_editor (jvst->fst)) {
+			fst_error ("cannot create editor");
+			return;
+		}
+
+		g_signal_connect (G_OBJECT(window), "configure-event", G_CALLBACK(configure_handler), gtk_socket);
+		gtk_socket_add_id (GTK_SOCKET (gtk_socket), jvst->fst->xid);
+
+	        SetWindowPos (jvst->fst->window, 0, 0, 0, jvst->fst->width, jvst->fst->height+24, 0);
+        	ShowWindow (jvst->fst->window, SW_SHOWNA);
+
+		gtk_widget_show (gtk_socket);
+		gtk_widget_grab_focus( gtk_socket );
+	} else {
+		fst_destroy_editor(jvst->fst);
+//		gtk_widget_destroy(gtk_socket);
+		gtk_widget_hide(gtk_socket);
+		gtk_window_resize(GTK_WINDOW(window), 1, 1);
+	}
+}
+
 void
 forward_key_event (GtkSocket *sock, GdkEventKey* ev, JackVST* jvst)
 {
@@ -216,7 +276,7 @@ forward_key_event (GtkSocket *sock, GdkEventKey* ev, JackVST* jvst)
 	
 	event.type = (ev->type == GDK_KEY_PRESS ? KeyPress : KeyRelease);
 	event.display = gdk_x11_drawable_get_xdisplay (sock->plug_window);
-	event.window = fst_get_XID (jvst->fst);
+	event.window = jvst->fst->xid;
 	event.time = ev->time;
 	event.x = 1;
 	event.y = 1;
@@ -236,8 +296,11 @@ static gboolean
 destroy_handler (GtkWidget* widget, GdkEventAny* ev, gpointer ptr)
 {
 	JackVST* jvst = (JackVST*) ptr;
-	fst_destroy_editor (jvst->fst);
+
 	//exit (0);
+
+	jack_deactivate( jvst->client );
+	fst_close(jvst->fst);
 	gtk_main_quit();
 	
 	return FALSE;
@@ -256,14 +319,22 @@ focus_handler (GtkWidget* widget, GdkEventFocus* ev, gpointer ptr)
 }
 
 static void
-program_change (GtkComboBox *combo, JackVST *jvst)
-{
+program_change (GtkComboBox *combo, JackVST *jvst) {
 	int program = gtk_combo_box_get_active (combo);
-	printf ("active: %d\n", program );
 	// cant be done here. plugin only expects one GUI thread.
-	//jvst->fst->plugin->dispatcher( jvst->fst->plugin, effSetProgram, 0, program, NULL, 0.0 );
-	jvst->fst->want_program = program;
-	gtk_widget_grab_focus( gtk_socket );
+	printf("Program: %d\n",program);
+	fst_program_change(jvst->fst,program);
+	
+//	gtk_widget_grab_focus( gtk_socket );
+}
+
+static void
+channel_change (GtkComboBox *combo, JackVST *jvst) {
+	int channel = gtk_combo_box_get_active (combo);
+
+	jvst->channel = channel - 1;
+
+        gtk_widget_grab_focus( gtk_socket );
 }
 
 #ifdef HAVE_LASH
@@ -296,12 +367,12 @@ save_data( JackVST *jvst )
 	    
 	    snprintf( buf, 15, "midi_map%d", i );
 	    config = lash_config_new_with_key( buf );
-	    lash_config_set_value_int(config, jvst->midi_map[i]);
+	    lash_config_set_value_int(config, jvst->fst->midi_map[i]);
 	    lash_send_config(lash_client, config);
 	    //lash_config_destroy( config );
 	}
 
-	if( jvst->fst->plugin->flags & 32 ) {
+	if ( jvst->fst->plugin->flags & effFlagsProgramChunks ) {
 	    // TODO: calling from this thread is wrong.
 	    //       is should move it to fst gui thread.
 	    printf( "getting chunk...\n" );
@@ -311,7 +382,7 @@ save_data( JackVST *jvst )
 	    //bytelen = jvst->fst->plugin->dispatcher( jvst->fst->plugin, 23, 0, 0, &chunk, 0 );
 	    //pthread_mutex_unlock( &(fst->lock) );
 
-	    bytelen = fst_call_dispatcher( jvst->fst, 23, 0, 0, &chunk, 0 );
+	    bytelen = fst_call_dispatcher( jvst->fst, effGetChunk, 0, 0, &chunk, 0 );
 	    printf( "got tha chunk..\n" );
 	    if( bytelen ) {
 		if( bytelen < 0 ) {
@@ -343,13 +414,13 @@ restore_data(lash_config_t * config, JackVST *jvst )
 	    if( cc < 0 || cc>=128 || param<0 || param>=jvst->fst->plugin->numParams ) 
 		return;
 
-	    jvst->midi_map[cc] = param;
+	    jvst->fst->midi_map[cc] = param;
 	    return;
 	}
 
-	if( jvst->fst->plugin->flags & 32 ) {
+	if ( jvst->fst->plugin->flags & effFlagsProgramChunks) {
 	    if (strcmp(key, "bin_chunk") == 0) {
-		fst_call_dispatcher( jvst->fst, 24, 0, lash_config_get_value_size( config ), (void *) lash_config_get_value( config ), 0 );
+		fst_call_dispatcher( jvst->fst, effSetChunk, 0, lash_config_get_value_size( config ), (void *) lash_config_get_value( config ), 0 );
 		return;
 	    } 
 	} else {
@@ -364,22 +435,64 @@ restore_data(lash_config_t * config, JackVST *jvst )
 static gboolean
 idle_cb(JackVST *jvst)
 {
+	FST* fst = (FST*) jvst->fst;
+
 	if (quit) {
+		jack_deactivate( jvst->client );
 		gtk_widget_destroy( window );
-		fst_destroy_editor( jvst->fst);
+		fst_close( fst);
 		gtk_main_quit();
-		//g_quit = TRUE;
 		return FALSE;
 	}
 
-	if( jvst->fst->want_program == -1 && gtk_combo_box_get_active( GTK_COMBO_BOX( preset_listbox ) ) != jvst->current_program )
-		gtk_combo_box_set_active( GTK_COMBO_BOX( preset_listbox ), jvst->current_program );
+	if( fst->want_program == -1 && 
+	    gtk_combo_box_get_active( GTK_COMBO_BOX( preset_listbox ) ) != fst->current_program )
+	{
+		g_signal_handler_block (preset_listbox, preset_listbox_signal);
+		gtk_combo_box_set_active( GTK_COMBO_BOX( preset_listbox ), fst->current_program );
+        	g_signal_handler_unblock (preset_listbox, preset_listbox_signal);
+	}
 
-	if( jvst->midi_learn && jvst->midi_learn_CC != -1 && jvst->midi_learn_PARAM != -1 ) {
-		if( jvst->midi_learn_CC < 128 ) {
-			jvst->midi_map[jvst->midi_learn_CC] = jvst->midi_learn_PARAM;
+	if( fst->midi_learn && fst->midi_learn_CC != -1 && fst->midi_learn_PARAM != -1 ) {
+		if( fst->midi_learn_CC < 128 ) {
+			fst->midi_map[fst->midi_learn_CC] = fst->midi_learn_PARAM;
+			char name[32];
+			int success;
+			success = fst->plugin->dispatcher( fst->plugin, effGetParamName, fst->midi_learn_PARAM, 0, name, 0 );
+			if (success) {
+				printf("MIDIMAP CC: %d => %s\n", fst->midi_learn_CC, name);
+			} else {
+				printf("MIDIMAP CC: %d => %d\n", fst->midi_learn_CC, fst->midi_learn_PARAM);
+			}
+
+			int cc, paramIndex;
+			int show_tooltip = FALSE;
+			char paramName[64];
+			char tString[96];
+			char tooltip[96 * 128];
+			tooltip[0] = 0;
+		   	for (cc = 0; cc < 128; cc++) {
+				paramIndex = fst->midi_map[cc];
+				if ( paramIndex < 0 || paramIndex >= fst->plugin->numParams )
+					continue;
+
+				fst->plugin->dispatcher(fst->plugin, effGetParamName, paramIndex, 0, paramName, 0 );
+
+				if (show_tooltip) {
+					sprintf(tString, "\nCC %03d => %s",cc, paramName);
+				} else {
+					sprintf(tString, "CC %03d => %s",cc, paramName);
+					show_tooltip = TRUE;
+				}
+
+				strcat(tooltip, tString);
+			}
+
+			if (show_tooltip)
+				gtk_widget_set_tooltip_text(midi_learn_toggle, tooltip);
+
 		}
-		jvst->midi_learn = 0;
+		fst->midi_learn = 0;
 		gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON( midi_learn_toggle ), 0 );
 	}
 
@@ -423,29 +536,48 @@ idle_cb(JackVST *jvst)
 	return TRUE;
 }
 
-GtkListStore *create_preset_store( FST *fst )
+int create_preset_store( GtkListStore *store, FST *fst )
 {
-	GtkListStore *retval = gtk_list_store_new( 2, G_TYPE_STRING, G_TYPE_INT );
 	int i;
+
+
 	int vst_version = fst->plugin->dispatcher (fst->plugin, effGetVstVersion, 0, 0, NULL, 0.0f);
-	for( i=0; i<fst->plugin->numPrograms; i++ )
+	for( i = 0; i < fst->plugin->numPrograms; i++ )
 	{
 		char buf[100];
 		GtkTreeIter new_row_iter;
 
 		snprintf( buf, 90, "preset %d", i );
 		if( vst_version >= 2 ) 
-			fst->plugin->dispatcher( fst->plugin, 29, i, 0, buf, 0.0 );
+			fst->plugin->dispatcher( fst->plugin, effGetProgramNameIndexed, i, 0, buf, 0.0 );
+
+		gtk_list_store_insert( store, &new_row_iter, i );
+		gtk_list_store_set( store, &new_row_iter, 0, buf, 1, i, -1 );
+	}
+
+	return 1;
+}
+GtkListStore * create_channel_store() {
+	GtkListStore *retval = gtk_list_store_new( 2, G_TYPE_STRING, G_TYPE_INT );
+	int i;
+	char buf[100];
+	
+	for( i=0; i <= 16; i++ ) {
+		GtkTreeIter new_row_iter;
+
+		if (i == 0) {
+			snprintf( buf, 90, "All");
+		} else {
+			snprintf( buf, 90, "Ch %d", i);
+		}
 
 		gtk_list_store_insert( retval, &new_row_iter, i );
 		gtk_list_store_set( retval, &new_row_iter, 0, buf, 1, i, -1 );
 	}
 
-	if( fst->plugin->numPrograms > 0 )
-		fst->plugin->dispatcher( fst->plugin, effSetProgram, 0, 0, NULL, 0.0 );
-
 	return retval;
 }
+
 int
 manage_vst_plugin (JackVST* jvst)
 {
@@ -461,21 +593,30 @@ manage_vst_plugin (JackVST* jvst)
 	vpacker = gtk_vbox_new (FALSE, 7);
 	hpacker = gtk_hbox_new (FALSE, 7);
 	bypass_button = gtk_toggle_button_new_with_label ("bypass");
-	mute_button = gtk_toggle_button_new_with_label ("mute");
-	remove_button = gtk_toggle_button_new_with_label ("remove");
+	gtk_toggle_button_set_active(bypass_button, jvst->bypassed);
+	editor_button = gtk_toggle_button_new_with_label ("editor");
 	midi_learn_toggle = gtk_toggle_button_new_with_label ("midi Learn");
 	save_button = gtk_button_new_with_label ("save state");
 	load_button = gtk_button_new_with_label ("load state");
 
+	//----------------------------------------------------------------------------------
+	channel_listbox = gtk_combo_box_new_with_model ( GTK_TREE_MODEL(create_channel_store()) );
+	renderer = gtk_cell_renderer_text_new ();
+	gtk_cell_layout_pack_start (GTK_CELL_LAYOUT (channel_listbox), renderer, TRUE);
+	gtk_cell_layout_set_attributes (GTK_CELL_LAYOUT (channel_listbox), renderer, "text", 0, NULL);
+	gtk_combo_box_set_active( GTK_COMBO_BOX(channel_listbox), (jvst->channel == -1) ? 0 : jvst->channel + 1 );
+	g_signal_connect( G_OBJECT(channel_listbox), "changed", G_CALLBACK(channel_change), jvst ); 
 
 	//----------------------------------------------------------------------------------
-	preset_listbox = gtk_combo_box_new_with_model( GTK_TREE_MODEL(create_preset_store( jvst->fst )) );
+	GtkListStore* store = gtk_list_store_new( 2, G_TYPE_STRING, G_TYPE_INT );
+	preset_listbox = gtk_combo_box_new_with_model( GTK_TREE_MODEL(store) );
+	create_preset_store( store, jvst->fst );
 
 	renderer = gtk_cell_renderer_text_new ();
 	gtk_cell_layout_pack_start (GTK_CELL_LAYOUT (preset_listbox), renderer, TRUE);
 	gtk_cell_layout_set_attributes (GTK_CELL_LAYOUT (preset_listbox), renderer, "text", 0, NULL);
 	gtk_combo_box_set_active( GTK_COMBO_BOX(preset_listbox), 0 );
-	g_signal_connect( G_OBJECT(preset_listbox), "changed", G_CALLBACK( program_change ), jvst ); 
+	preset_listbox_signal = g_signal_connect( G_OBJECT(preset_listbox), "changed", G_CALLBACK( program_change ), jvst ); 
 	//----------------------------------------------------------------------------------
 
 
@@ -483,16 +624,12 @@ manage_vst_plugin (JackVST* jvst)
 			    G_CALLBACK(bypass_handler),
 			    jvst);
 
-	g_signal_connect (G_OBJECT(mute_button), "toggled",
-			    G_CALLBACK(mute_handler),
-			    jvst);
-
 	g_signal_connect (G_OBJECT(midi_learn_toggle), "toggled",
 			    G_CALLBACK(learn_handler),
 			    jvst);
 
-	g_signal_connect (G_OBJECT(remove_button), "toggled",
-			    G_CALLBACK(remove_handler),
+	g_signal_connect (G_OBJECT(editor_button), "toggled",
+			    G_CALLBACK(editor_handler),
 			    jvst);
 
 	g_signal_connect (G_OBJECT(load_button), "clicked",
@@ -503,42 +640,37 @@ manage_vst_plugin (JackVST* jvst)
 			    G_CALLBACK(save_handler),
 			    jvst);
 
-
 	gtk_container_set_border_width (GTK_CONTAINER(hpacker), 3);
 
 	g_signal_connect (G_OBJECT(window), "delete_event",
 			    G_CALLBACK(destroy_handler),
 			    jvst);
 
-	gtk_socket = gtk_socket_new ();
-	GTK_WIDGET_SET_FLAGS(gtk_socket, GTK_CAN_FOCUS);
 	
 	gtk_box_pack_end   (GTK_BOX(hpacker), midi_learn_toggle, FALSE, FALSE, 0);
 	gtk_box_pack_end   (GTK_BOX(hpacker), preset_listbox, FALSE, FALSE, 0);
 	gtk_box_pack_end   (GTK_BOX(hpacker), bypass_button, FALSE, FALSE, 0);
-	gtk_box_pack_end   (GTK_BOX(hpacker), mute_button, FALSE, FALSE, 0);
 	gtk_box_pack_end   (GTK_BOX(hpacker), load_button, FALSE, FALSE, 0);
 	gtk_box_pack_end   (GTK_BOX(hpacker), save_button, FALSE, FALSE, 0);
-	// gtk_box_pack_end   (GTK_BOX(hpacker), remove_button, FALSE, FALSE, 0);
+	gtk_box_pack_end   (GTK_BOX(hpacker), editor_button, FALSE, FALSE, 0);
+	gtk_box_pack_end   (GTK_BOX(hpacker), channel_listbox, FALSE, FALSE, 0);
 	gtk_box_pack_start (GTK_BOX(vpacker), hpacker, FALSE, FALSE, 0);
-	gtk_box_pack_start (GTK_BOX(vpacker), gtk_socket, TRUE, FALSE, 0);
 
 	gtk_container_add (GTK_CONTAINER (window), vpacker);
 
 	// normally every socket should register it self like this.
-	g_signal_connect (G_OBJECT(window), "configure_event",
-			    G_CALLBACK(configure_handler),
-			    gtk_socket);
+	//g_signal_connect (G_OBJECT(window), "configure_event", G_CALLBACK(configure_handler), gtk_socket);
 
 
 	// but you can show() a GtkSocket only with an id set.
-	gtk_socket_add_id (GTK_SOCKET (gtk_socket), fst_get_XID (jvst->fst));
+	//gtk_socket_add_id (GTK_SOCKET (gtk_socket), jvst->fst->xid);
 	
-	SetWindowPos (jvst->fst->window, 0, 0, 0, jvst->fst->width, jvst->fst->height+24, 0);
-	ShowWindow (jvst->fst->window, SW_SHOWNA);
 
  	gtk_widget_show_all (window);
-	gtk_widget_grab_focus( gtk_socket );
+
+	// Nasty hack ;-)
+	if (jvst->with_editor == 2)
+		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(editor_button), TRUE);
 
 	g_timeout_add(500, (GSourceFunc) idle_cb, jvst);
 
