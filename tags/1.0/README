@@ -1,0 +1,66 @@
+
+Whats This ?
+------------
+
+This is official fork of FST, well what is fst ?
+This is a linux vst host. Runs as a jack client.
+Uses jack midi input.
+Only works for GUI plugins currently.
+
+Supports load/save state to LASH, JackSessions, FXP/FXP files, FPS (XML files)
+Supports JackTransport.
+
+Getting Started
+---------------
+
+1) ensure you have the necessary build dependencies:
+
+   gtk-devel
+   jack-devel
+   libxml2
+   lash-devel (optional)
+
+2) Type 'make'. If everything works correctly this should create an
+   executable file called 'fst'.
+
+3) On 64bit it may fail with a link error, when it cant find a 32bit lash
+   but the 64bit stuff is in place. 
+   build yourself a 32bit lash, or:
+   make LASH_EXISTS=no
+
+4) To run your vst plugins:
+   
+   ./fst /path/to/someplugin.dll
+
+   and set up the inputs and outputs, eg. using qjackctl's
+   'Connections' window.
+
+5) To install copy both fst and fst.exe.so into your $PATH
+   (i think they need to be in the same folder)
+
+Stuff
+-----
+
+With LASH you can save and restore the state of the plugin.
+in order to promote lash i pushed other methods of load/save
+pretty much down in my priority list.
+
+There is a first version of midi learn, load/save of midimap
+will come tomorrow. i had my beer now and its 5:15
+i should be in a club. but i go to bed now.
+just press midi learn, move a plugin control and your midi
+control.
+
+License
+-------
+
+fst is licenced under the GNU General Public License version 2. See
+file 'COPYING' for details.
+
+Authors / contributors
+----------------------
+torbenh@gmx.de, Paul Davis, Kjetil S. Matheussen / Notam, Mark Williamson
+Joe Button, Nedko Arnaudov
+
+Current maintainer of this fork: Pawel Piatek <xj@wp.pl>
+
