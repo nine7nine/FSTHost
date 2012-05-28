@@ -22,10 +22,12 @@
  *
  */
 
+#include <stdint.h>
 
 #ifndef _AEFFECTX_H
 #define _AEFFECTX_H
 
+#define CCONST(a, b, c, d)( ( ( (int) a ) << 24 ) | ( ( (int) b ) << 16 ) | ( ( (int) c ) << 8 ) | ( ( (int) d ) << 0 ) )
 
 #define audioMasterAutomate 0
 #define audioMasterVersion 1
@@ -92,17 +94,13 @@
 #define effFlagsCanDoubleReplacing (1 << 12) // v2.4 only
 
 #define effOpen 0
-//currently unused
 #define effClose 1
-// currently unused
 #define effSetProgram 2
-// currently unused
 #define effGetProgram 3
 #define effSetProgramName 4
 #define effGetProgramName 5
 #define effGetParamLabel 6
 #define effGetParamDisplay 7
-// currently unused
 #define effGetParamName 8
 // this is a guess
 #define effSetSampleRate 10
@@ -112,6 +110,7 @@
 #define effEditOpen 14
 #define effEditClose 15
 #define effEditIdle 19
+#define effEditTop 20
 #define effGetChunk 23
 #define effSetChunk 24
 #define effProcessEvents 25
@@ -122,9 +121,7 @@
 #define effGetVendorString 47
 #define effGetProductString 48
 #define effGetVendorVersion 49
-// currently unused
 #define effCanDo 51
-// currently unused
 #define effIdle 53
 #define effGetVstVersion 58
 #define effGetVstVersion 58
@@ -135,24 +132,22 @@
 #define effBeginLoadBank 75
 #define effBeginLoadProgram 76
 
-#ifdef WORDS_BIGENDIAN
-// "VstP"
-#define kEffectMagic 0x50747356
-#else
-// "PtsV"
-#define kEffectMagic 0x56737450
-#endif
-
+#define kEffectMagic (CCONST( 'V', 's', 't', 'P' ))
 #define kVstLangEnglish 1
 #define kVstMidiType 1
 #define kVstTransportPlaying (1 << 1)
-#define kVstParameterUsesFloatStep (1 << 2)
-#define kVstTempoValid (1 << 10)
-#define kVstBarsValid (1 << 11)
 #define kVstTransportChanged 1
 
-typedef struct VSTPlugin VSTPlugin;
+//struct RemoteVstPlugin;
 
+#define kVstNanosValid (1 << 8)
+#define kVstPpqPosValid (1 << 9)
+#define kVstTempoValid (1 << 10)
+#define kVstBarsValid (1 << 11)
+#define kVstCyclePosValid (1 << 12)
+#define kVstTimeSigValid (1 << 13)
+#define kVstSmpteValid (1 << 14)
+#define kVstClockValid (1 << 15)
 
 typedef struct VstMidiEvent
 {
@@ -181,116 +176,119 @@ typedef struct VstMidiEvent
 
 } VstMidiEvent;
 
-
-
-
 typedef struct VstEvent
 {
 	char dump[sizeof( VstMidiEvent )];
 
-} VstEvent ;
-
-
-
+} VstEvent;
 
 typedef struct VstEvents
 {
 	// 00
 	int numEvents;
 	// 04
-	int reserved;
+	void *reserved;
 	// 08
 	VstEvent * events[];
 } VstEvents;
 
-
-
-
-// Not finished, neither really used
+/* this struct taken from http://asseca.com/vst-24-specs/efGetParameterProperties.html */
 typedef struct VstParameterProperties
 {
 	float stepFloat;
+	float smallStepFloat;
+	float largeStepFloat;
 	char label[64];
-	int flags;
-	int minInteger;
-	int maxInteger;
-	int stepInteger;
+	int32_t flags;
+	int32_t minInteger;
+	int32_t maxInteger;
+	int32_t stepInteger;
+	int32_t largeStepInteger;
 	char shortLabel[8];
-	int category;
-	char categoryLabel[24];
-	char empty[128];
-
 } VstParameterProperties;
 
-
-
-
-typedef struct AEffect
+/* this enum taken from http://asseca.com/vst-24-specs/efGetParameterProperties.html */
+enum VstParameterFlags
 {
-	// Never use c++!!!
-	// 00-03
-	int magic;
-	// dispatcher 04-07
-	int (* dispatcher)( struct AEffect * , int , int , int , void * , float );
-	// process, quite sure 08-0b
-	void (* process)( struct AEffect * , float * * , float * * , int );
-	// setParameter 0c-0f
-	void (* setParameter)( struct AEffect * , int , float );
-	// getParameter 10-13
-	float (* getParameter)( struct AEffect * , int );
-	// programs 14-17
-	int numPrograms;
-	// Params 18-1b
-	int numParams;
-	// Input 1c-1f
-	int numInputs;
-	// Output 20-23
-	int numOutputs;
-	// flags 24-27
-	int flags;
-	// Fill somewhere 28-2b
-	VSTPlugin * user;
-	// Zeroes 2c-2f 30-33 34-37 38-3b
-	char empty3[4 + 4 + 4 + 4];
-	// 1.0f 3c-3f
-	float ioRatio;
-	// An object? pointer 40-43
-	char empty4[4];
-	// Zeroes 44-47
-	char empty5[4];
-	// Id 48-4b
-	int uniqueID;
-	// version 4c-4f
-	int version;
-	// processReplacing 50-53
-	void (* processReplacing)( struct AEffect * , float * * , float * * , int );
-} AEffect;
+	kVstParameterIsSwitch                = 1 << 0,  /* parameter is a switch (on/off) */
+	kVstParameterUsesIntegerMinMax       = 1 << 1,  /* minInteger, maxInteger valid */
+	kVstParameterUsesFloatStep           = 1 << 2,  /* stepFloat, smallStepFloat, largeStepFloat valid */
+	kVstParameterUsesIntStep             = 1 << 3,  /* stepInteger, largeStepInteger valid */
+	kVstParameterSupportsDisplayIndex    = 1 << 4,  /* displayIndex valid */
+	kVstParameterSupportsDisplayCategory = 1 << 5,  /* category, etc. valid */
+	kVstParameterCanRamp                 = 1 << 6  /* set if parameter value can ramp up/down */
+};
 
-
-
-
+// Thanks for FlakXT for update
 typedef struct VstTimeInfo
 {
 	// 00
 	double samplePos;
 	// 08
 	double sampleRate;
-	// unconfirmed 10 18
-	char empty1[8 + 8];
-	// 20?
+	// 10 - 18 - update by FalkXT
+	double nanoSeconds;
+	double ppqPos;
+	// 20
 	double tempo;
-	// unconfirmed 28 30 38
-	char empty2[8 + 8 + 8];
-	// 40?
-	int timeSigNumerator;
-	// 44?
-	int timeSigDenominator;
-	// unconfirmed 48 4c 50
-	char empty3[4 + 4 + 4];
+	// 28, 30, 38 - update by FalkXT
+	double barStartPos;
+	double cycleStartPos;
+	double cycleEndPos;
+	// 40
+	int32_t timeSigNumerator;
+	// 44
+	int32_t timeSigDenominator;
+	// 48, 4c, 50 - update by FalkXT
+	int32_t smpteOffset;
+	int32_t smpteFrameRate;
+	int32_t samplesToNextClock;
 	// 54
-	int flags;
+	int32_t flags;
 
 } VstTimeInfo;
+
+typedef struct AEffect
+{
+	// Never use c++!!!
+	// 00-03
+	int32_t magic;
+	// dispatcher 04-07
+	intptr_t (* dispatcher) (struct AEffect *, int32_t, int32_t, intptr_t, void *, float);
+	// process, quite sure 08-0b
+	void (* process)( struct AEffect * , float **, float **, int32_t );
+	// setParameter 0c-0f
+	void (* setParameter)( struct AEffect * , int32_t, float );
+	// getParameter 10-13
+	float (* getParameter)( struct AEffect * , int32_t );
+	// programs 14-17
+	int32_t numPrograms;
+	// Params 18-1b
+	int32_t numParams;
+	// Input 1c-1f
+	int32_t numInputs;
+	// Output 20-23
+	int32_t numOutputs;
+	// flags 24-27
+	int32_t flags;
+	// Fill somewhere 28-2b
+	intptr_t *ptr1;
+	intptr_t *ptr2;
+	// Zeroes 2c-2f 30-33 34-37 38-3b
+	int32_t empty3[3];
+	// 1.0f 3c-3f
+	float ioRatio;
+	// An object? pointer 40-43
+	void *ptr3;
+	// Zeroes 44-47
+	void *user;
+	// Id 48-4b
+	int32_t uniqueID;
+	// version 4c-4f
+	int32_t version;
+	// processReplacing 50-53
+	void (* processReplacing)( struct AEffect * , float **, float **, int32_t );
+} AEffect;
 
 typedef struct VstPatchChunkInfo
 {
@@ -301,12 +299,11 @@ typedef struct VstPatchChunkInfo
 	char future[48];              // Reserved for future use
 } VstPatchChunkInfo;
 
-typedef long int (* audioMasterCallback)( AEffect * , long int , long int ,
-						long int , void * , float );
+//typedef long int (* audioMasterCallback)( AEffect * , long int , long int , long int , void * , float );
+
+typedef intptr_t (* audioMasterCallback) ( AEffect *, int32_t, int32_t, intptr_t, void *, float );
+//typedef long int (* audioMasterCallback) ( AEffect *, int32_t, int32_t, intptr_t, void *, float );
 // we don't use it, may be noise
 #define VSTCALLBACK
-
-
-
 
 #endif
