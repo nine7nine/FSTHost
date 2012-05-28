@@ -79,7 +79,7 @@ long jack_host_callback (struct AEffect* effect,
 		SHOW_CALLBACK ("amc: audioMasterIdle\n");
 		// call application idle routine (this will
 		// call effEditIdle for all open editors too) 
-		effect->dispatcher(effect, effEditIdle, 0, 0, NULL, 0.0f);
+		// GUI-EVENT-LOOP call effEditIdle for all open editors
 		return 0;
 
 	case audioMasterPinConnected:		
@@ -335,7 +335,8 @@ long jack_host_callback (struct AEffect* effect,
 	case audioMasterUpdateDisplay:
 		SHOW_CALLBACK ("amc: audioMasterUpdateDisplay\n");
 		// something has changed, update 'multi-fx' display
-		effect->dispatcher(effect, effEditIdle, 0, 0, NULL, 0.0f);
+		//effect->dispatcher(effect, effEditIdle, 0, 0, NULL, 0.0f);
+		// GUI-EVENT-LOOP call effEditIdle for all open editors
 		return 0;
 		
 	case audioMasterBeginEdit:

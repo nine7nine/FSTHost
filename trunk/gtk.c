@@ -27,6 +27,7 @@ static	GtkWidget* midi_learn_toggle;
 static	GtkWidget* load_button;
 static	GtkWidget* save_button;
 static	gulong preset_listbox_signal;
+static	gulong gtk_socket_signal;
 
 
 static void
@@ -82,28 +83,49 @@ save_handler (GtkToggleButton *but, gboolean ptr)
 			GTK_STOCK_SAVE, GTK_RESPONSE_ACCEPT,
 			NULL);
 
-	GtkFileFilter * ff = gtk_file_filter_new();
-	gtk_file_filter_set_name(ff,"FST Plugin State");
-	gtk_file_filter_add_pattern(ff,"*.fps");
-	gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog),ff);
+	GtkFileFilter * f1 = gtk_file_filter_new();
+	GtkFileFilter * f2 = gtk_file_filter_new();
+	GtkFileFilter * f3 = gtk_file_filter_new();
+	gtk_file_filter_set_name(f1,"FST Plugin State");
+	gtk_file_filter_add_pattern(f1,"*.fps");
+	gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog),f1);
 
-	ff = gtk_file_filter_new();
-	gtk_file_filter_set_name(ff,"FXB Bank");
-	gtk_file_filter_add_pattern(ff,"*.fxb");
-	gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog),ff);
+	gtk_file_filter_set_name(f2,"FXB Bank");
+	gtk_file_filter_add_pattern(f2,"*.fxb");
+	gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog),f2);
 
-	gtk_file_chooser_set_do_overwrite_confirmation (GTK_FILE_CHOOSER (dialog), TRUE);
+	gtk_file_filter_set_name(f3,"FXP Preset");
+	gtk_file_filter_add_pattern(f3,"*.fxp");
+	gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog),f3);
+
+	gtk_file_chooser_set_do_overwrite_confirmation (GTK_FILE_CHOOSER(dialog), TRUE);
 
 	if (gtk_dialog_run (GTK_DIALOG (dialog)) == GTK_RESPONSE_ACCEPT) {
 		char *filename;
 		char *selected;
-		selected = gtk_file_chooser_get_filename (GTK_FILE_CHOOSER (dialog));
+		char *last4;
+		const gchar *fa_name;
+
+		selected = gtk_file_chooser_get_filename (GTK_FILE_CHOOSER(dialog));
 
 		filename = malloc (strlen (selected) + 5);
 		strcpy (filename, selected);
 
-		if (strlen (selected) < 5 || strcmp (".fps", selected + strlen (selected) - 4)) {
-			strcat (filename, ".fps");
+		last4 = selected + strlen(selected) - 4;
+		fa_name = gtk_file_filter_get_name( gtk_file_chooser_get_filter(GTK_FILE_CHOOSER(dialog)) );
+
+		// F1 Filter - FPS
+		if ( strcmp(gtk_file_filter_get_name(f1), fa_name) == 0) {
+			if (strcmp (".fps", last4) != 0)
+				strcat (filename, ".fps");
+		// F2 filter - FXB
+		} else if ( strcmp(gtk_file_filter_get_name(f2), fa_name) == 0) {
+			if (strcmp (".fxb", last4) != 0 && strcmp (".FXB", last4) != 0)
+				strcat (filename, ".fxb");
+		// F3 Filter - FXP
+		} else if ( strcmp(gtk_file_filter_get_name(f3), fa_name) == 0) {
+			if (strcmp (".fxp", last4) != 0 && strcmp (".FXP", last4) != 0)
+				strcat (filename, ".fxp");
 		}
 
 		if (!fst_save_state (jvst->fst, filename)) {
@@ -250,18 +272,23 @@ editor_handler (GtkToggleButton *but, gboolean ptr)
 			return;
 		}
 
-		g_signal_connect (G_OBJECT(window), "configure-event", G_CALLBACK(configure_handler), gtk_socket);
+		gtk_socket_signal = g_signal_connect (G_OBJECT(window), "configure-event",
+			G_CALLBACK(configure_handler), gtk_socket);
+
 		gtk_socket_add_id (GTK_SOCKET (gtk_socket), jvst->fst->xid);
 
-	        SetWindowPos (jvst->fst->window, 0, 0, 0, jvst->fst->width, jvst->fst->height+24, 0);
-        	ShowWindow (jvst->fst->window, SW_SHOWNA);
+		fst_show_editor(jvst->fst);
 
-		gtk_widget_show (gtk_socket);
+		gtk_widget_set_size_request(gtk_socket, jvst->fst->width, jvst->fst->height);
+		printf("Plugin - Width: %d | Height: %d\n", jvst->fst->width, jvst->fst->height);
+				
+		gtk_widget_show_now (gtk_socket);
 		gtk_widget_grab_focus( gtk_socket );
 	} else {
+		g_signal_handler_disconnect(G_OBJECT(window), gtk_socket_signal);
 		fst_destroy_editor(jvst->fst);
-//		gtk_widget_destroy(gtk_socket);
-		gtk_widget_hide(gtk_socket);
+		gtk_widget_set_size_request(gtk_socket, -1, -1);
+		gtk_widget_destroy(gtk_socket);
 		gtk_window_resize(GTK_WINDOW(window), 1, 1);
 	}
 }
@@ -297,10 +324,14 @@ destroy_handler (GtkWidget* widget, GdkEventAny* ev, gpointer ptr)
 {
 	JackVST* jvst = (JackVST*) ptr;
 
-	//exit (0);
+	printf("GTK destroy_handler\n");
+//	quit = TRUE;
+
+	fst_destroy_editor(jvst->fst);
 
 	jack_deactivate( jvst->client );
 	fst_close(jvst->fst);
+	
 	gtk_main_quit();
 	
 	return FALSE;
@@ -322,7 +353,6 @@ static void
 program_change (GtkComboBox *combo, JackVST *jvst) {
 	int program = gtk_combo_box_get_active (combo);
 	// cant be done here. plugin only expects one GUI thread.
-	printf("Program: %d\n",program);
 	fst_program_change(jvst->fst,program);
 	
 //	gtk_widget_grab_focus( gtk_socket );
@@ -436,11 +466,10 @@ static gboolean
 idle_cb(JackVST *jvst)
 {
 	FST* fst = (FST*) jvst->fst;
-
 	if (quit) {
 		jack_deactivate( jvst->client );
-		gtk_widget_destroy( window );
 		fst_close( fst);
+//		gtk_widget_destroy( window );
 		gtk_main_quit();
 		return FALSE;
 	}
@@ -581,6 +610,8 @@ GtkListStore * create_channel_store() {
 int
 manage_vst_plugin (JackVST* jvst)
 {
+	printf("GTK ThID: %d\n", GetCurrentThreadId ());
+
 	// create a GtkWindow containing a GtkSocket...
 	//
 	// notice the order of the functions.
@@ -593,7 +624,7 @@ manage_vst_plugin (JackVST* jvst)
 	vpacker = gtk_vbox_new (FALSE, 7);
 	hpacker = gtk_hbox_new (FALSE, 7);
 	bypass_button = gtk_toggle_button_new_with_label ("bypass");
-	gtk_toggle_button_set_active(bypass_button, jvst->bypassed);
+	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(bypass_button), jvst->bypassed);
 	editor_button = gtk_toggle_button_new_with_label ("editor");
 	midi_learn_toggle = gtk_toggle_button_new_with_label ("midi Learn");
 	save_button = gtk_button_new_with_label ("save state");
@@ -673,7 +704,7 @@ manage_vst_plugin (JackVST* jvst)
 		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(editor_button), TRUE);
 
 	g_timeout_add(500, (GSourceFunc) idle_cb, jvst);
-
+	
 	printf( "calling gtk_main now\n" );
 	gtk_main ();
 
@@ -698,7 +729,7 @@ int fst_xerror_handler( Display *disp, XErrorEvent *ev )
 }
 
 void
-gui_init (int *argc, char **argv[])
+gtk_gui_init (int *argc, char **argv[])
 {
 	wine_error_handler = XSetErrorHandler( NULL );
 	gtk_init (argc, argv);
