@@ -39,10 +39,10 @@
 
 extern void queue_midi_message(JackVST* jvst, int status, int d1, int d2, jack_nframes_t delta );
 
-long jack_host_callback (struct AEffect* effect,
-			 long opcode,
-			 long index,
-			 long value,
+intptr_t jack_host_callback (struct AEffect* effect,
+			 int32_t  opcode,
+			 int32_t  index,
+			 intptr_t value,
 			 void* ptr,
 			 float opt)
 {
@@ -122,6 +122,12 @@ long jack_host_callback (struct AEffect* effect,
 				_timeInfo.timeSigNumerator = (long) floor (jack_pos.beats_per_bar);
 				_timeInfo.timeSigDenominator = (long) floor (jack_pos.beat_type);
 				_timeInfo.flags |= (kVstBarsValid);
+
+				double dPos = _timeInfo.samplePos / _timeInfo.sampleRate;
+				_timeInfo.barStartPos = 0;
+				_timeInfo.nanoSeconds = dPos * 1000.0;
+				_timeInfo.ppqPos = dPos * _timeInfo.tempo / 60.0;
+				_timeInfo.flags |= (kVstNanosValid|kVstPpqPosValid);
 			}
 			
 			if (tstate == JackTransportRolling) {
