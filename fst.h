@@ -65,17 +65,27 @@ struct _FSTHandle
     int plugincnt;
 };
 
+struct ERect{
+    short top;
+    short left;
+    short bottom;
+    short right;
+};
+
 enum EventCall {
 	RESET,
 	DISPATCHER,
 	EDITOR_OPEN,
+	EDITOR_SHOW,
 	EDITOR_CLOSE,
+	CLOSE,
 	PROGRAM_CHANGE
 };
 
 struct _FST 
 {
     struct	AEffect*    plugin;
+    unsigned int mainThreadId;
     void*       window; /* win32 HWND */
     int         xid;    /* X11 XWindow */
     FSTHandle*  handle;
@@ -105,9 +115,7 @@ struct _FST
     struct _FST* next;
     pthread_mutex_t lock;
     pthread_mutex_t event_call_lock;
-    pthread_cond_t  program_change;
-    pthread_cond_t  window_status_change;
-    pthread_cond_t  plugin_dispatcher_called;
+    pthread_cond_t  event_called;
 };
 
 struct _FXHeader {
@@ -123,8 +131,6 @@ struct _FXHeader {
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-extern int        start_gui_event_loop (HMODULE hInst);
 
 extern FSTHandle* fst_load (const char * );
 extern int        fst_unload (FSTHandle*);
@@ -143,13 +149,16 @@ extern int fst_call_dispatcher(FST *fst, int opcode, int index, int val, void *p
 /**
  * Load a plugin state from a file.
  */
-extern int fst_load_fps (FST * fst, char * filename);
-extern int fst_load_fxfile (FST * fst, char * filename);
+extern int fst_load_state (FST * fst, const char * filename);
+extern int fst_load_fps (FST * fst, const char * filename);
+extern int fst_load_fxfile (FST * fst, const char * filename);
 
 /**
  * Save a plugin state to a file.
  */
-extern int fst_save_state (FST * fst, char * filename);
+extern int fst_save_state (FST * fst, const char * filename);
+extern int fst_save_fps (FST * fst, const char * filename);
+extern int fst_save_fxfile (FST * fst, const char * filename, int isBank);
 
 #ifdef __cplusplus
 }

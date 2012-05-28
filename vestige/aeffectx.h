@@ -260,12 +260,10 @@ typedef struct AEffect
 	char empty5[4];
 	// Id 48-4b
 	int uniqueID;
-	// Don't know 4c-4f
+	// version 4c-4f
 	int version;
 	// processReplacing 50-53
 	void (* processReplacing)( struct AEffect * , float * * , float * * , int );
-
-
 } AEffect;
 
 

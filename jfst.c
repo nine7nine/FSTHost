@@ -21,8 +21,10 @@
 #include <string.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <libgen.h>
 #include <glib.h>
 #include <semaphore.h>
+#include <signal.h>
 #include <vestige/aeffectx.h>
 
 #include <fst.h>
@@ -41,8 +43,8 @@ extern long jack_host_callback (struct AEffect*, long, long, long, void*, float)
 
 /* gtk.c */
 
-extern void gui_init (int* argc, char** argv[]);
-extern int  manage_vst_plugin (JackVST*);
+extern void gtk_gui_init (int* argc, char** argv[]);
+extern int manage_vst_plugin (JackVST * jvst);
 
 /* Prototype for plugin "canDo" helper function*/
 int canDo(struct AEffect* plugin, char* feature);
@@ -70,8 +72,30 @@ static void *the_arg;
 static pthread_t the_thread_id;
 static sem_t sema;
 
+JackVST *jvst_first;
+
+void
+signal_callback_handler(int signum)
+{
+	JackVST *jvst;
+
+	jvst = jvst_first;
+
+	printf("Caught signal to terminate\n");
+
+        jvst->fst->plugin->dispatcher (jvst->fst->plugin, effStopProcess, 0, 0, NULL, 0.0f);
+        jvst->fst->plugin->dispatcher (jvst->fst->plugin, effMainsChanged, 0, 0, NULL, 0.0f);
+
+	jack_deactivate(jvst->client);
+
+	jvst->fst->event_call = CLOSE;
+}
+
+
 static DWORD WINAPI wine_thread_aux( LPVOID arg )
 {
+  printf("Audio ThID: %d\n", GetCurrentThreadId ());
+
   the_thread_id = pthread_self();
   sem_post( &sema );
   the_function( the_arg );
@@ -759,6 +783,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 
 	// Init VST
 	jvst = (JackVST*) calloc (1, sizeof (JackVST));
+	jvst_first = jvst;
 	jvst->bypassed = opt_bypassed;
 	jvst->channel = opt_channel;
 	jvst->with_editor = opt_with_editor;
@@ -767,10 +792,9 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 //		jvst->fst->midi_map[i] = -1;
 
 	if (!client_name) {
-		client_name = g_path_get_basename(strdup (plug));
-		if ((period = strrchr (client_name, '.')) != NULL) {
+		client_name = basename( strdup(plug) );
+		if ((period = strrchr (client_name, '.')) != NULL)
 			*period = '\0';
-		}
 	}
 
 	printf( "yo... lets see...\n" );
@@ -786,9 +810,9 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 		return 1;
 	}
 
-	printf("Start GUI/Event thread ...\n");
-	if (! start_gui_event_loop (hInst))
-		return 1;
+//	printf("Start GUI/Event thread ...\n");
+//	if (! start_gui_event_loop (jvst->fst))
+//		return 1;
 
 	plugin = jvst->fst->plugin;
 
@@ -953,18 +977,21 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	if (connect_to)
 		jvst_connect(jvst, client_name, connect_to);
 
-	printf( "Entering main loop\n" );
 	if (jvst->with_editor) {
-		gui_init (&argc, &argv);
 		printf( "ok.... RockNRoll\n" );
-		manage_vst_plugin (jvst);
+		gtk_gui_init (&argc, &argv);
+        	if (CreateThread (NULL, 0, (LPTHREAD_START_ROUTINE) manage_vst_plugin, jvst, 0, NULL) == NULL) {
+                	fst_error ("could not create new thread proxy");
+	                return 0;
+        	}
 	} else {
+		signal(SIGINT, signal_callback_handler);
 		printf("Editor Disabled\n");
-		while( 1 ) sleep (10);
-
-		jack_deactivate( jvst->client );
-		fst_close(jvst->fst);
 	}
+
+	fst_gui_event_loop(hInst);
+
+	free(jvst);
 
 	return 0;
 }

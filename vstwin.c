@@ -11,13 +11,6 @@
 #include <X11/X.h>
 #include <X11/Xlib.h>
 
-struct ERect{
-    short top;
-    short left;
-    short bottom;
-    short right;
-};
-
 static FST* fst_first = NULL;
 
 #define DELAYED_WINDOW 1
@@ -28,57 +21,23 @@ my_window_proc (HWND w, UINT msg, WPARAM wp, LPARAM lp)
 	FST* fst=NULL;
 	LRESULT result;
 
-//	if (msg != WM_TIMER) {
-//		fst_error ("window callback handler, msg = 0x%x win=%p\n", msg, w);
-//	}
-
 	switch (msg) {
 	case WM_KEYUP:
 	case WM_KEYDOWN:
 		break;
 
 	case WM_CLOSE:
-		//printf("wtf.\n" );
-		PostQuitMessage (0);
+		printf("Receive WM_CLOSE - WTF ?\n");
+		break;
 	case WM_NCDESTROY:
 	case WM_DESTROY:
-		/* we should never get these */
-		//return 0;
+//		printf("Get destroy %d\n", w);
 		break;
-#if 0
-	case WM_PAINT:
-			if ((fst = GetPropA (w, "fst_ptr")) != NULL) {
-				if (fst->window && !fst->been_activated) {
-					fst->been_activated = TRUE;
-					pthread_cond_signal (&fst->window_status_change);
-					pthread_mutex_unlock (&fst->lock);
-				}
-			}
-		break;
-#endif
-
-#if 0	
-	case WM_TIMER:
-		fst = GetPropA( w, "fst_ptr" );
-		if( !fst ) {
-		    printf( "Timer without fst_ptr Prop :(\n" );
-		    return 0;
-		}
-
-		fst->plugin->dispatcher(fst->plugin, effEditIdle, 0, 0, NULL, 0.0f);
-		if( fst->wantIdle )
-		    fst->plugin->dispatcher(fst->plugin, 53, 0, 0, NULL, 0.0f);
-		return 0;
-#endif
-
-
-
 	default:
 		break;
 	}
 
 	return DefWindowProcA (w, msg, wp, lp );
-	//return 0;
 }
 
 static FST* 
@@ -89,9 +48,7 @@ fst_new ()
 
 	pthread_mutex_init (&fst->lock, NULL);
 	pthread_mutex_init (&fst->event_call_lock, NULL);
-	pthread_cond_init (&fst->window_status_change, NULL);
-	pthread_cond_init (&fst->program_change, NULL);
-	pthread_cond_init (&fst->plugin_dispatcher_called, NULL);
+	pthread_cond_init (&fst->event_called, NULL);
 	fst->want_program = -1;
 	fst->event_call = RESET;
 	for (i=0; i<128; i++ )
@@ -108,16 +65,20 @@ fst_new ()
 	return fst;
 }
 
-DWORD WINAPI gui_event_loop (LPVOID param)
+//DWORD WINAPI
+int
+fst_gui_event_loop (HMODULE hInst)
 {
 	MSG msg;
 	FST* fst;
 	struct AEffect* plugin;
-	HMODULE hInst;
+	int newProg;
+	char progName[24];
 	HWND window;
 	DWORD gui_thread_id;
 	HANDLE* h_thread;
 
+	register_window_class(hInst);
 	gui_thread_id = GetCurrentThreadId ();
 	h_thread = GetCurrentThread ();
 
@@ -134,18 +95,15 @@ DWORD WINAPI gui_event_loop (LPVOID param)
 		return 1;
 	}
 	
-	if ((window = CreateWindowExA (0, "FST", "dummy",
-				       WS_OVERLAPPEDWINDOW & ~WS_THICKFRAME & ~WS_MAXIMIZEBOX,
-				       9999, 9999,
-				       1, 1,
-				       NULL, NULL,
-				       hInst,
-				       NULL )) == NULL) {
+	if ((window = CreateWindowA ("FST", "dummy", WS_OVERLAPPEDWINDOW | WS_DISABLED,
+		0, 0, 0, 0, NULL, NULL, hInst, NULL )) == NULL) {
 		fst_error ("cannot create dummy timer window");
 	}
 
-	if (!SetTimer (window, 1000, 20, NULL))
+	if (!SetTimer (window, 1000, 20, NULL)) {
 		fst_error ("cannot set timer on dummy window");
+		return 1;
+	}
 
 	while (GetMessageA (&msg, NULL, 0,0)) {
 	   TranslateMessage( &msg );
@@ -157,51 +115,74 @@ DWORD WINAPI gui_event_loop (LPVOID param)
 	   if ( msg.message != WM_TIMER )
 		continue;
 
+again:
 	   for (fst = fst_first; fst; fst = fst->next) {
 	      plugin = fst->plugin;
 
 	      switch (fst->event_call) {
 	      case EDITOR_OPEN:		
 	         pthread_mutex_lock (&fst->lock);
-	         if (fst->window == NULL) {
-	            if (! fst_create_editor (fst))
-	               fst_error ("cannot create editor for plugin %s", fst->handle->name);
-	         }
 	         fst->event_call = RESET;
-	         pthread_cond_signal (&fst->window_status_change);
+	         if (fst->window == NULL && ! fst_create_editor (fst))
+	               fst_error ("cannot create editor for plugin %s", fst->handle->name);
+
+	         pthread_cond_signal (&fst->event_called);
+	         pthread_mutex_unlock (&fst->lock);
+	         break;
+	      case EDITOR_SHOW:
+	         pthread_mutex_lock (&fst->lock);
+	         fst->event_call = RESET;
+	         if (fst->window != NULL) {
+		         ShowWindow(fst->window, SW_RESTORE);
+		         EnableWindow(fst->window, TRUE);
+	        	 UpdateWindow(fst->window);
+	         }
+
+	         pthread_cond_signal (&fst->event_called);
 	         pthread_mutex_unlock (&fst->lock);
 	         break;
 	      case EDITOR_CLOSE:
-	        pthread_mutex_lock (&fst->lock);
-		if (fst->window != NULL)
-		   plugin->dispatcher( plugin, effEditClose, 0, 0, NULL, 0.0f );
-	        fst->event_call = RESET;
-	        pthread_cond_signal (&fst->window_status_change);
-	        pthread_mutex_unlock (&fst->lock);
-	        break;
-
-	      case PROGRAM_CHANGE:
 	         pthread_mutex_lock (&fst->lock);
-	         if (fst->want_program != -1) {
-	             plugin->dispatcher (plugin, effBeginSetProgram, 0, fst->want_program, NULL, 0);
-	             plugin->dispatcher (plugin, effSetProgram, 0, fst->want_program, NULL, 0);
-	             plugin->dispatcher (plugin, effEndSetProgram, 0, fst->want_program, NULL, 0);
-	             fst->want_program = -1; 
-	         }
 	         fst->event_call = RESET;
-	         pthread_cond_signal (&fst->program_change);
+		 if (fst->window != NULL)
+		    plugin->dispatcher( plugin, effEditClose, 0, 0, NULL, 0.0f );
+
+		 DestroyWindow(fst->window);
+	         fst->window = NULL;
+	         pthread_cond_signal (&fst->event_called);
 	         pthread_mutex_unlock (&fst->lock);
 	         break;
+	      case PROGRAM_CHANGE:
+	         pthread_mutex_lock (&fst->lock);
+	         fst->event_call = RESET;
+	         if (fst->want_program != -1) {
+	             plugin->dispatcher (plugin, effBeginSetProgram, 0, 0, NULL, 0);
+	             plugin->dispatcher (plugin, effSetProgram, 0, fst->want_program, NULL, 0);
+	             plugin->dispatcher (plugin, effEndSetProgram, 0, 0, NULL, 0);
+	             fst->want_program = -1; 
+	         }
+	         pthread_cond_signal (&fst->event_called);
+	         pthread_mutex_unlock (&fst->lock);
+	         break;
+	      case CLOSE:
+	         pthread_mutex_lock (&fst->lock);
+	         fst->event_call = RESET;
+	         plugin->dispatcher(plugin, effClose, 0, 0, NULL, 0.0f);
+	         fst_event_loop_remove_plugin (fst);
 
+	         if (fst->handle->plugincnt)
+		    --fst->handle->plugincnt;
+
+	         pthread_cond_signal (&fst->event_called);
+	         pthread_mutex_unlock (&fst->lock);
+	         goto again;
 	      case DISPATCHER:
 	         pthread_mutex_lock (&fst->lock);
-	         fst->dispatcher_retval = fst->plugin->dispatcher( plugin, fst->dispatcher_opcode,
-	                                                           fst->dispatcher_index,
-	                                                           fst->dispatcher_val,
-	                                                           fst->dispatcher_ptr,
-	                                                           fst->dispatcher_opt );
 	         fst->event_call = RESET;
-	         pthread_cond_signal (&fst->plugin_dispatcher_called);
+	         fst->dispatcher_retval = fst->plugin->dispatcher( plugin, 
+	              fst->dispatcher_opcode, fst->dispatcher_index, fst->dispatcher_val,
+	              fst->dispatcher_ptr, fst->dispatcher_opt );
+	         pthread_cond_signal (&fst->event_called);
 	         pthread_mutex_unlock (&fst->lock);
 	         break;
 	      }
@@ -210,18 +191,22 @@ DWORD WINAPI gui_event_loop (LPVOID param)
 	         plugin->dispatcher (plugin, effIdle, 0, 0, NULL, 0);  
 
 	      if (fst->window)
-	         plugin->dispatcher (plugin, effEditIdle, 0, 0, NULL, 0);  
-
-	      fst->current_program = plugin->dispatcher( plugin, effGetProgram, 0, 0, NULL, 0.0f );
+	         plugin->dispatcher (plugin, effEditIdle, 0, 0, NULL, 0);
+		
+	      newProg = plugin->dispatcher( plugin, effGetProgram, 0, 0, NULL, 0.0f );
+	      if (fst->current_program != newProg) {
+	         fst->current_program = newProg;
+	         plugin->dispatcher (plugin, effGetProgramName, 0, 0, &progName, 0.0f);
+	         printf("Program: %d : %s\n", newProg, progName);
+	      }
 	   }
 	}
-	//printf( "quit........\n" );
-	//exit(0);
-	gtk_main_quit();
+
+	printf( "GUI EVENT LOOP: THE END\n" );
 }
 
 int
-start_gui_event_loop (HMODULE hInst)
+register_window_class (HMODULE hInst)
 {
 	WNDCLASSEX wclass;
 	HANDLE t_thread; 
@@ -249,12 +234,6 @@ start_gui_event_loop (HMODULE hInst)
 		printf( "Class register failed :(\n" );
 		return 0;
 	}
-	
-	if (CreateThread (NULL, 0, gui_event_loop, NULL, 0, NULL) == NULL) {
-		fst_error ("could not create new thread proxy");
-		return 0;
-	}
-
 
 	return 1;
 }
@@ -268,7 +247,7 @@ fst_run_editor (FST* fst)
 
 	if (!fst->window) {
 		fst->event_call = EDITOR_OPEN;
-		pthread_cond_wait (&fst->window_status_change, &fst->lock);
+		pthread_cond_wait (&fst->event_called, &fst->lock);
 	}
 
 	pthread_mutex_unlock (&fst->lock);
@@ -283,6 +262,22 @@ fst_run_editor (FST* fst)
 }
 
 int
+fst_show_editor (FST *fst) {
+	pthread_mutex_lock (&fst->event_call_lock);
+	pthread_mutex_lock (&fst->lock);
+
+	if (fst->window) {
+		fst->event_call = EDITOR_SHOW;
+		pthread_cond_wait (&fst->event_called, &fst->lock);
+	}
+
+	pthread_mutex_unlock (&fst->lock);
+	pthread_mutex_unlock (&fst->event_call_lock);
+
+	return 0;
+}
+
+int
 fst_program_change (FST *fst, int want_program)
 {
         pthread_mutex_lock (&fst->event_call_lock);
@@ -291,7 +286,7 @@ fst_program_change (FST *fst, int want_program)
 	fst->want_program = want_program;
         fst->event_call = PROGRAM_CHANGE;
 
-        pthread_cond_wait (&fst->program_change, &fst->lock);
+        pthread_cond_wait (&fst->event_called, &fst->lock);
 
         pthread_mutex_unlock (&fst->lock);
         pthread_mutex_unlock (&fst->event_call_lock);
@@ -300,16 +295,23 @@ fst_program_change (FST *fst, int want_program)
 int 
 fst_call_dispatcher(FST *fst, int opcode, int index, int val, void *ptr, float opt )
 {
+
 	pthread_mutex_lock (&fst->event_call_lock);
 	pthread_mutex_lock (&fst->lock);
-	fst->dispatcher_opcode = opcode;
-	fst->dispatcher_index = index;
-	fst->dispatcher_val = val;
-	fst->dispatcher_ptr = ptr;
-	fst->dispatcher_opt = opt;
-	fst->event_call = DISPATCHER;
+	if (fst->mainThreadId != GetCurrentThreadId() ) {
+		fst->dispatcher_opcode = opcode;
+		fst->dispatcher_index = index;
+		fst->dispatcher_val = val;
+		fst->dispatcher_ptr = ptr;
+		fst->dispatcher_opt = opt;
+		fst->event_call = DISPATCHER;
 
-	pthread_cond_wait (&fst->plugin_dispatcher_called, &fst->lock);
+		pthread_cond_wait (&fst->event_called, &fst->lock);
+
+	} else {
+        	fst->dispatcher_retval =
+			fst->plugin->dispatcher(fst->plugin, opcode, index, val, ptr, opt );
+	}
 	pthread_mutex_unlock (&fst->lock);
 	pthread_mutex_unlock (&fst->event_call_lock);
 
@@ -320,7 +322,6 @@ int
 fst_create_editor (FST* fst)
 {
 	HMODULE hInst;
-	char class[20];
 	HWND window;
 	struct ERect* er;
 
@@ -338,38 +339,27 @@ fst_create_editor (FST* fst)
 		return 0;
 	}
 	
-//	if ((window = CreateWindowExA (WS_EX_TOOLWINDOW | WS_EX_TRAYWINDOW, "FST", fst->handle->name,
-	if ((window = CreateWindowExA (0, "FST", fst->handle->name,
-				       (WS_OVERLAPPEDWINDOW & ~WS_THICKFRAME & ~WS_MAXIMIZEBOX),
-//				       (WS_OVERLAPPEDWINDOW & ~WS_MAXIMIZEBOX),
-				       9999,9999,1,1,
-//				       CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-				       NULL, NULL,
-				       hInst,
-				       NULL)) == NULL) {
+	if ((window = CreateWindowA ("FST", fst->handle->name,
+//		       (WS_OVERLAPPEDWINDOW & ~WS_THICKFRAME & ~WS_MAXIMIZEBOX & ~WS_CAPTION),
+			WS_POPUPWINDOW | WS_DISABLED | WS_MINIMIZE & ~WS_BORDER & ~WS_SYSMENU,
+			CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+			NULL, NULL, hInst, NULL)) == NULL)
+	{
 		fst_error ("cannot create editor window");
 		return 0;
 	}
-
-	if (!SetPropA (window, "fst_ptr", fst)) {
-		fst_error ("cannot set fst_ptr on window");
-	}
-
 	fst->window = window;
-//	fst->xid = (int) GetPropA (window, "__wine_x11_whole_window");
 
-	//printf( "effEditOpen......\n" );
-	fst->plugin->dispatcher (fst->plugin, effEditOpen, 0, 0, fst->window, 0 );
+	fst->plugin->dispatcher (fst->plugin, effEditOpen, 0, 0, fst->window, 0);
 	fst->plugin->dispatcher (fst->plugin, effEditGetRect, 0, 0, &er, 0 );
 
-	fst->width =  er->right-er->left;
-	fst->height =  er->bottom-er->top;
-	//printf( "get rect ses... %d,%d\n", fst->width, fst->height );
+	fst->width  =  er->right - er->left;
+	fst->height =  er->bottom - er->top;
 
-//	SetWindowPos (fst->window, 0, 0, 0, fst->width, fst->height + 24, 0);
-	SetWindowPos (fst->window, 0, 9999, 9999, 2, 2, 0);
-	ShowWindow (fst->window, SW_SHOWNA);
-	//SetWindowPos (fst->window, 0, 0, 0, er->right-er->left+8, er->bottom-er->top+26, SWP_NOMOVE|SWP_NOZORDER);
+	SetWindowPos (fst->window, HWND_BOTTOM, 0, 0, fst->width, fst->height, 
+		SWP_NOACTIVATE | SWP_NOMOVE);
+
+	ShowWindow (fst->window, SW_SHOWMINNOACTIVE);
 
 	fst->xid = (int) GetPropA (window, "__wine_x11_whole_window");
 	printf( "And xid = %x\n", fst->xid );
@@ -384,9 +374,7 @@ fst_destroy_editor (FST* fst)
 	pthread_mutex_lock (&fst->lock);
 	if (fst->window) {
 		fst->event_call = EDITOR_CLOSE;
-		pthread_cond_wait (&fst->window_status_change, &fst->lock);
-		DestroyWindow(fst->window);
-		fst->window = NULL;
+		pthread_cond_wait (&fst->event_called, &fst->lock);
 	}
 	pthread_mutex_unlock (&fst->lock);
 	pthread_mutex_unlock (&fst->event_call_lock);
@@ -397,9 +385,9 @@ fst_suspend (FST *fst) {
 	fst_call_dispatcher (fst, effStopProcess, 0, 0, NULL, 0.0f);
 	fst_call_dispatcher (fst, effMainsChanged, 0, 0, NULL, 0.0f);
 } 
- 
+
 void
-fst_resume (FST *fst) { 
+fst_resume (FST *fst) {
 	fst_call_dispatcher (fst, effMainsChanged, 0, 1, NULL, 0.0f);
 	fst_call_dispatcher (fst, effStartProcess, 0, 0, NULL, 0.0f);
 } 
@@ -415,8 +403,14 @@ fst_event_loop_remove_plugin (FST* fst)
 			prev->next = p->next;
 	}
 
-	if (fst_first == fst)
-		fst_first = fst_first->next;
+	if (fst_first == fst) {
+		if (fst_first->next) {
+			fst_first = fst_first->next;
+		} else {
+			fst_first = NULL;
+			PostQuitMessage(0);
+		}
+	}
 }
 
 HMODULE
@@ -470,16 +464,16 @@ fst_load_vst_library(FSTHandle* fhandle, const char * path) {
 
 FSTHandle*
 fst_load (const char * path) {
-	char * buf;
-	char * mypath;
+	char mypath[MAX_PATH];
 	char * period;
 	WCHAR* wbuf;
 	FSTHandle* fhandle;
 	LPWSTR dos_file_name;
 
-	mypath = strdup(path);
+
+	strcpy(mypath, path);
 	if (strstr (path, ".dll") == NULL)
-		sprintf (mypath, "%s.dll", path);
+		strcat (mypath, ".dll");
 
 	fhandle = (FSTHandle*) calloc (1, sizeof (FSTHandle));
 	fhandle->name = basename (strdup(mypath));
@@ -489,20 +483,16 @@ fst_load (const char * path) {
 		*period = '\0';
 
 	// Get wine path
-	buf = (char *) malloc (MAX_PATH);
 	printf("UnixPath: %s\n", mypath);
 	wbuf = wine_get_dos_file_name(mypath);
-	free(mypath);
-	WideCharToMultiByte(CP_UNIXCP, 0, wbuf, -1, buf, MAX_PATH, NULL, NULL);
-	printf("WinePath: %s\n", buf);
+	WideCharToMultiByte(CP_UNIXCP, 0, wbuf, -1, (LPSTR) &mypath, MAX_PATH, NULL, NULL);
+	printf("WinePath: %s\n", mypath);
 
-	if ((fhandle->dll = fst_load_vst_library (fhandle, buf)) == NULL) {
-		free(buf);
+	if ((fhandle->dll = fst_load_vst_library (fhandle, (const char *) &mypath)) == NULL) {
 		fst_unload (fhandle);
 		return NULL;
 	}
 
-	free(buf);
 	if ((fhandle->main_entry = (main_entry_t) GetProcAddress (fhandle->dll, "main")) == NULL) {
 		fst_unload (fhandle);
 		return NULL;
@@ -562,6 +552,7 @@ fst_instantiate (FSTHandle* fhandle, audioMasterCallback amc, void* userptr)
 
 	fst->handle->plugincnt++;
 	fst->event_call = RESET;
+	fst->mainThreadId = GetCurrentThreadId();
 
 	return fst;
 }
@@ -569,23 +560,22 @@ fst_instantiate (FSTHandle* fhandle, audioMasterCallback amc, void* userptr)
 void
 fst_close (FST* fst)
 {
-	void * mywin = fst->window;
-
 	fst_suspend(fst);
 
 	fst_destroy_editor (fst);
-	DestroyWindow(mywin);
 
-	fst_event_loop_remove_plugin (fst);
+	pthread_mutex_lock (&fst->event_call_lock);
+	pthread_mutex_lock (&fst->lock);
+	fst->event_call = CLOSE;
+	pthread_cond_wait (&fst->event_called, &fst->lock);
+	pthread_mutex_unlock (&fst->lock);
+	pthread_mutex_unlock (&fst->event_call_lock);
 
-	fst->plugin->dispatcher (fst->plugin, effClose, 0, 0, NULL, 0.0f);
-
-	if (fst->handle->plugincnt)
-		--fst->handle->plugincnt;
+	free(fst);
 }
 
 int
-fst_load_state (FST * fst, char * filename)
+fst_load_state (FST * fst, const char * filename)
 {
 	char * file_ext = strrchr(filename, '.');
 
@@ -606,7 +596,7 @@ fst_load_state (FST * fst, char * filename)
 }
 
 int
-fst_save_state (FST * fst, char * filename)
+fst_save_state (FST * fst, const char * filename)
 {
 	char * file_ext = strrchr(filename, '.');
 

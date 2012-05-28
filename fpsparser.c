@@ -7,9 +7,9 @@
 
 #include <fst.h>
 
-// From: http://stackoverflow.com/questions/122616/how-do-i-trim-leading-trailing-whitespace-in-a-standard-way
+// Concept from: http://stackoverflow.com/questions/122616/how-do-i-trim-leading-trailing-whitespace-in-a-standard-way
 // With small modifications
-char *
+static char *
 trim(char * s) {
     char * p = s;
     int l = strlen(p);
@@ -23,19 +23,19 @@ trim(char * s) {
 }
 // -----------------------------------
 
-char *
+static char *
 int2str(char *str, int *integer) {
    sprintf(str, "%d", *integer);
    return str;
 }
 
-char *
+static char *
 float2str(char *str, float *floating) {
    sprintf(str, "%f", *floating);
    return str;
 }
 
-int
+static int
 fps_check_this(FST *fst, char *field, char *value) {
    int success;
    char testString[64];
@@ -63,7 +63,7 @@ fps_check_this(FST *fst, char *field, char *value) {
    return 0;
 }
 
-int
+static int
 process_node(FST *fst, xmlNode *a_node)
 {
     xmlNode *cur_node = NULL;
@@ -143,7 +143,7 @@ process_node(FST *fst, xmlNode *a_node)
 }
 
 int
-fst_load_fps ( FST *fst, char *filename ) {
+fst_load_fps ( FST *fst, const char *filename ) {
    xmlDoc *doc = NULL;
    xmlNode *plugin_state_node = NULL;
 
@@ -165,7 +165,7 @@ fst_load_fps ( FST *fst, char *filename ) {
 }
 
 // SAVE --------------
-int
+static int
 xml_add_check (FST *fst, xmlNode *node, int opcode, const char *field) {
    char tString[64];
    xmlNode *myNode;
@@ -182,7 +182,7 @@ xml_add_check (FST *fst, xmlNode *node, int opcode, const char *field) {
 } 
 
 int
-fst_save_fps (FST * fst, char * filename) {
+fst_save_fps (FST * fst, const char * filename) {
    int paramIndex;
    unsigned int cc;
    char tString[64];
@@ -223,7 +223,7 @@ fst_save_fps (FST * fst, char * filename) {
       void * chunk_data;
       printf( "getting chunk ... " );
       chunk_size = fst_call_dispatcher( fst, effGetChunk, 0, 0, &chunk_data, 0 );
-      printf( "[DONE]\n" );
+      printf( "%d B [DONE]\n", chunk_size );
 
       if ( chunk_size <= 0 ) {
          printf( "Chunke len =< 0 !!! Not saving chunk.\n" );
