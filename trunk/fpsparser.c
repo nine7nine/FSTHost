@@ -5,7 +5,8 @@
 #include <libxml/parser.h>
 #include <libxml/tree.h>
 
-#include <fst.h>
+#include "fst.h"
+#include "jackvst.h"
 
 // Concept from: http://stackoverflow.com/questions/122616/how-do-i-trim-leading-trailing-whitespace-in-a-standard-way
 // With small modifications
@@ -67,6 +68,7 @@ static int
 process_node(FST *fst, xmlNode *a_node)
 {
     xmlNode *cur_node = NULL;
+    JackVST* jvst = fst->plugin ? ((JackVST*) fst->plugin->user) : NULL;
 
     for (cur_node = a_node; cur_node; cur_node = cur_node->next) {
        if (cur_node->type != XML_ELEMENT_NODE)
@@ -80,8 +82,8 @@ process_node(FST *fst, xmlNode *a_node)
           fps_check_this(fst, field, value);
        // Map
        } else if (strcmp(cur_node->name, "map") == 0) {
-          int cc = strtol(xmlGetProp(cur_node, "cc"), NULL, 10);
-          int index = strtol(xmlGetProp(cur_node, "index"), NULL, 10);
+          int  cc = strtol(xmlGetProp(cur_node, "cc"), NULL, 10);
+          int  index = strtol(xmlGetProp(cur_node, "index"), NULL, 10);
           char *name = (char *) xmlGetProp(cur_node, "name");
 
           printf( "Got map %d = %d (%s)\n", cc, index, name );
@@ -102,7 +104,15 @@ process_node(FST *fst, xmlNode *a_node)
 	  pthread_mutex_lock( &fst->lock );
 	  fst->plugin->setParameter( fst->plugin, index, val );
 	  pthread_mutex_unlock( &fst->lock );
+       // Channel
+       } else if (strcmp(cur_node->name, "channel") == 0) {
+	  if (! jvst)
+	     continue;
 
+	  int channel = strtol(xmlGetProp(cur_node, "number"), NULL, 10);
+
+	  if (channel >= 1 && channel <= 16)
+	     jvst->channel = channel - 1;
        // Chunk
        } else if (strcmp(cur_node->name, "chunk") == 0) {
           if (! fst->plugin->flags & effFlagsProgramChunks) {
@@ -194,6 +204,7 @@ fst_save_fps (FST * fst, const char * filename) {
       return FALSE;
    }
 
+   JackVST* jvst = fst->plugin ? ((JackVST*) fst->plugin->user) : NULL;
    xmlDoc  *doc = xmlNewDoc("1.0");
    xmlNode *plugin_state_node = xmlNewDocRawNode(doc, NULL, "plugin_state", NULL);
    xmlDocSetRootElement(doc, plugin_state_node);
@@ -203,7 +214,7 @@ fst_save_fps (FST * fst, const char * filename) {
    xml_add_check(fst, plugin_state_node, effGetVendorString, "vendorString");
    xml_add_check(fst, plugin_state_node, effGetEffectName, "effectName");
 
-   // Midi Map
+   // MIDI Map
    for (cc = 0; cc < 128; cc++ ) {
       paramIndex = fst->midi_map[cc];
       if( paramIndex < 0 || paramIndex >= fst->plugin->numParams )
@@ -215,6 +226,12 @@ fst_save_fps (FST * fst, const char * filename) {
       xmlNewProp(cur_node, "name", tString);
       xmlNewProp(cur_node, "cc", int2str(tString, &cc));
       xmlNewProp(cur_node, "index", int2str(tString, &paramIndex));
+   }
+
+   // MIDI Channel
+   if (jvst && jvst->channel >= 0 && jvst->channel <= 15) {
+      cur_node = xmlNewChild(plugin_state_node, NULL, "channel", NULL);
+      xmlNewProp(cur_node, "number", int2str(tString, &jvst->channel));
    }
 
    // Chunk
