@@ -10,6 +10,14 @@ Only works for GUI plugins currently.
 Supports load/save state to LASH, JackSessions, FXP/FXP files, FPS (XML files)
 Supports JackTransport.
 
+Known BUGs
+---------------
+If you experience WineBUG like RenderBadPicture, please update this ticket:
+http://bugs.winehq.org/show_bug.cgi?id=6673
+
+workaround:
+export WINEDEBUG=synchronous
+
 Getting Started
 ---------------
 
