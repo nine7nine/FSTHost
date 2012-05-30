@@ -20,9 +20,9 @@ struct _JackVST {
     jack_port_t  *midi_outport;
     jack_port_t  **inports;
     jack_port_t  **outports;
-    int            bypassed;
-    int		   channel;
-    int            with_editor;
+    short          bypassed;
+    int            channel;
+    short          with_editor;
     double         tempo;
 
     /* For VST/i support */

@@ -26,9 +26,9 @@
 #include <semaphore.h>
 #include <signal.h>
 #include <vestige/aeffectx.h>
-
-#include <fst.h>
 #include <windows.h>
+
+#include "fst.h"
 
 #include "jackvst.h"
 #include "jack/midiport.h"
