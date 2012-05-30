@@ -23,6 +23,7 @@ struct _JackVST {
     int            bypassed;
     int		   channel;
     int            with_editor;
+    double         tempo;
 
     /* For VST/i support */
     int	want_midi_in;

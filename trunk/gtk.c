@@ -719,11 +719,16 @@ error_handler_t gtk_error_handler;
 
 int fst_xerror_handler( Display *disp, XErrorEvent *ev )
 {
+	int error_code = (int) ev->error_code;
+	char error_text[256];
+
+	XGetErrorText(disp, error_code, (char *) &error_text, 256);
+
 	if( disp == the_gtk_display ) {
-		printf( "relaying error to gtk\n" );
+		printf( "Xerror : GTK: %s\n", error_text );
 		return gtk_error_handler( disp, ev );
 	} else {
-		printf( "relaying error to wine\n" );
+		printf( "Xerror:  Wine : %s\n", error_text );
 		return wine_error_handler( disp, ev );
 	}
 }
@@ -732,7 +737,7 @@ void
 gtk_gui_init (int *argc, char **argv[])
 {
 	wine_error_handler = XSetErrorHandler( NULL );
+	gtk_error_handler = XSetErrorHandler( fst_xerror_handler );
 	gtk_init (argc, argv);
 	the_gtk_display = gdk_x11_display_get_xdisplay( gdk_display_get_default() );
-	gtk_error_handler = XSetErrorHandler( fst_xerror_handler );
 }

@@ -39,7 +39,7 @@
 
 /* audiomaster.c */
 
-extern long jack_host_callback (struct AEffect*, long, long, long, void*, float);
+extern long jack_host_callback (struct AEffect*, int32_t, int32_t, intptr_t, void *, float );
 
 /* gtk.c */
 
@@ -718,6 +718,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	int opt_uuid = 0;
 	int opt_bypassed = FALSE;
 	int opt_channel = -1;
+	double opt_tempo = -1;
 	const char *connect_to = NULL;
 	const char *state_file = 0;
 	const char *plug;
@@ -740,7 +741,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 
         // Parse command line options
 	int c;
-	while ( (c = getopt (argc, argv, "bners:c:k:j:u:")) != -1) {
+	while ( (c = getopt (argc, argv, "bners:c:k:j:t:u:")) != -1) {
 		switch (c) {
 			case 'b':
 				opt_bypassed = TRUE;
@@ -766,6 +767,9 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 			case 'j':
 				connect_to = optarg;
 				break;
+			case 't':
+				opt_tempo = strtod(optarg, NULL);
+				break;
 			case 'u':
 				opt_uuid = (int) optarg;
 				break;
@@ -788,6 +792,8 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	jvst->channel = opt_channel;
 	jvst->with_editor = opt_with_editor;
 	jvst->uuid = opt_uuid;
+	jvst->tempo = opt_tempo; // -1 here mean get it from Jack
+
 //	for (i=0; i<128; i++ )
 //		jvst->fst->midi_map[i] = -1;
 
@@ -805,7 +811,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 
 	printf( "instantiate... \n" );
 
-	if ((jvst->fst = fst_instantiate (jvst->handle, jack_host_callback, jvst)) == NULL) {
+	if ((jvst->fst = fst_instantiate (jvst->handle, (audioMasterCallback) jack_host_callback, jvst)) == NULL) {
 		fst_error ("can't instantiate plugin %s", plug);
 		return 1;
 	}
