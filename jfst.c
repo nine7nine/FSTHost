@@ -188,7 +188,6 @@ void process_midi_input(JackVST* jvst, jack_nframes_t nframes)
 			&&  ( jackevent.buffer[0] >= 0x80 && jackevent.buffer[0] <= 0xEF)
 			&&  ( (jackevent.buffer[0] & 0x0f) != jvst->channel ) )
 			continue;
-
 		// Mapping MIDI
 		if ( (jackevent.buffer[0] & 0xf0) == 0xb0 && jvst->fst->midi_learn ) {
 			jvst->fst->midi_learn_CC = jackevent.buffer[1];
@@ -282,7 +281,7 @@ void queue_midi_message(JackVST* jvst, int status, int d1, int d2, jack_nframes_
 
 int process_callback( jack_nframes_t nframes, void* data) 
 {
-	int i, o;
+	short i, o;
 	JackVST* jvst = (JackVST*) data;
 	struct AEffect* plugin = jvst->fst->plugin;
 
@@ -297,10 +296,7 @@ int process_callback( jack_nframes_t nframes, void* data)
 		jvst->outs[o]  = (float *) jack_port_get_buffer (jvst->outports[o], nframes);
 	
 		// If bypassed then copy In's to Out's
-		if ( (jvst->bypassed) &&
-		   (plugin->numInputs) &&
-		   (i < plugin->numOutputs - 1) 
-		) {
+		if ( (jvst->bypassed) && (i < plugin->numInputs) ) {
 			memcpy (jvst->outs[o], jvst->ins[i], sizeof (float) * nframes);
 			++i;
 		// Zeroing buffers

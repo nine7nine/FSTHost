@@ -14,6 +14,8 @@ struct _JackVST {
     jack_client_t *client;
     FSTHandle*     handle;
     FST*           fst;
+    short        numIns;
+    short        numOuts;
     float        **ins;
     float        **outs;
     jack_port_t  *midi_inport;
@@ -26,7 +28,7 @@ struct _JackVST {
     double         tempo;
 
     /* For VST/i support */
-    int	want_midi_in;
+    int	   want_midi_in;
     struct VstMidiEvent* event_array;
     struct VstEvents*    events;
 
