@@ -6,6 +6,7 @@
 #include <jack/jack.h>
 #include <jack/ringbuffer.h>
 #include <jack/session.h>
+#include <stdbool.h>
 #include <fst.h>
 
 typedef struct _JackVST JackVST;
@@ -22,9 +23,9 @@ struct _JackVST {
     jack_port_t  *midi_outport;
     jack_port_t  **inports;
     jack_port_t  **outports;
-    short          bypassed;
     int            channel;
-    short          with_editor;
+    bool           bypassed;
+    short            with_editor;
     double         tempo;
 
     /* For VST/i support */

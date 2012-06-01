@@ -214,7 +214,7 @@ jack_host_callback (struct AEffect* effect, int32_t  opcode, int32_t  index, int
 		SHOW_CALLBACK ("amc: audioMasterNeedIdle\n");
 		// plug needs idle calls (outside its editor window)
                 if( jackvst )
-                    jackvst->fst->wantIdle = 1;
+                    jackvst->fst->wantIdle = TRUE;
 		
 		return 1;
 

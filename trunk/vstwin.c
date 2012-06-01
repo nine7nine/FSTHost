@@ -525,7 +525,7 @@ FST*
 fst_instantiate (FSTHandle* fhandle, audioMasterCallback amc, void* userptr)
 {
 	FST* fst = fst_new ();
-	int i;
+	short i;
 	char ParamName[32];
 
 	if( fhandle == NULL ) {

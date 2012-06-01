@@ -4,8 +4,10 @@
 #include <setjmp.h>
 #include <signal.h>
 #include <pthread.h>
+#include <stdbool.h>
 
 #include <windows.h>
+
 /**
  * Display FST error message.
  *
@@ -91,11 +93,11 @@ struct _FST
     FSTHandle*  handle;
     int 	width;
     int 	height;
-    int         wantIdle;
+    bool         wantIdle;
 
     enum EventCall event_call;
 
-    int		want_program;
+    int	        want_program;
     int         current_program;
     float      *want_params;
     float      *set_params;
@@ -133,13 +135,13 @@ extern "C" {
 #endif
 
 extern FSTHandle* fst_load (const char * );
-extern int        fst_unload (FSTHandle*);
+extern int fst_unload (FSTHandle*);
 
-extern FST*       fst_instantiate (FSTHandle*, audioMasterCallback amc, void* userptr);
-extern void       fst_close (FST*);
+extern FST* fst_instantiate (FSTHandle*, audioMasterCallback amc, void* userptr);
+extern void fst_close (FST*);
 
-extern int   fst_run_editor (FST*);
-extern void  fst_destroy_editor (FST*);
+extern int fst_run_editor (FST*);
+extern void fst_destroy_editor (FST*);
 
 extern FSTInfo *fst_get_info (char *dllpathname);
 extern void fst_free_info (FSTInfo *info);

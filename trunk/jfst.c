@@ -706,14 +706,14 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 {
 	JackVST* jvst;
 	struct AEffect* plugin;
-	int i;
 	char *client_name = 0;
 	char* period;
-	int load_state = 0;
-	int opt_with_editor = 2;
 	int opt_uuid = 0;
-	int opt_bypassed = FALSE;
 	int opt_channel = -1;
+	short i;
+	short opt_with_editor = 2;
+	bool load_state = FALSE;
+	bool opt_bypassed = FALSE;
 	double opt_tempo = -1;
 	const char *connect_to = NULL;
 	const char *state_file = 0;
@@ -811,10 +811,6 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 		fst_error ("can't instantiate plugin %s", plug);
 		return 1;
 	}
-
-//	printf("Start GUI/Event thread ...\n");
-//	if (! start_gui_event_loop (jvst->fst))
-//		return 1;
 
 	plugin = jvst->fst->plugin;
 
