@@ -182,11 +182,11 @@ xml_add_check (FST *fst, xmlNode *node, int opcode, const char *field) {
 
    if (fst_call_dispatcher( fst, opcode, 0, 0, tString, 0 )) {
       myNode = xmlNewChild(node, NULL, "check", NULL);
-      xmlNewProp(myNode, "field", "productString");
+      xmlNewProp(myNode, "field", field);
       xmlNewProp(myNode, "value", tString);
       return 1;
    } else {
-      printf ("No product string\n");
+      printf ("No %s string\n", field);
       return 0;
    }
 } 
