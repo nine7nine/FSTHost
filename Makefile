@@ -2,7 +2,7 @@
 SRCDIR                = .
 SUBDIRS               =
 DLLS                  =
-EXES                  = fst
+EXES                  = fsthost
 
 LASH_EXISTS := $(shell if pkg-config --exists lash-1.0; then echo yes; else echo no; fi)
 
@@ -28,31 +28,25 @@ LIBRARY_PATH          = -L/usr/lib/i386-linux-gnu/wine
 LIBRARIES             := $(shell pkg-config --libs $(PKG_CONFIG_MODULES)) -L/usr/X11R6/lib -lpthread -lrt -lX11 -m32
 
 ### fst.exe sources and settings
-fst_exe_MODULE       = fst
-fst_exe_C_SRCS       = audiomaster.c \
-			fst.c \
-			gtk.c \
-			jfst.c \
-			fxb.c \
-			fpsparser.c \
-			vstwin.c
-fst_exe_CXX_SRCS     =
-fst_exe_RC_SRCS      =
-fst_exe_LDFLAGS      = -mwindows
-fst_exe_DLL_PATH     =
-fst_exe_DLLS         = 
-fst_exe_LIBRARY_PATH =
-fst_exe_LIBRARIES    = uuid
+fsthost_exe_MODULE       = fsthost
+fsthost_exe_C_SRCS       = audiomaster.c fst.c gtk.c jfst.c fxb.c fpsparser.c vstwin.c
+fsthost_exe_CXX_SRCS     =
+fsthost_exe_RC_SRCS      =
+fsthost_exe_LDFLAGS      = -mwindows
+fsthost_exe_DLL_PATH     =
+fsthost_exe_DLLS         = 
+fsthost_exe_LIBRARY_PATH =
+fsthost_exe_LIBRARIES    = uuid
 
-fst_exe_OBJS         = $(fst_exe_C_SRCS:.c=.o) \
-			$(fst_exe_CXX_SRCS:.cpp=.o) \
-			$(fst_exe_RC_SRCS:.rc=.res)
+fsthost_exe_OBJS         = $(fsthost_exe_C_SRCS:.c=.o) \
+			$(fsthost_exe_CXX_SRCS:.cpp=.o) \
+			$(fsthost_exe_RC_SRCS:.rc=.res)
 
 ### Global source lists
 
-C_SRCS                = $(fst_exe_C_SRCS)
-CXX_SRCS              = $(fst_exe_CXX_SRCS)
-RC_SRCS               = $(fst_exe_RC_SRCS)
+C_SRCS                = $(fsthost_exe_C_SRCS)
+CXX_SRCS              = $(fsthost_exe_CXX_SRCS)
+RC_SRCS               = $(fsthost_exe_RC_SRCS)
 
 ### Tools
 
@@ -93,9 +87,7 @@ DEFINCL = $(INCLUDE_PATH) $(DEFINES) $(OPTIONS)
 
 # Rules for cleaning
 
-CLEAN_FILES     = *.dbg.c y.tab.c y.tab.h lex.yy.c \
-                  core *.orig *.rej fst.exe* \
-                  \\\#*\\\# *~ *% .\\\#*
+CLEAN_FILES = *.dbg.c y.tab.c y.tab.h lex.yy.c core *.orig *.rej fst.exe* \\\#*\\\# *~ *% .\\\#*
 
 clean:: $(SUBDIRS:%=%/__clean__) $(EXTRASUBDIRS:%=%/__clean__)
 	$(RM) $(CLEAN_FILES) $(RC_SRCS:.rc=.res) $(C_SRCS:.c=.o) $(CXX_SRCS:.cpp=.o)
@@ -112,7 +104,5 @@ $(EXTRASUBDIRS:%=%/__clean__): dummy
 ### Target specific build rules
 DEFLIB = $(LIBRARY_PATH) $(LIBRARIES) $(DLL_PATH)
 
-$(fst_exe_MODULE): $(fst_exe_OBJS)
-	$(LINK) $(fst_exe_LDFLAGS) -o $@ $(fst_exe_OBJS) $(fst_exe_LIBRARY_PATH) $(DEFLIB) $(fst_exe_DLLS:%=-l%) $(fst_exe_LIBRARIES:%=-l%)
-
-
+$(fsthost_exe_MODULE): $(fsthost_exe_OBJS)
+	$(LINK) $(fsthost_exe_LDFLAGS) -o $@ $(fsthost_exe_OBJS) $(fsthost_exe_LIBRARY_PATH) $(DEFLIB) $(fsthost_exe_DLLS:%=-l%) $(fsthost_exe_LIBRARIES:%=-l%)
