@@ -59,6 +59,16 @@ static void fx_load_chunk ( FST *fst, FILE *fxfile, int chunkType )
 	free(chunk);
 }
 
+static void fx_load_current_program( FST *fst, FILE *fxfile)
+{
+	unsigned int currentProgram;
+	size_t br;
+
+	br = fread ( &currentProgram, sizeof(currentProgram), 1, fxfile );
+	currentProgram = endian_swap( currentProgram );
+	fst_program_change(fst, currentProgram);
+}
+
 // NOTE: Program numbers -1 and -2 mean we are not in Bank
 static void fx_load_program ( FST *fst, FILE *fxfile, int programNumber )
 {
@@ -114,7 +124,7 @@ static void fx_load_program ( FST *fst, FILE *fxfile, int programNumber )
 int fst_load_fxfile ( FST *fst, const char *filename )
 {
 	FXHeader fxHeader;
-	int i;
+	unsigned short i;
         size_t br;
 
 	FILE * fxfile = fopen( filename, "rb" );
@@ -124,6 +134,7 @@ int fst_load_fxfile ( FST *fst, const char *filename )
 	fxHeader.numPrograms = endian_swap( fxHeader.numPrograms );
 	fxHeader.chunkMagic = endian_swap( fxHeader.chunkMagic );
 	fxHeader.fxMagic = endian_swap( fxHeader.fxMagic );
+	fxHeader.version = endian_swap( fxHeader.version );
 
 	printf("Numprograms: %d\n", fxHeader.numPrograms);
 
@@ -155,6 +166,9 @@ int fst_load_fxfile ( FST *fst, const char *filename )
 		// Bank file with programs
 		case bankMagic:
 			printf("bankMagic\n");
+			// For version 2 read current program
+			if (fxHeader.version == 2)
+				fx_load_current_program(fst, fxfile);
 			// skip blank hole
 			fseek ( fxfile , 156 , SEEK_SET );
 			for (i=0; i < fxHeader.numPrograms; i++)
@@ -163,6 +177,9 @@ int fst_load_fxfile ( FST *fst, const char *filename )
 		// Bank file with one chunk
 		case chunkBankMagic:
 			printf("chunkBankMagic\n");
+			// For version 2 read current program
+			if (fxHeader.version == 2)
+				fx_load_current_program(fst, fxfile);
 			// skip blank hole
 			fseek ( fxfile , 156 , SEEK_SET );
 			fx_load_chunk(fst, fxfile, FXBANK);
@@ -229,7 +246,7 @@ int fst_save_fxfile ( FST *fst, const char *filename, int isBank )
 	}
 
 	fxHeader.fxMagic = endian_swap ( fxHeader.fxMagic );
-        fxHeader.version = endian_swap( 1 );
+        fxHeader.version = endian_swap( 2 );
         fxHeader.fxID = endian_swap( fst->plugin->uniqueID );
         fxHeader.fxVersion = endian_swap( fst->plugin->version );
         fxHeader.numPrograms = endian_swap( (isBank) ? fst->plugin->numPrograms : fst->plugin->numParams );
@@ -237,6 +254,7 @@ int fst_save_fxfile ( FST *fst, const char *filename, int isBank )
 	unsigned int headerSize = ( sizeof(FXHeader) - sizeof(fxHeader.chunkMagic) - sizeof(fxHeader.byteSize) );
 	unsigned int paramSize = fst->plugin->numParams * sizeof(float);
 	unsigned int programSize = headerSize + sizeof(prgName) + paramSize;
+	unsigned int currentProgram = fst->current_program; // used by Banks
 
 	fxHeader.byteSize = headerSize;
 
@@ -249,15 +267,17 @@ int fst_save_fxfile ( FST *fst, const char *filename, int isBank )
 		fxHeader.byteSize += (isBank) ? fst->plugin->numPrograms * programSize : paramSize;
 	}
 
-	// Add hole for bank or program name for program
-	fxHeader.byteSize += (isBank) ? 128 : sizeof(prgName);
+	// Add current program and blank hole for bank or program name for program
+	fxHeader.byteSize += (isBank) ? (sizeof(currentProgram) + 124) : sizeof(prgName);
 	fxHeader.byteSize = endian_swap(fxHeader.byteSize);
 
 	FILE * fxfile = fopen( filename, "wb" );
 	fwrite(&fxHeader, sizeof(FXHeader), 1, fxfile);
 
 	if (isBank) {
-		char blank[128];
+		currentProgram = endian_swap(currentProgram);
+		fwrite(&currentProgram, sizeof(currentProgram), 1, fxfile);
+		char blank[124];
 		memset(blank, 0, sizeof(blank));
 		fwrite(&blank, sizeof(blank), 1, fxfile);
 	} else {
@@ -276,7 +296,6 @@ int fst_save_fxfile ( FST *fst, const char *filename, int isBank )
 		fxHeader.fxMagic = endian_swap( fMagic );
 		fxHeader.numPrograms = endian_swap( fst->plugin->numParams );
 		fxHeader.byteSize = endian_swap( programSize );
-		int currentProgram = fst->current_program;
 
 		for (p = 0; p < fst->plugin->numPrograms; p++) {
 			fst_program_change (fst, p);

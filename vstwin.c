@@ -50,6 +50,7 @@ fst_new ()
 	pthread_mutex_init (&fst->event_call_lock, NULL);
 	pthread_cond_init (&fst->event_called, NULL);
 	fst->want_program = -1;
+	fst->current_program = 0;
 	fst->event_call = RESET;
 	for (i=0; i<128; i++ )
 		fst->midi_map[i] = -1;
@@ -282,11 +283,21 @@ fst_program_change (FST *fst, int want_program)
 {
         pthread_mutex_lock (&fst->event_call_lock);
 	pthread_mutex_lock (&fst->lock);
-	
-	fst->want_program = want_program;
-        fst->event_call = PROGRAM_CHANGE;
 
-        pthread_cond_wait (&fst->event_called, &fst->lock);
+	if (fst->want_program != want_program) {
+		fst->want_program = want_program;
+		if (fst->mainThreadId != GetCurrentThreadId() ) {
+			fst->event_call = PROGRAM_CHANGE;
+
+			pthread_cond_wait (&fst->event_called, &fst->lock);
+		} else {
+			fst->plugin->dispatcher (fst->plugin, effBeginSetProgram, 0, 0, NULL, 0);
+			fst->plugin->dispatcher (fst->plugin, effSetProgram, 0, fst->want_program, NULL, 0);
+			fst->plugin->dispatcher (fst->plugin, effEndSetProgram, 0, 0, NULL, 0);
+	         	fst->current_program = fst->want_program;
+			fst->want_program = -1;
+		}
+	}
 
         pthread_mutex_unlock (&fst->lock);
         pthread_mutex_unlock (&fst->event_call_lock);

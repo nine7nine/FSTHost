@@ -87,7 +87,7 @@ DEFINCL = $(INCLUDE_PATH) $(DEFINES) $(OPTIONS)
 
 # Rules for cleaning
 
-CLEAN_FILES = *.dbg.c y.tab.c y.tab.h lex.yy.c core *.orig *.rej fst.exe* \\\#*\\\# *~ *% .\\\#*
+CLEAN_FILES = *.dbg.c y.tab.c y.tab.h lex.yy.c core *.orig *.rej fsthost.exe* \\\#*\\\# *~ *% .\\\#*
 
 clean:: $(SUBDIRS:%=%/__clean__) $(EXTRASUBDIRS:%=%/__clean__)
 	$(RM) $(CLEAN_FILES) $(RC_SRCS:.rc=.res) $(C_SRCS:.c=.o) $(CXX_SRCS:.cpp=.o)
