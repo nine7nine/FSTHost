@@ -957,23 +957,11 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	    lash_send_event(lash_client, event);
 	}
 #endif
-
         /* load state if requested */
 	if ( load_state && ! fst_load_state (jvst->fst, state_file)) {
 		jack_deactivate( jvst->client );
 		return 1;
 	}
-
-	if (! jvst->bypassed) {
-		printf("Activate plugin\n");
-		fst_resume(jvst->fst);
-	}
-
-	printf( "Calling Jack activate\n" );
-	jack_activate (jvst->client);
-
-	if (connect_to)
-		jvst_connect(jvst, client_name, connect_to);
 
 	if (jvst->with_editor) {
 		printf( "ok.... RockNRoll\n" );
@@ -986,6 +974,17 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 		signal(SIGINT, signal_callback_handler);
 		printf("Editor Disabled\n");
 	}
+
+	if (! jvst->bypassed) {
+		printf("Activate plugin\n");
+		fst_resume(jvst->fst);
+	}
+
+	printf( "Calling Jack activate\n" );
+	jack_activate (jvst->client);
+
+	if (connect_to)
+		jvst_connect(jvst, client_name, connect_to);
 
 	fst_gui_event_loop(hInst);
 

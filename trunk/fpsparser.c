@@ -79,7 +79,8 @@ process_node(FST *fst, xmlNode *a_node)
           char *field = xmlGetProp(cur_node, "field");
           char *value = xmlGetProp(cur_node, "value");
 
-          fps_check_this(fst, field, value);
+          if (! fps_check_this(fst, field, value))
+		return 0;
        // Map
        } else if (strcmp(cur_node->name, "map") == 0) {
           int  cc = strtol(xmlGetProp(cur_node, "cc"), NULL, 10);
@@ -113,6 +114,10 @@ process_node(FST *fst, xmlNode *a_node)
 
 	  if (channel >= 1 && channel <= 16)
 	     jvst->channel = channel - 1;
+       // Program
+       } else if (strcmp(cur_node->name, "program") == 0) {
+          int currentProgram = strtol(xmlGetProp(cur_node, "number"), NULL, 10);
+          fst_program_change(fst, currentProgram);
        // Chunk
        } else if (strcmp(cur_node->name, "chunk") == 0) {
           if (! fst->plugin->flags & effFlagsProgramChunks) {
@@ -131,7 +136,7 @@ process_node(FST *fst, xmlNode *a_node)
              return 0;
           }
 
-          printf("Load %dB chunk .. ", chunk_size);
+          printf("Load %dB chunk\n", chunk_size);
           chunk_base64 = trim((char *) cur_node->children->content);
           chunk_data = g_base64_decode(chunk_base64, &out_len);
 
@@ -141,11 +146,12 @@ process_node(FST *fst, xmlNode *a_node)
              return 0;
           }
           fst_call_dispatcher( fst, effSetChunk, 0, chunk_size, chunk_data, 0 );
-          printf("[DONE]\n");
+          printf("Load chunk [DONE]\n");
 
           g_free(chunk_data);
        } else {
-          process_node(fst, cur_node->children);
+          if (! process_node(fst, cur_node->children))
+		return 0;
        }
     }
 
@@ -154,6 +160,7 @@ process_node(FST *fst, xmlNode *a_node)
 
 int
 fst_load_fps ( FST *fst, const char *filename ) {
+   int success;
    xmlDoc *doc = NULL;
    xmlNode *plugin_state_node = NULL;
 
@@ -167,11 +174,11 @@ fst_load_fps ( FST *fst, const char *filename ) {
    }
 
    plugin_state_node = xmlDocGetRootElement(doc);
-   process_node(fst, plugin_state_node);
+   success = process_node(fst, plugin_state_node);
 
    xmlFreeDoc(doc);
 
-   return 1;
+   return success;
 }
 
 // SAVE --------------
@@ -233,6 +240,10 @@ fst_save_fps (FST * fst, const char * filename) {
       cur_node = xmlNewChild(plugin_state_node, NULL, "channel", NULL);
       xmlNewProp(cur_node, "number", int2str(tString, &jvst->channel));
    }
+
+   // Current Program
+   cur_node = xmlNewChild(plugin_state_node, NULL, "program", NULL);
+   xmlNewProp(cur_node, "number", int2str(tString, &jvst->fst->current_program));
 
    // Chunk
    if ( fst->plugin->flags & effFlagsProgramChunks ) {

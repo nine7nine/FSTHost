@@ -207,9 +207,6 @@ load_handler (GtkToggleButton *but, gboolean ptr)
 	gtk_list_store_clear( GTK_LIST_STORE( store ) );
 	create_preset_store( store, jvst->fst );
         g_signal_handler_unblock (preset_listbox, preset_listbox_signal);
-
-	// Set first program
-	fst_program_change(jvst->fst, 0);
 }
 
 static gboolean
@@ -352,10 +349,8 @@ focus_handler (GtkWidget* widget, GdkEventFocus* ev, gpointer ptr)
 static void
 program_change (GtkComboBox *combo, JackVST *jvst) {
 	int program = gtk_combo_box_get_active (combo);
-	// cant be done here. plugin only expects one GUI thread.
+
 	fst_program_change(jvst->fst,program);
-	
-//	gtk_widget_grab_focus( gtk_socket );
 }
 
 static void
@@ -646,7 +641,7 @@ manage_vst_plugin (JackVST* jvst)
 	renderer = gtk_cell_renderer_text_new ();
 	gtk_cell_layout_pack_start (GTK_CELL_LAYOUT (preset_listbox), renderer, TRUE);
 	gtk_cell_layout_set_attributes (GTK_CELL_LAYOUT (preset_listbox), renderer, "text", 0, NULL);
-	gtk_combo_box_set_active( GTK_COMBO_BOX(preset_listbox), 0 );
+	gtk_combo_box_set_active( GTK_COMBO_BOX(preset_listbox), jvst->fst->current_program );
 	preset_listbox_signal = g_signal_connect( G_OBJECT(preset_listbox), "changed", G_CALLBACK( program_change ), jvst ); 
 	//----------------------------------------------------------------------------------
 
