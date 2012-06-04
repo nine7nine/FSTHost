@@ -160,7 +160,7 @@ extern int fst_load_fxfile (FST * fst, const char * filename);
  */
 extern int fst_save_state (FST * fst, const char * filename);
 extern int fst_save_fps (FST * fst, const char * filename);
-extern int fst_save_fxfile (FST * fst, const char * filename, int isBank);
+extern int fst_save_fxfile (FST * fst, const char * filename, bool isBank);
 
 #ifdef __cplusplus
 }

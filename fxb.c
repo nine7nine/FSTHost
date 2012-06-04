@@ -74,7 +74,7 @@ static void fx_load_program ( FST *fst, FILE *fxfile, int programNumber )
 {
 	FXHeader fxHeader;
 	char prgName[28];
-	int i, isChunk;
+	unsigned short i, isChunk;
         size_t br;
 
 	// if we in Bank
@@ -197,7 +197,7 @@ int fst_load_fxfile ( FST *fst, const char *filename )
 static int fx_save_params ( FST *fst, FILE *fxfile )
 {
 	float Params[fst->plugin->numParams];
-	int i;
+	unsigned short i;
 	float v;
 
 	pthread_mutex_lock (&fst->lock);
@@ -210,7 +210,7 @@ static int fx_save_params ( FST *fst, FILE *fxfile )
 	fwrite(&Params, sizeof(float), fst->plugin->numParams, fxfile);
 }
 
-int fst_save_fxfile ( FST *fst, const char *filename, int isBank )
+int fst_save_fxfile ( FST *fst, const char *filename, bool isBank )
 {
 	FXHeader fxHeader;
         void * chunk = NULL;
@@ -219,8 +219,8 @@ int fst_save_fxfile ( FST *fst, const char *filename, int isBank )
 	char prgName[28];
 	int p;
 
-	int isChunk = (fst->plugin->flags & effFlagsProgramChunks);
-	int chunkType = (isBank) ? FXBANK : FXPROGRAM;
+	bool isChunk = (fst->plugin->flags & effFlagsProgramChunks);
+	short chunkType = (isBank) ? FXBANK : FXPROGRAM;
 
         fxHeader.chunkMagic = endian_swap( cMagic );
 

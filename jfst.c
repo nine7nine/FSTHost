@@ -174,7 +174,8 @@ void process_midi_input(JackVST* jvst, jack_nframes_t nframes)
 	void *port_buffer = jack_port_get_buffer( jvst->midi_inport, nframes );
 	jack_nframes_t num_jackevents = jack_midi_get_event_count( port_buffer );
 	jack_midi_event_t jackevent;
-	int i,j,stuffed_events = 0;
+	unsigned short i, j;
+	int stuffed_events = 0;
 
 	if( num_jackevents >= MIDI_EVENT_MAX )
 		num_jackevents = MIDI_EVENT_MAX;
@@ -370,7 +371,7 @@ void create_argc_argv_from_cmdline( char *cmdline, char *argv0, int *argc, char 
     char *pos = cmdline;
     enum ParseMode parseMode = MODE_WHITESPACE;
     enum ParseMode parseMode_before_ESC = MODE_NORMAL;
-    int i;
+    unsigned short i;
 
     int myargc = 1; 
     char **myargv;
@@ -672,7 +673,7 @@ int canDo(struct AEffect* plugin, char* feature)
 int
 jvst_connect(JackVST *jvst, const char *myname, const char *connect_to)
 {
-	int i,j;
+	unsigned short i,j;
 	char pname[strlen(myname) + 16];
 	const char *ptype;
 
@@ -870,7 +871,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 
 	vst_version = plugin->dispatcher (plugin, effGetVstVersion, 0, 0, NULL, 0.0f);
 	if (vst_version >= 2) {
-		int isSynth = (plugin->flags & effFlagsIsSynth) > 0;
+		bool isSynth = (plugin->flags & effFlagsIsSynth) > 0;
 		int canReceiveVstEvents = canDo(plugin, "receiveVstEvents");
 		int canReceiveVstMidiEvent = canDo(plugin, "receiveVstMidiEvent");
 		int canSendVstEvents = canDo(plugin, "sendVstEvents");
@@ -884,7 +885,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 
 		/* should we send the plugin VST events (i.e. MIDI) */
 		if (isSynth || canReceiveVstEvents || canReceiveVstMidiEvent) {
-			int i;
+			unsigned short i;
 			jvst->want_midi_in = 1;
 
 			/* The VstEvents structure already contains an array of 2    */

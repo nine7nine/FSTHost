@@ -70,9 +70,6 @@ bypass_handler (GtkToggleButton *but, gboolean ptr)
 static void
 save_handler (GtkToggleButton *but, gboolean ptr)
 {
- 	int i, bytelen = 0;
-	void *chunk;
-
 	JackVST* jvst = (JackVST*) ptr;
 
 	GtkWidget *dialog;
@@ -194,8 +191,6 @@ load_handler (GtkToggleButton *but, gboolean ptr)
 			gtk_dialog_run (GTK_DIALOG (errdialog));
 			gtk_widget_destroy (errdialog);
 		}
-
-		printf("File %s loaded\n", filename);
 		g_free (filename);
 	}
 	gtk_widget_destroy (dialog);
@@ -366,7 +361,8 @@ channel_change (GtkComboBox *combo, JackVST *jvst) {
 void
 save_data( JackVST *jvst )
 {
-	int i, bytelen;
+	unsigned short i;
+	size_t bytelen;
 	lash_config_t *config;
 	void *chunk;
 
@@ -562,7 +558,7 @@ idle_cb(JackVST *jvst)
 
 int create_preset_store( GtkListStore *store, FST *fst )
 {
-	int i;
+	unsigned short i;
 
 
 	int vst_version = fst->plugin->dispatcher (fst->plugin, effGetVstVersion, 0, 0, NULL, 0.0f);
@@ -583,7 +579,7 @@ int create_preset_store( GtkListStore *store, FST *fst )
 }
 GtkListStore * create_channel_store() {
 	GtkListStore *retval = gtk_list_store_new( 2, G_TYPE_STRING, G_TYPE_INT );
-	int i;
+	unsigned short i;
 	char buf[100];
 	
 	for( i=0; i <= 16; i++ ) {

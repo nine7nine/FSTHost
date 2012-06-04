@@ -44,7 +44,7 @@ static FST*
 fst_new ()
 {
 	FST* fst = (FST*) calloc (1, sizeof (FST));
-	int i;
+	unsigned short i;
 
 	pthread_mutex_init (&fst->lock, NULL);
 	pthread_mutex_init (&fst->event_call_lock, NULL);
@@ -602,6 +602,8 @@ fst_load_state (FST * fst, const char * filename)
 		printf("Unkown file type\n");
 		return 0;
 	}
+
+	printf("File %s loaded\n", filename);
 
 	return 1;
 }
