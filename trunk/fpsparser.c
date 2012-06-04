@@ -1,6 +1,7 @@
 #include <glib.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdbool.h>
 
 #include <libxml/parser.h>
 #include <libxml/tree.h>
@@ -38,7 +39,7 @@ float2str(char *str, float *floating) {
 
 static int
 fps_check_this(FST *fst, char *field, char *value) {
-   int success;
+   bool success;
    char testString[64];
 
    printf("Check %s : %s == ", field, value);
@@ -53,7 +54,7 @@ fps_check_this(FST *fst, char *field, char *value) {
    if (success == 1) {
       if (strcmp (testString, value) == 0) {
          printf("%s [PASS]\n", testString);
-         return 1;
+         return TRUE;
       }
 
       printf("%s [FAIL]\nstring mismatch!\n", testString);
@@ -61,7 +62,7 @@ fps_check_this(FST *fst, char *field, char *value) {
       printf("empty [FAIL]\nCan't get plugin string\n");
    }
 
-   return 0;
+   return FALSE;
 }
 
 static int
@@ -80,10 +81,10 @@ process_node(FST *fst, xmlNode *a_node)
           char *value = xmlGetProp(cur_node, "value");
 
           if (! fps_check_this(fst, field, value))
-		return 0;
+		return FALSE;
        // Map
        } else if (strcmp(cur_node->name, "map") == 0) {
-          int  cc = strtol(xmlGetProp(cur_node, "cc"), NULL, 10);
+          unsigned short cc = strtol(xmlGetProp(cur_node, "cc"), NULL, 10);
           int  index = strtol(xmlGetProp(cur_node, "index"), NULL, 10);
           char *name = (char *) xmlGetProp(cur_node, "name");
 
@@ -133,7 +134,7 @@ process_node(FST *fst, xmlNode *a_node)
           chunk_size = strtoul(xmlGetProp(cur_node, "size"), NULL, 0);
           if ( ! chunk_size > 0 ) {
              printf("Error: chunk size: %d", chunk_size);
-             return 0;
+             return FALSE;
           }
 
           printf("Load %dB chunk\n", chunk_size);
@@ -143,7 +144,7 @@ process_node(FST *fst, xmlNode *a_node)
           if (chunk_size != out_len) {
              printf("[ERROR]\n");
              printf ("Problem while decode base64. DecodedChunkSize: %d\n", (int) out_len);
-             return 0;
+             return FALSE;
           }
           fst_call_dispatcher( fst, effSetChunk, 0, chunk_size, chunk_data, 0 );
           printf("Load chunk [DONE]\n");
@@ -151,16 +152,16 @@ process_node(FST *fst, xmlNode *a_node)
           g_free(chunk_data);
        } else {
           if (! process_node(fst, cur_node->children))
-		return 0;
+		return FALSE;
        }
     }
 
-    return 1;
+    return TRUE;
 }
 
 int
 fst_load_fps ( FST *fst, const char *filename ) {
-   int success;
+   bool success;
    xmlDoc *doc = NULL;
    xmlNode *plugin_state_node = NULL;
 
@@ -170,7 +171,7 @@ fst_load_fps ( FST *fst, const char *filename ) {
 
    if (doc == NULL) {
       printf("error: could not parse file %s\n", filename);
-      return 0;
+      return FALSE;
    }
 
    plugin_state_node = xmlDocGetRootElement(doc);
