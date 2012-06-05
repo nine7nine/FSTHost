@@ -50,32 +50,96 @@ fst_new ()
 	pthread_mutex_init (&fst->event_call_lock, NULL);
 	pthread_cond_init (&fst->event_called, NULL);
 	fst->want_program = -1;
-	fst->current_program = 0;
+	//fst->current_program = 0; - calloc done this
 	fst->event_call = RESET;
 	for (i=0; i<128; i++ )
 		fst->midi_map[i] = -1;
 
-	if (fst_first == NULL) {
-		fst_first = fst;
-	} else {
-		FST* p = fst_first;
-		while (p->next) p = p->next;
-		p->next = fst;
-	}
-
 	return fst;
 }
 
-//DWORD WINAPI
-int
-fst_gui_event_loop (HMODULE hInst)
+/* Plugin "canDo" helper function to neaten up plugin feature detection calls */
+static int
+fst_canDo(FST* fst, char* feature)
+{
+	bool can;
+	can = (fst->plugin->dispatcher(fst->plugin, effCanDo, 0, 0, (void*)feature, 0.0f) > 0);
+	printf("Plugin can %s : %s\n", feature, ((can) ? "Yes" : "No"));
+	return can;
+}
+
+static bool
+fst_event_handler(FST* fst) {
+	pthread_mutex_lock (&fst->lock);
+	bool ret = TRUE;
+	struct AEffect* plugin = fst->plugin;
+
+	switch (fst->event_call) {
+	case EDITOR_OPEN:		
+		if (fst->window == NULL && ! fst_create_editor (fst)) {
+			fst_error ("cannot create editor for plugin %s", fst->handle->name);
+		}
+		break;
+	case EDITOR_SHOW:
+		if (fst->window != NULL) {
+			ShowWindow(fst->window, SW_RESTORE);
+			EnableWindow(fst->window, TRUE);
+			UpdateWindow(fst->window);
+		}
+		break;
+	case EDITOR_CLOSE:
+		if (fst->window != NULL) {
+			EnableWindow(fst->window, FALSE);
+			ShowWindow(fst->window, SW_HIDE);
+			UpdateWindow(fst->window);
+			plugin->dispatcher( plugin, effEditClose, 0, 0, NULL, 0.0f );
+			DestroyWindow(fst->window);
+			fst->window = FALSE;
+		}
+		break;
+	case PROGRAM_CHANGE:
+		if (fst->want_program != -1) {
+			plugin->dispatcher (plugin, effBeginSetProgram, 0, 0, NULL, 0);
+			plugin->dispatcher (plugin, effSetProgram, 0, fst->want_program, NULL, 0);
+			plugin->dispatcher (plugin, effEndSetProgram, 0, 0, NULL, 0);
+			fst->want_program = -1; 
+		}
+		break;
+	case CLOSE:
+		plugin->dispatcher(plugin, effClose, 0, 0, NULL, 0.0f);
+		ret = FALSE;
+		break;
+	case OPEN:
+		plugin->dispatcher (plugin, effOpen, 0, 0, NULL, 0.0f);
+		fst->vst_version = plugin->dispatcher (plugin, effGetVstVersion, 0, 0, NULL, 0.0f);
+
+		if (fst->vst_version >= 2) {
+			fst->isSynth = (plugin->flags & effFlagsIsSynth) > 0;
+			fst->canReceiveVstEvents = fst_canDo(fst, "receiveVstEvents");
+			fst->canReceiveVstMidiEvent = fst_canDo(fst, "receiveVstMidiEvent");
+			fst->canSendVstEvents = fst_canDo(fst, "sendVstEvents");
+			fst->canSendVstMidiEvent = fst_canDo(fst, "sendVstMidiEvent");
+		}
+		break;
+	case DISPATCHER:
+		fst->dispatcher_retval = fst->plugin->dispatcher( plugin, 
+			fst->dispatcher_opcode, fst->dispatcher_index, fst->dispatcher_val,
+			fst->dispatcher_ptr, fst->dispatcher_opt );
+		break;
+	}
+
+	fst->event_call = RESET;
+	pthread_cond_signal (&fst->event_called);
+	pthread_mutex_unlock (&fst->lock);
+}
+
+DWORD WINAPI
+fst_event_loop (HMODULE hInst)
 {
 	MSG msg;
 	FST* fst;
-	struct AEffect* plugin;
 	int newProg;
-	char progName[24];
-	HWND window;
+	HWND dummy_window;
 	DWORD gui_thread_id;
 	HANDLE* h_thread;
 
@@ -96,111 +160,46 @@ fst_gui_event_loop (HMODULE hInst)
 		return 1;
 	}
 	
-	if ((window = CreateWindowA ("FST", "dummy", WS_OVERLAPPEDWINDOW | WS_DISABLED,
+	if ((dummy_window = CreateWindowA ("FST", "dummy", WS_OVERLAPPEDWINDOW | WS_DISABLED,
 		0, 0, 0, 0, NULL, NULL, hInst, NULL )) == NULL) {
 		fst_error ("cannot create dummy timer window");
 	}
 
-	if (!SetTimer (window, 1000, 20, NULL)) {
+	if (!SetTimer (dummy_window, 1000, 20, NULL)) {
 		fst_error ("cannot set timer on dummy window");
 		return 1;
 	}
 
-	while (GetMessageA (&msg, NULL, 0,0)) {
-	   TranslateMessage( &msg );
-	   DispatchMessageA (&msg);
+	while (GetMessageA (&msg, NULL, 0,0) != 0) {
+		TranslateMessage( &msg );
+		DispatchMessageA (&msg);
 
-	   /* handle window creation requests, destroy requests, 
-	      and run idle callbacks 
-	   */
-	   if ( msg.message != WM_TIMER )
-		continue;
+		/* handle window creation requests, destroy requests, and run idle callbacks */
+		if ( msg.message != WM_TIMER || msg.hwnd != dummy_window )
+			continue;
 
-again:
-	   for (fst = fst_first; fst; fst = fst->next) {
-	      plugin = fst->plugin;
+		for (fst = fst_first; fst; fst = fst->next) {
+			if (fst->event_call != RESET) {
+				if (! fst_event_handler(fst))
+					continue;
+			}
 
-	      switch (fst->event_call) {
-	      case EDITOR_OPEN:		
-	         pthread_mutex_lock (&fst->lock);
-	         fst->event_call = RESET;
-	         if (fst->window == NULL && ! fst_create_editor (fst))
-	               fst_error ("cannot create editor for plugin %s", fst->handle->name);
+			if (fst->wantIdle)
+				fst->plugin->dispatcher (fst->plugin, effIdle, 0, 0, NULL, 0);  
 
-	         pthread_cond_signal (&fst->event_called);
-	         pthread_mutex_unlock (&fst->lock);
-	         break;
-	      case EDITOR_SHOW:
-	         pthread_mutex_lock (&fst->lock);
-	         fst->event_call = RESET;
-	         if (fst->window != NULL) {
-		         ShowWindow(fst->window, SW_RESTORE);
-		         EnableWindow(fst->window, TRUE);
-	        	 UpdateWindow(fst->window);
-	         }
-
-	         pthread_cond_signal (&fst->event_called);
-	         pthread_mutex_unlock (&fst->lock);
-	         break;
-	      case EDITOR_CLOSE:
-	         pthread_mutex_lock (&fst->lock);
-	         fst->event_call = RESET;
-		 if (fst->window != NULL)
-		    plugin->dispatcher( plugin, effEditClose, 0, 0, NULL, 0.0f );
-
-		 DestroyWindow(fst->window);
-	         fst->window = NULL;
-	         pthread_cond_signal (&fst->event_called);
-	         pthread_mutex_unlock (&fst->lock);
-	         break;
-	      case PROGRAM_CHANGE:
-	         pthread_mutex_lock (&fst->lock);
-	         fst->event_call = RESET;
-	         if (fst->want_program != -1) {
-	             plugin->dispatcher (plugin, effBeginSetProgram, 0, 0, NULL, 0);
-	             plugin->dispatcher (plugin, effSetProgram, 0, fst->want_program, NULL, 0);
-	             plugin->dispatcher (plugin, effEndSetProgram, 0, 0, NULL, 0);
-	             fst->want_program = -1; 
-	         }
-	         pthread_cond_signal (&fst->event_called);
-	         pthread_mutex_unlock (&fst->lock);
-	         break;
-	      case CLOSE:
-	         pthread_mutex_lock (&fst->lock);
-	         fst->event_call = RESET;
-	         plugin->dispatcher(plugin, effClose, 0, 0, NULL, 0.0f);
-	         fst_event_loop_remove_plugin (fst);
-
-	         if (fst->handle->plugincnt)
-		    --fst->handle->plugincnt;
-
-	         pthread_cond_signal (&fst->event_called);
-	         pthread_mutex_unlock (&fst->lock);
-	         goto again;
-	      case DISPATCHER:
-	         pthread_mutex_lock (&fst->lock);
-	         fst->event_call = RESET;
-	         fst->dispatcher_retval = fst->plugin->dispatcher( plugin, 
-	              fst->dispatcher_opcode, fst->dispatcher_index, fst->dispatcher_val,
-	              fst->dispatcher_ptr, fst->dispatcher_opt );
-	         pthread_cond_signal (&fst->event_called);
-	         pthread_mutex_unlock (&fst->lock);
-	         break;
-	      }
-
-	      if (fst->wantIdle)
-	         plugin->dispatcher (plugin, effIdle, 0, 0, NULL, 0);  
-
-	      if (fst->window)
-	         plugin->dispatcher (plugin, effEditIdle, 0, 0, NULL, 0);
+			if (fst->window) {
+				fst->plugin->dispatcher (fst->plugin, effEditIdle, 0, 0, NULL, 0);
+			}
 		
-	      newProg = plugin->dispatcher( plugin, effGetProgram, 0, 0, NULL, 0.0f );
-	      if (fst->current_program != newProg) {
-	         fst->current_program = newProg;
-	         plugin->dispatcher (plugin, effGetProgramName, 0, 0, &progName, 0.0f);
-	         printf("Program: %d : %s\n", newProg, progName);
-	      }
-	   }
+			newProg = fst->plugin->dispatcher( fst->plugin, effGetProgram, 0, 0, NULL, 0.0f );
+			if (fst->current_program != newProg) {
+				fst->current_program = newProg;
+				char progName[24];
+				fst->plugin->dispatcher (fst->plugin, effGetProgramName, 0, 0, &progName, 0.0f);
+				printf("Program: %d : %s\n", newProg, progName);
+			}
+		}
+		WaitMessage();
 	}
 
 	printf( "GUI EVENT LOOP: THE END\n" );
@@ -256,10 +255,10 @@ fst_run_editor (FST* fst)
 
 	if (!fst->window) {
 		fst_error ("no window created for VST plugin editor");
-		return -1;
+		return FALSE;
 	}
 
-	return 0;
+	return TRUE;
 }
 
 int
@@ -278,25 +277,17 @@ fst_show_editor (FST *fst) {
 	return 0;
 }
 
-int
-fst_program_change (FST *fst, int want_program)
+void
+fst_program_change (FST *fst, short want_program)
 {
         pthread_mutex_lock (&fst->event_call_lock);
 	pthread_mutex_lock (&fst->lock);
 
 	if (fst->want_program != want_program) {
 		fst->want_program = want_program;
-		if (fst->mainThreadId != GetCurrentThreadId() ) {
-			fst->event_call = PROGRAM_CHANGE;
+		fst->event_call = PROGRAM_CHANGE;
 
-			pthread_cond_wait (&fst->event_called, &fst->lock);
-		} else {
-			fst->plugin->dispatcher (fst->plugin, effBeginSetProgram, 0, 0, NULL, 0);
-			fst->plugin->dispatcher (fst->plugin, effSetProgram, 0, fst->want_program, NULL, 0);
-			fst->plugin->dispatcher (fst->plugin, effEndSetProgram, 0, 0, NULL, 0);
-	         	fst->current_program = fst->want_program;
-			fst->want_program = -1;
-		}
+		pthread_cond_wait (&fst->event_called, &fst->lock);
 	}
 
         pthread_mutex_unlock (&fst->lock);
@@ -309,20 +300,16 @@ fst_call_dispatcher(FST *fst, int opcode, int index, int val, void *ptr, float o
 
 	pthread_mutex_lock (&fst->event_call_lock);
 	pthread_mutex_lock (&fst->lock);
-	if (fst->mainThreadId != GetCurrentThreadId() ) {
-		fst->dispatcher_opcode = opcode;
-		fst->dispatcher_index = index;
-		fst->dispatcher_val = val;
-		fst->dispatcher_ptr = ptr;
-		fst->dispatcher_opt = opt;
-		fst->event_call = DISPATCHER;
 
-		pthread_cond_wait (&fst->event_called, &fst->lock);
+	fst->dispatcher_opcode = opcode;
+	fst->dispatcher_index = index;
+	fst->dispatcher_val = val;
+	fst->dispatcher_ptr = ptr;
+	fst->dispatcher_opt = opt;
+	fst->event_call = DISPATCHER;
 
-	} else {
-        	fst->dispatcher_retval =
-			fst->plugin->dispatcher(fst->plugin, opcode, index, val, ptr, opt );
-	}
+	pthread_cond_wait (&fst->event_called, &fst->lock);
+
 	pthread_mutex_unlock (&fst->lock);
 	pthread_mutex_unlock (&fst->event_call_lock);
 
@@ -421,6 +408,18 @@ fst_event_loop_remove_plugin (FST* fst)
 			fst_first = NULL;
 			PostQuitMessage(0);
 		}
+	}
+}
+
+void
+fst_event_loop_add_plugin (FST* fst)
+{
+	if (fst_first == NULL) {
+		fst_first = fst;
+	} else {
+		FST* p = fst_first;
+		while (p->next) p = p->next;
+		p->next = fst;
 	}
 }
 
@@ -532,6 +531,20 @@ fst_unload (FSTHandle* fhandle)
 	return 0;
 }
 
+static int
+fst_open (FST *fst) {
+	fst_event_loop_add_plugin(fst);
+
+	pthread_mutex_lock (&fst->event_call_lock);
+	pthread_mutex_lock (&fst->lock);
+	fst->event_call = OPEN;
+	pthread_cond_wait (&fst->event_called, &fst->lock);
+	pthread_mutex_unlock (&fst->lock);
+	pthread_mutex_unlock (&fst->event_call_lock);
+
+	fst->handle->plugincnt++;
+}
+
 FST*
 fst_instantiate (FSTHandle* fhandle, audioMasterCallback amc, void* userptr)
 {
@@ -552,20 +565,27 @@ fst_instantiate (FSTHandle* fhandle, audioMasterCallback amc, void* userptr)
 
 	fst->handle = fhandle;
 	fst->plugin->user = userptr;
-		
+
 	if (fst->plugin->magic != kEffectMagic) {
 		fst_error ("%s is not a VST plugin\n", fhandle->name);
 		free (fst);
 		return NULL;
 	}
 
-	fst->plugin->dispatcher (fst->plugin, effOpen, 0, 0, NULL, 0.0f);
-
-	fst->handle->plugincnt++;
-	fst->event_call = RESET;
-	fst->mainThreadId = GetCurrentThreadId();
+	fst_open(fst);
 
 	return fst;
+}
+
+int
+fst_init ()
+{
+	if (CreateThread (NULL, 0, (LPTHREAD_START_ROUTINE) fst_event_loop, NULL, 0, NULL) == NULL) {
+		fst_error ("could not create new thread proxy");
+		return FALSE;
+	}
+
+	return TRUE;
 }
 
 void
@@ -581,6 +601,11 @@ fst_close (FST* fst)
 	pthread_cond_wait (&fst->event_called, &fst->lock);
 	pthread_mutex_unlock (&fst->lock);
 	pthread_mutex_unlock (&fst->event_call_lock);
+
+	fst_event_loop_remove_plugin (fst);
+
+	if (fst->handle->plugincnt)
+		--fst->handle->plugincnt;
 
 	free(fst);
 }

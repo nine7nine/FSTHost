@@ -80,44 +80,52 @@ enum EventCall {
 	EDITOR_OPEN,
 	EDITOR_SHOW,
 	EDITOR_CLOSE,
+	OPEN,
 	CLOSE,
 	PROGRAM_CHANGE
 };
 
 struct _FST 
 {
-    struct	AEffect*    plugin;
-    unsigned int mainThreadId;
-    void*       window; /* win32 HWND */
-    int         xid;    /* X11 XWindow */
-    FSTHandle*  handle;
-    int 	width;
-    int 	height;
-    bool         wantIdle;
+	struct AEffect*	plugin;
+	unsigned int	mainThreadId;
+	void*		window; /* win32 HWND */
+	int		xid;    /* X11 XWindow */
+	FSTHandle*	handle;
+	int		width;
+	int		height;
+	bool		wantIdle;
 
-    enum EventCall event_call;
+	enum EventCall	event_call;
 
-    int	        want_program;
-    int         current_program;
-    float      *want_params;
-    float      *set_params;
+	short		want_program;
+	short		current_program;
+	float		*want_params;
+	float		*set_params;
 
-    int            midi_map[128];
-    volatile int   midi_learn;
-    volatile int   midi_learn_CC;
-    volatile int   midi_learn_PARAM;
+	int		midi_map[128];
+	volatile int	midi_learn;
+	volatile int	midi_learn_CC;
+	volatile int	midi_learn_PARAM;
 
-    int         dispatcher_opcode;
-    int         dispatcher_index;
-    int         dispatcher_val;
-    void *	dispatcher_ptr;
-    float	dispatcher_opt;
-    int		dispatcher_retval;
+	int		dispatcher_opcode;
+	int		dispatcher_index;
+	int		dispatcher_val;
+	void*		dispatcher_ptr;
+	float		dispatcher_opt;
+	int		dispatcher_retval;
 
-    struct _FST* next;
-    pthread_mutex_t lock;
-    pthread_mutex_t event_call_lock;
-    pthread_cond_t  event_called;
+	unsigned short	vst_version;
+	bool		isSynth;
+	bool		canReceiveVstEvents;
+	bool		canReceiveVstMidiEvent;
+	bool		canSendVstEvents;
+	bool		canSendVstMidiEvent;
+
+	struct _FST*	next;
+	pthread_mutex_t	lock;
+	pthread_mutex_t	event_call_lock;
+	pthread_cond_t	event_called;
 };
 
 struct _FXHeader {
@@ -146,6 +154,7 @@ extern void fst_destroy_editor (FST*);
 extern FSTInfo *fst_get_info (char *dllpathname);
 extern void fst_free_info (FSTInfo *info);
 extern void fst_event_loop_remove_plugin (FST* fst);
+extern void fst_event_loop_add_plugin (FST* fst);
 extern int fst_call_dispatcher(FST *fst, int opcode, int index, int val, void *ptr, float opt );
 
 /**
