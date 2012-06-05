@@ -66,11 +66,11 @@ static void fx_load_current_program( FST *fst, FILE *fxfile)
 
 	br = fread ( &currentProgram, sizeof(currentProgram), 1, fxfile );
 	currentProgram = endian_swap( currentProgram );
-	fst_program_change(fst, currentProgram);
+	fst_program_change(fst, (short) currentProgram);
 }
 
 // NOTE: Program numbers -1 and -2 mean we are not in Bank
-static void fx_load_program ( FST *fst, FILE *fxfile, int programNumber )
+static void fx_load_program ( FST *fst, FILE *fxfile, short programNumber )
 {
 	FXHeader fxHeader;
 	char prgName[28];
@@ -217,7 +217,7 @@ int fst_save_fxfile ( FST *fst, const char *filename, bool isBank )
 	size_t chunkSize;
 	size_t swapedChunkSize;
 	char prgName[28];
-	int p;
+	short p;
 
 	bool isChunk = (fst->plugin->flags & effFlagsProgramChunks);
 	short chunkType = (isBank) ? FXBANK : FXPROGRAM;

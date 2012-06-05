@@ -117,7 +117,7 @@ process_node(FST *fst, xmlNode *a_node)
 	     jvst->channel = channel - 1;
        // Program
        } else if (strcmp(cur_node->name, "program") == 0) {
-          int currentProgram = strtol(xmlGetProp(cur_node, "number"), NULL, 10);
+          short currentProgram = strtol(xmlGetProp(cur_node, "number"), NULL, 10);
           fst_program_change(fst, currentProgram);
        // Chunk
        } else if (strcmp(cur_node->name, "chunk") == 0) {
@@ -244,7 +244,7 @@ fst_save_fps (FST * fst, const char * filename) {
 
    // Current Program
    cur_node = xmlNewChild(plugin_state_node, NULL, "program", NULL);
-   xmlNewProp(cur_node, "number", int2str(tString, &jvst->fst->current_program));
+   xmlNewProp(cur_node, "number", int2str(tString, (int *) &jvst->fst->current_program));
 
    // Chunk
    if ( fst->plugin->flags & effFlagsProgramChunks ) {

@@ -259,7 +259,7 @@ editor_handler (GtkToggleButton *but, gboolean ptr)
 		// Add Widget socket to vBox
 		gtk_box_pack_start (GTK_BOX(vpacker), gtk_socket, TRUE, FALSE, 0);
 
-		if (fst_run_editor (jvst->fst)) {
+		if (! fst_run_editor (jvst->fst)) {
 			fst_error ("cannot create editor");
 			return;
 		}
@@ -285,32 +285,6 @@ editor_handler (GtkToggleButton *but, gboolean ptr)
 	}
 }
 
-void
-forward_key_event (GtkSocket *sock, GdkEventKey* ev, JackVST* jvst)
-{
-	XKeyEvent event;
-	Status status;
-
-	g_return_if_fail (sock->plug_window != NULL);
-	
-	event.type = (ev->type == GDK_KEY_PRESS ? KeyPress : KeyRelease);
-	event.display = gdk_x11_drawable_get_xdisplay (sock->plug_window);
-	event.window = jvst->fst->xid;
-	event.time = ev->time;
-	event.x = 1;
-	event.y = 1;
-	event.x_root = 1;
-	event.y_root = 1;
-	event.state = ev->state;
-	event.keycode = ev->hardware_keycode;
-	event.same_screen = True;
-	
-	gdk_error_trap_push ();
-	XSendEvent (event.display, event.window, False, 0, (XEvent*) &event);
-	gdk_display_sync (gtk_widget_get_display (GTK_WIDGET (sock)));
-	gdk_error_trap_pop ();
-}
-
 static gboolean
 destroy_handler (GtkWidget* widget, GdkEventAny* ev, gpointer ptr)
 {
@@ -321,9 +295,6 @@ destroy_handler (GtkWidget* widget, GdkEventAny* ev, gpointer ptr)
 
 	fst_destroy_editor(jvst->fst);
 
-	jack_deactivate( jvst->client );
-	fst_close(jvst->fst);
-	
 	gtk_main_quit();
 	
 	return FALSE;
@@ -343,14 +314,14 @@ focus_handler (GtkWidget* widget, GdkEventFocus* ev, gpointer ptr)
 
 static void
 program_change (GtkComboBox *combo, JackVST *jvst) {
-	int program = gtk_combo_box_get_active (combo);
+	short program = gtk_combo_box_get_active (combo);
 
 	fst_program_change(jvst->fst,program);
 }
 
 static void
 channel_change (GtkComboBox *combo, JackVST *jvst) {
-	int channel = gtk_combo_box_get_active (combo);
+	short channel = gtk_combo_box_get_active (combo);
 
 	jvst->channel = channel - 1;
 
@@ -429,7 +400,7 @@ restore_data(lash_config_t * config, JackVST *jvst )
 	key = lash_config_get_key(config);
 
 	if (strncmp(key, "midi_map", strlen( "midi_map")) == 0) {
-	    int cc = atoi( key+strlen("midi_map") );
+	    short cc = atoi( key+strlen("midi_map") );
 	    int param = lash_config_get_value_int( config );
 
 	    if( cc < 0 || cc>=128 || param<0 || param>=jvst->fst->plugin->numParams ) 
@@ -477,7 +448,7 @@ idle_cb(JackVST *jvst)
 		if( fst->midi_learn_CC < 128 ) {
 			fst->midi_map[fst->midi_learn_CC] = fst->midi_learn_PARAM;
 			char name[32];
-			int success;
+			gboolean success;
 			success = fst->plugin->dispatcher( fst->plugin, effGetParamName, fst->midi_learn_PARAM, 0, name, 0 );
 			if (success) {
 				printf("MIDIMAP CC: %d => %s\n", fst->midi_learn_CC, name);
@@ -485,8 +456,9 @@ idle_cb(JackVST *jvst)
 				printf("MIDIMAP CC: %d => %d\n", fst->midi_learn_CC, fst->midi_learn_PARAM);
 			}
 
-			int cc, paramIndex;
-			int show_tooltip = FALSE;
+			short cc;
+			int paramIndex;
+			gboolean show_tooltip = FALSE;
 			char paramName[64];
 			char tString[96];
 			char tooltip[96 * 128];
@@ -599,7 +571,7 @@ GtkListStore * create_channel_store() {
 }
 
 int
-manage_vst_plugin (JackVST* jvst)
+gtk_gui_start (JackVST* jvst)
 {
 	printf("GTK ThID: %d\n", GetCurrentThreadId ());
 
@@ -611,6 +583,7 @@ manage_vst_plugin (JackVST* jvst)
 	
 	window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
 	gtk_window_set_title (GTK_WINDOW(window), jvst->handle->name);
+	gtk_window_set_resizable (GTK_WINDOW(window), FALSE);
 
 	vpacker = gtk_vbox_new (FALSE, 7);
 	hpacker = gtk_hbox_new (FALSE, 7);
@@ -728,7 +701,7 @@ void
 gtk_gui_init (int *argc, char **argv[])
 {
 	wine_error_handler = XSetErrorHandler( NULL );
-	gtk_error_handler = XSetErrorHandler( fst_xerror_handler );
 	gtk_init (argc, argv);
 	the_gtk_display = gdk_x11_display_get_xdisplay( gdk_display_get_default() );
+	gtk_error_handler = XSetErrorHandler( fst_xerror_handler );
 }

@@ -44,10 +44,7 @@ extern long jack_host_callback (struct AEffect*, int32_t, int32_t, intptr_t, voi
 /* gtk.c */
 
 extern void gtk_gui_init (int* argc, char** argv[]);
-extern int manage_vst_plugin (JackVST * jvst);
-
-/* Prototype for plugin "canDo" helper function*/
-int canDo(struct AEffect* plugin, char* feature);
+extern int gtk_gui_start (JackVST * jvst);
 
 /* Structures & Prototypes for midi output and associated queue */
 typedef struct _MidiMessage MidiMessage;
@@ -72,6 +69,8 @@ static void *the_arg;
 static pthread_t the_thread_id;
 static sem_t sema;
 
+bool jvst_quit = FALSE;
+
 JackVST *jvst_first;
 
 void
@@ -83,12 +82,7 @@ signal_callback_handler(int signum)
 
 	printf("Caught signal to terminate\n");
 
-        jvst->fst->plugin->dispatcher (jvst->fst->plugin, effStopProcess, 0, 0, NULL, 0.0f);
-        jvst->fst->plugin->dispatcher (jvst->fst->plugin, effMainsChanged, 0, 0, NULL, 0.0f);
-
-	jack_deactivate(jvst->client);
-
-	jvst->fst->event_call = CLOSE;
+	jvst_quit = TRUE;
 }
 
 
@@ -664,12 +658,6 @@ void create_argc_argv_from_cmdline( char *cmdline, char *argv0, int *argc, char 
     *argv = myargv;
 }
 
-/* Plugin "canDo" helper function to neaten up plugin feature detection calls */
-int canDo(struct AEffect* plugin, char* feature)
-{
-	return (plugin->dispatcher(plugin, effCanDo, 0, 0, (void*)feature, 0.0f) > 0);
-}
-
 int
 jvst_connect(JackVST *jvst, const char *myname, const char *connect_to)
 {
@@ -706,6 +694,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 //main( int argc, char **argv ) 
 {
 	JackVST* jvst;
+	FST* fst;
 	struct AEffect* plugin;
 	char *client_name = 0;
 	char* period;
@@ -806,14 +795,17 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 		return 1;
 	}
 
-	printf( "instantiate... \n" );
+	printf("FST init\n");
+	fst_init();
 
+	printf( "Revive plugin: %s\n", client_name);
 	if ((jvst->fst = fst_instantiate (jvst->handle, (audioMasterCallback) jack_host_callback, jvst)) == NULL) {
 		fst_error ("can't instantiate plugin %s", plug);
 		return 1;
 	}
 
-	plugin = jvst->fst->plugin;
+	fst = jvst->fst;
+	plugin = fst->plugin;
 
 	printf("Start Jack thread ...\n");
 	if ((jvst->client = jack_client_open (client_name, JackSessionID, NULL, jvst->uuid )) == 0) {
@@ -828,10 +820,8 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	printf("Sample Rate = %.2f\n", sample_rate);
 	printf("Block Size = %ld\n", block_size);
 
-	plugin->dispatcher (plugin, effSetSampleRate, 0, 0, NULL, 
-			    (float) jack_get_sample_rate (jvst->client));
-	plugin->dispatcher (plugin, effSetBlockSize, 0, 
-			    jack_get_buffer_size (jvst->client), NULL, 0.0f);
+	fst_call_dispatcher (fst, effSetSampleRate, 0, 0, NULL, (float) jack_get_sample_rate (jvst->client));
+	fst_call_dispatcher (fst, effSetBlockSize, 0, jack_get_buffer_size (jvst->client), NULL, 0.0f);
 
 	// ok.... plugin is running... lets bind to lash...
 	
@@ -853,39 +843,14 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	}
 #endif
 
-
-	/* set program to zero */
-	/* i comment this out because it breaks dfx Geometer
-	 * looks like we cant set programs for it
-	 *
-	 * TODO:
-	 * this might have been because we were not a real wine thread, but i doubt
-	 * it. need to check.
-	 *
-	 * plugin->dispatcher (plugin, effSetProgram, 0, 0, NULL, 0.0f); 
-	 */
-
-
 	jvst->midi_inport = 
 		jack_port_register(jvst->client, "midi-in", JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
 
-	vst_version = plugin->dispatcher (plugin, effGetVstVersion, 0, 0, NULL, 0.0f);
-	if (vst_version >= 2) {
-		bool isSynth = (plugin->flags & effFlagsIsSynth) > 0;
-		int canReceiveVstEvents = canDo(plugin, "receiveVstEvents");
-		int canReceiveVstMidiEvent = canDo(plugin, "receiveVstMidiEvent");
-		int canSendVstEvents = canDo(plugin, "sendVstEvents");
-		int canSendVstMidiEvent = canDo(plugin, "sendVstMidiEvent");
-
-		printf("Plugin isSynth = %d\n", isSynth);
-		printf("Plugin canDo receiveVstEvents = %d\n", canReceiveVstEvents);
-		printf("Plugin canDo receiveVstMidiEvent = %d\n", canReceiveVstMidiEvent);
-		printf("Plugin canDo sendVstEvents = %d\n", canSendVstEvents);
-		printf("Plugin canDo SendVstMidiEvent = %d\n", canSendVstMidiEvent);
+	if (fst->vst_version >= 2) {
+		printf("Plugin isSynth = %d\n", fst->isSynth);
 
 		/* should we send the plugin VST events (i.e. MIDI) */
-		if (isSynth || canReceiveVstEvents || canReceiveVstMidiEvent) {
-			unsigned short i;
+		if (fst->isSynth || fst->canReceiveVstEvents || fst->canReceiveVstMidiEvent) {
 			jvst->want_midi_in = 1;
 
 			/* The VstEvents structure already contains an array of 2    */
@@ -906,7 +871,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 		}
 
 		/* Can the plugin send VST events (i.e. MIDI) */
-		if (canSendVstEvents || canSendVstMidiEvent) {
+		if (fst->canSendVstEvents || fst->canSendVstMidiEvent) {
 			jvst->ringbuffer = jack_ringbuffer_create(RINGBUFFER_SIZE);
 			if (jvst->ringbuffer == NULL) {
 				fst_error("Cannot create JACK ringbuffer.");
@@ -964,18 +929,6 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 		return 1;
 	}
 
-	if (jvst->with_editor) {
-		printf( "ok.... RockNRoll\n" );
-		gtk_gui_init (&argc, &argv);
-        	if (CreateThread (NULL, 0, (LPTHREAD_START_ROUTINE) manage_vst_plugin, jvst, 0, NULL) == NULL) {
-                	fst_error ("could not create new thread proxy");
-	                return 0;
-        	}
-	} else {
-		signal(SIGINT, signal_callback_handler);
-		printf("Editor Disabled\n");
-	}
-
 	if (! jvst->bypassed) {
 		printf("Activate plugin\n");
 		fst_resume(jvst->fst);
@@ -987,7 +940,31 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	if (connect_to)
 		jvst_connect(jvst, client_name, connect_to);
 
-	fst_gui_event_loop(hInst);
+	if (jvst->with_editor) {
+		printf( "ok.... RockNRoll\n" );
+		gtk_gui_init (&argc, &argv);
+		gtk_gui_start(jvst);
+	} else {
+		signal(SIGINT, signal_callback_handler);
+		printf("Editor Disabled\n");
+		bool chuj=FALSE;
+		while (! jvst_quit) {
+			sleep(5);
+			if (chuj) {
+				chuj = FALSE;
+				fst_run_editor(jvst->fst);
+			} else {
+				chuj = TRUE;
+				fst_destroy_editor(jvst->fst);
+			}
+		}
+	}
+
+	printf("Call Jack deactivate\n");
+        jack_deactivate( jvst->client );
+
+	printf("FST close\n");
+        fst_close(jvst->fst);
 
 	free(jvst);
 
