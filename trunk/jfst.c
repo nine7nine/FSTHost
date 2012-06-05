@@ -68,8 +68,7 @@ static void *(*the_function)(void*);
 static void *the_arg;
 static pthread_t the_thread_id;
 static sem_t sema;
-
-bool jvst_quit = FALSE;
+static sem_t jvst_quit;
 
 JackVST *jvst_first;
 
@@ -82,7 +81,7 @@ signal_callback_handler(int signum)
 
 	printf("Caught signal to terminate\n");
 
-	jvst_quit = TRUE;
+  	sem_post( &jvst_quit );
 }
 
 
@@ -947,17 +946,8 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	} else {
 		signal(SIGINT, signal_callback_handler);
 		printf("Editor Disabled\n");
-		bool chuj=FALSE;
-		while (! jvst_quit) {
-			sleep(5);
-			if (chuj) {
-				chuj = FALSE;
-				fst_run_editor(jvst->fst);
-			} else {
-				chuj = TRUE;
-				fst_destroy_editor(jvst->fst);
-			}
-		}
+		sem_init(&jvst_quit, 0, 0);
+		sem_wait(&jvst_quit);
 	}
 
 	printf("Call Jack deactivate\n");
