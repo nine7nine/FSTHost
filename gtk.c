@@ -11,7 +11,6 @@
 extern lash_client_t *lash_client;
 #endif
 
-
 gboolean quit = FALSE;
 
 static	GtkWidget* window;
@@ -26,9 +25,10 @@ static  GtkWidget* preset_listbox;
 static	GtkWidget* midi_learn_toggle;
 static	GtkWidget* load_button;
 static	GtkWidget* save_button;
+static	GtkWidget* volume_slider;
 static	gulong preset_listbox_signal;
+static	gulong volume_signal;
 static	gulong gtk_socket_signal;
-
 
 static void
 learn_handler (GtkToggleButton *but, gboolean ptr)
@@ -65,6 +65,16 @@ bypass_handler (GtkToggleButton *but, gboolean ptr)
 	}
 	
 	gtk_widget_grab_focus( gtk_socket );
+}
+
+static void
+volume_handler (GtkVScale *slider, gboolean ptr)
+{
+	JackVST* jvst = (JackVST*) ptr;
+
+	short volume = gtk_range_get_value(GTK_RANGE(slider));
+	jvst_set_volume(jvst, volume);
+	printf("Volume: %d (%f)\n", volume, jvst->volume);
 }
 
 static void
@@ -264,20 +274,19 @@ editor_handler (GtkToggleButton *but, gboolean ptr)
 			return;
 		}
 
-		gtk_socket_signal = g_signal_connect (G_OBJECT(window), "configure-event",
-			G_CALLBACK(configure_handler), gtk_socket);
-
 		gtk_socket_add_id (GTK_SOCKET (gtk_socket), jvst->fst->xid);
-
-		fst_show_editor(jvst->fst);
 
 		gtk_widget_set_size_request(gtk_socket, jvst->fst->width, jvst->fst->height);
 		printf("Plugin - Width: %d | Height: %d\n", jvst->fst->width, jvst->fst->height);
-				
+		fst_show_editor(jvst->fst);
+	
 		gtk_widget_show_now (gtk_socket);
 		gtk_widget_grab_focus( gtk_socket );
+		gtk_socket_signal = g_signal_connect (G_OBJECT(window), "configure-event",
+			G_CALLBACK(configure_handler), gtk_socket);
 	} else {
 		g_signal_handler_disconnect(G_OBJECT(window), gtk_socket_signal);
+		gtk_widget_hide(gtk_socket);
 		fst_destroy_editor(jvst->fst);
 		gtk_widget_set_size_request(gtk_socket, -1, -1);
 		gtk_widget_destroy(gtk_socket);
@@ -488,6 +497,13 @@ idle_cb(JackVST *jvst)
 		gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON( midi_learn_toggle ), 0 );
 	}
 
+	// If volume was changed by MIDI CC7 message
+	if (jvst->volume != -1) {
+		g_signal_handler_block(volume_slider, volume_signal);
+		gtk_range_set_value(GTK_RANGE(volume_slider), jvst_get_volume(jvst));
+		g_signal_handler_unblock(volume_slider, volume_signal);
+	}
+
 #ifdef HAVE_LASH
 	if (lash_enabled(lash_client)) {
 	    lash_event_t *event;
@@ -595,6 +611,15 @@ gtk_gui_start (JackVST* jvst)
 	load_button = gtk_button_new_with_label ("load state");
 
 	//----------------------------------------------------------------------------------
+	if (jvst->volume != -1) {
+		volume_slider = gtk_hscale_new_with_range(0,127,1);
+		gtk_widget_set_size_request(volume_slider, 100, -1);
+		gtk_scale_set_value_pos (GTK_SCALE(volume_slider), GTK_POS_LEFT);
+		gtk_range_set_value(GTK_RANGE(volume_slider), jvst_get_volume(jvst));
+		volume_signal = g_signal_connect (G_OBJECT(volume_slider), "value_changed", G_CALLBACK(volume_handler), jvst);
+	}
+
+	//----------------------------------------------------------------------------------
 	channel_listbox = gtk_combo_box_new_with_model ( GTK_TREE_MODEL(create_channel_store()) );
 	renderer = gtk_cell_renderer_text_new ();
 	gtk_cell_layout_pack_start (GTK_CELL_LAYOUT (channel_listbox), renderer, TRUE);
@@ -614,33 +639,13 @@ gtk_gui_start (JackVST* jvst)
 	preset_listbox_signal = g_signal_connect( G_OBJECT(preset_listbox), "changed", G_CALLBACK( program_change ), jvst ); 
 	//----------------------------------------------------------------------------------
 
-
-	g_signal_connect (G_OBJECT(bypass_button), "toggled",
-			    G_CALLBACK(bypass_handler),
-			    jvst);
-
-	g_signal_connect (G_OBJECT(midi_learn_toggle), "toggled",
-			    G_CALLBACK(learn_handler),
-			    jvst);
-
-	g_signal_connect (G_OBJECT(editor_button), "toggled",
-			    G_CALLBACK(editor_handler),
-			    jvst);
-
-	g_signal_connect (G_OBJECT(load_button), "clicked",
-			    G_CALLBACK(load_handler),
-			    jvst);
-
-	g_signal_connect (G_OBJECT(save_button), "clicked",
-			    G_CALLBACK(save_handler),
-			    jvst);
-
-	gtk_container_set_border_width (GTK_CONTAINER(hpacker), 3);
-
-	g_signal_connect (G_OBJECT(window), "delete_event",
-			    G_CALLBACK(destroy_handler),
-			    jvst);
-
+	g_signal_connect (G_OBJECT(bypass_button), "toggled", G_CALLBACK(bypass_handler), jvst); 
+	g_signal_connect (G_OBJECT(midi_learn_toggle), "toggled", G_CALLBACK(learn_handler), jvst); 
+	g_signal_connect (G_OBJECT(editor_button), "toggled", G_CALLBACK(editor_handler), jvst); 
+	g_signal_connect (G_OBJECT(load_button), "clicked", G_CALLBACK(load_handler), jvst); 
+	g_signal_connect (G_OBJECT(save_button), "clicked", G_CALLBACK(save_handler), jvst); 
+	gtk_container_set_border_width (GTK_CONTAINER(hpacker), 3); 
+	g_signal_connect (G_OBJECT(window), "delete_event", G_CALLBACK(destroy_handler), jvst);
 	
 	gtk_box_pack_end   (GTK_BOX(hpacker), midi_learn_toggle, FALSE, FALSE, 0);
 	gtk_box_pack_end   (GTK_BOX(hpacker), preset_listbox, FALSE, FALSE, 0);
@@ -649,17 +654,10 @@ gtk_gui_start (JackVST* jvst)
 	gtk_box_pack_end   (GTK_BOX(hpacker), save_button, FALSE, FALSE, 0);
 	gtk_box_pack_end   (GTK_BOX(hpacker), editor_button, FALSE, FALSE, 0);
 	gtk_box_pack_end   (GTK_BOX(hpacker), channel_listbox, FALSE, FALSE, 0);
+	gtk_box_pack_end   (GTK_BOX(hpacker), volume_slider, FALSE, FALSE, 0);
 	gtk_box_pack_start (GTK_BOX(vpacker), hpacker, FALSE, FALSE, 0);
 
 	gtk_container_add (GTK_CONTAINER (window), vpacker);
-
-	// normally every socket should register it self like this.
-	//g_signal_connect (G_OBJECT(window), "configure_event", G_CALLBACK(configure_handler), gtk_socket);
-
-
-	// but you can show() a GtkSocket only with an id set.
-	//gtk_socket_add_id (GTK_SOCKET (gtk_socket), jvst->fst->xid);
-	
 
  	gtk_widget_show_all (window);
 

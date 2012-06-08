@@ -1,6 +1,7 @@
 #ifndef __fst_fst_h__
 #define __fst_fst_h__
 
+#include <stdio.h>
 #include <setjmp.h>
 #include <signal.h>
 #include <pthread.h>

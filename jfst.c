@@ -19,7 +19,6 @@
 
 #include <sys/types.h>
 #include <string.h>
-#include <stdio.h>
 #include <unistd.h>
 #include <libgen.h>
 #include <glib.h>
@@ -55,14 +54,13 @@ struct _MidiMessage {
 	unsigned char	data[3];
 };
 #define RINGBUFFER_SIZE	1024*sizeof(MidiMessage)
-void process_midi_output(JackVST* jvst, jack_nframes_t nframes);
+//static inline void process_midi_output(JackVST* jvst, jack_nframes_t nframes);
+//static inline void process_midi_input(JackVST* jvst, jack_nframes_t nframes)
 void queue_midi_message(JackVST* jvst, int status, int d1, int d2, jack_nframes_t delta);
-
 
 #ifdef HAVE_LASH
 lash_client_t * lash_client;
 #endif
-
 
 static void *(*the_function)(void*);
 static void *the_arg;
@@ -110,7 +108,8 @@ int wine_pthread_create (pthread_t* thread_id, const pthread_attr_t* attr, void 
 
 static pthread_t audio_thread = 0;
 
-void process_midi_output(JackVST* jvst, jack_nframes_t nframes)
+static inline void
+process_midi_output(JackVST* jvst, jack_nframes_t nframes)
 {
 	/* This jack ringbuffer consume code was largely taken from jack-keyboard */
 	/* written by Edward Tomasz Napierala <trasz@FreeBSD.org>                 */
@@ -160,7 +159,8 @@ void process_midi_output(JackVST* jvst, jack_nframes_t nframes)
 	}
 }
 
-void process_midi_input(JackVST* jvst, jack_nframes_t nframes)
+static inline void
+process_midi_input(JackVST* jvst, jack_nframes_t nframes)
 {
 	struct AEffect* plugin = jvst->fst->plugin;
 
@@ -182,6 +182,14 @@ void process_midi_input(JackVST* jvst, jack_nframes_t nframes)
 			&&  ( jackevent.buffer[0] >= 0x80 && jackevent.buffer[0] <= 0xEF)
 			&&  ( (jackevent.buffer[0] & 0x0f) != jvst->channel ) )
 			continue;
+		// If Volume control is enabled then grab CC7 messages
+		if ( (jvst->volume != -1) && 
+			( (jackevent.buffer[0] & 0xf0) == 0xB0 ) && 
+			(jackevent.buffer[1] == 0x07) )
+		{
+			jvst_set_volume(jvst, jackevent.buffer[2]);
+			continue;
+		}
 		// Mapping MIDI
 		if ( (jackevent.buffer[0] & 0xf0) == 0xb0 && jvst->fst->midi_learn ) {
 			jvst->fst->midi_learn_CC = jackevent.buffer[1];
@@ -281,19 +289,19 @@ int process_callback( jack_nframes_t nframes, void* data)
 
 	audio_thread = pthread_self();
 
-	// Initialize JackAudio-input buffers
-	for (i = 0; i < plugin->numInputs; ++i)
+	// Initialize input buffers
+	for (i = 0; i < jvst->numIns; ++i)
 		jvst->ins[i]  = (float *) jack_port_get_buffer (jvst->inports[i], nframes);
 
-	// Initialize JackAudio-output buffers
-	for (o = 0, i = 0; o < plugin->numOutputs; ++o) {
+	// Initialize output buffers
+	for (o = 0, i = 0; o < jvst->numOuts; ++o) {
 		jvst->outs[o]  = (float *) jack_port_get_buffer (jvst->outports[o], nframes);
 	
 		// If bypassed then copy In's to Out's
-		if ( (jvst->bypassed) && (i < plugin->numInputs) ) {
+		if ( (jvst->bypassed) && (i < jvst->numIns) && (o < jvst->numOuts) ) {
 			memcpy (jvst->outs[o], jvst->ins[i], sizeof (float) * nframes);
 			++i;
-		// Zeroing buffers
+		// Zeroing output buffers
 		} else {
 			memset (jvst->outs[o], 0, sizeof (float) * nframes);
 		}
@@ -303,16 +311,33 @@ int process_callback( jack_nframes_t nframes, void* data)
 	if (jvst->bypassed)
 		return 0;
 
-	// Normal process
+	// Process MIDI Input
 	if (jvst->midi_inport) 
 		process_midi_input(jvst, nframes);
 
+	// Get Data from plugin
 	if (plugin->flags & effFlagsCanReplacing) {
 		plugin->processReplacing (plugin, jvst->ins, jvst->outs, nframes);
 	} else {
 		plugin->process (plugin, jvst->ins, jvst->outs, nframes);
 	}
 
+	// Ouput volume control
+	if (jvst->volume != -1) {
+		jack_nframes_t n=0;
+		o = 0;
+		while(o < jvst->numOuts) {
+			jvst->outs[o][n] *= jvst->volume;
+			if (n < nframes) {
+				n++;
+			} else {
+				++o;
+				n=0;
+			}
+		}
+	}
+
+	// Process MIDI Output
 	if (jvst->midi_outport)
 		process_midi_output(jvst, nframes);
 
@@ -700,9 +725,12 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	int opt_uuid = 0;
 	int opt_channel = -1;
 	short i;
+	short opt_numIns = 0;
+	short opt_numOuts = 0;
 	short opt_with_editor = 2;
 	bool load_state = FALSE;
 	bool opt_bypassed = FALSE;
+	bool opt_disable_volume = FALSE;
 	double opt_tempo = -1;
 	const char *connect_to = NULL;
 	const char *state_file = 0;
@@ -726,7 +754,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 
         // Parse command line options
 	int c;
-	while ( (c = getopt (argc, argv, "bners:c:k:j:t:u:")) != -1) {
+	while ( (c = getopt (argc, argv, "bners:c:k:i:j:o:t:u:V")) != -1) {
 		switch (c) {
 			case 'b':
 				opt_bypassed = TRUE;
@@ -749,14 +777,23 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 				if (opt_channel < 0 || opt_channel > 15)
 					opt_channel = -1;
 				break;
+			case 'i':
+				opt_numIns = strtol(optarg, NULL, 10);
+				break;
 			case 'j':
 				connect_to = optarg;
+				break;
+			case 'o':
+				opt_numOuts = strtol(optarg, NULL, 10);
 				break;
 			case 't':
 				opt_tempo = strtod(optarg, NULL);
 				break;
 			case 'u':
 				opt_uuid = (int) optarg;
+				break;
+			case 'V':
+				opt_disable_volume = TRUE;
 				break;
 			default:
 				fprintf (stderr, "usage: %s <plugin>\n", argv[0]);
@@ -765,7 +802,8 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	}
 
 	if (optind >= argc) {
-		fprintf (stderr, "usage: [ -b | -n | -e | -s state_file | -j connect_to | -c client_name ] %s <plugin>\n", argv[0]);
+		fprintf (stderr, "usage: [ -b | -n | -e | -s state_file | -j connect_to | -c client_name | -V ] %s <plugin>\n",
+			argv[0]);
 		return 1;
 	}
 	plug = argv[optind];
@@ -778,14 +816,10 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	jvst->with_editor = opt_with_editor;
 	jvst->uuid = opt_uuid;
 	jvst->tempo = opt_tempo; // -1 here mean get it from Jack
-
-//	for (i=0; i<128; i++ )
-//		jvst->fst->midi_map[i] = -1;
-
-	if (!client_name) {
-		client_name = basename( strdup(plug) );
-		if ((period = strrchr (client_name, '.')) != NULL)
-			*period = '\0';
+	if (opt_disable_volume) {
+		jvst->volume = -1;
+	} else {
+		jvst_set_volume(jvst, 63);
 	}
 
 	printf( "yo... lets see...\n" );
@@ -793,6 +827,9 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 		fst_error ("can't load plugin %s", plug);
 		return 1;
 	}
+
+	if (!client_name)
+		client_name = jvst->handle->name;
 
 	printf("FST init\n");
 	fst_init();
@@ -884,24 +921,38 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 		}
 	}
 
-	printf("PortLayout: in: %d out: %d\n", plugin->numInputs, plugin->numOutputs);
+	// Register / allocate ports
+	printf("Plugin PortLayout: in: %d out: %d\n", plugin->numInputs, plugin->numOutputs);
+	jvst->numIns = (opt_numIns > 0 && opt_numIns < plugin->numInputs) ? opt_numIns : plugin->numInputs;
+	jvst->numOuts = (opt_numOuts > 0 && opt_numOuts < plugin->numOutputs) ? opt_numOuts : plugin->numOutputs;
+	printf("FSTHost PortLayout: in: %d out: %d\n", jvst->numIns, jvst->numOuts);
 
-	jvst->inports = (jack_port_t**)malloc(sizeof(jack_port_t*) * plugin->numInputs);
+	jvst->inports = (jack_port_t**)malloc(sizeof(jack_port_t*) * jvst->numIns);
 	jvst->ins = (float**)malloc(sizeof(float*) * plugin->numInputs);
 	
-	for (i = 0; i < plugin->numInputs; ++i) {
-		char buf[64];
-		snprintf (buf, sizeof(buf), "in%d", i+1);
-		jvst->inports[i] = jack_port_register (jvst->client, buf, JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
+	for (i = 0; i < jvst->numIns; ++i) {
+		if (i < jvst->numIns) {
+			char buf[64];
+			snprintf (buf, sizeof(buf), "in%d", i+1);
+			jvst->inports[i] = jack_port_register (jvst->client, buf, JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
+		} else {
+			// Swap area for plugin not used ports;-)
+			jvst->outs[i] = malloc(sizeof(float) * jack_get_buffer_size (jvst->client));
+		}
 	}
 	
-	jvst->outports = (jack_port_t **) malloc (sizeof(jack_port_t*) * plugin->numOutputs);
+	jvst->outports = (jack_port_t **) malloc (sizeof(jack_port_t*) * jvst->numOuts);
 	jvst->outs = (float **) malloc (sizeof (float *) * plugin->numOutputs);
 	
 	for (i = 0; i < plugin->numOutputs; ++i) {
-		char buf[64];
-		snprintf (buf, sizeof(buf), "out%d", i+1);
-		jvst->outports[i] = jack_port_register (jvst->client, buf, JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+		if (i < jvst->numOuts) {
+			char buf[64];
+			snprintf (buf, sizeof(buf), "out%d", i+1);
+			jvst->outports[i] = jack_port_register (jvst->client, buf, JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+		} else {
+			// Swap area for plugin not used ports;-)
+			jvst->outs[i] = malloc(sizeof(float) * jack_get_buffer_size (jvst->client));
+		}
 	}
 
 	jack_set_thread_creator (wine_pthread_create);
@@ -914,7 +965,6 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
              jack_set_session_callback( jvst->client, session_callback_aux, jvst );
         }
 
-
 #ifdef HAVE_LASH
 	if( lash_enabled( lash_client ) ) {
 	    event = lash_event_new_with_type(LASH_Jack_Client_Name);
@@ -922,38 +972,36 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	    lash_send_event(lash_client, event);
 	}
 #endif
-        /* load state if requested */
+        // load state if requested
 	if ( load_state && ! fst_load_state (jvst->fst, state_file)) {
 		jack_deactivate( jvst->client );
 		return 1;
 	}
 
-	if (! jvst->bypassed) {
-		printf("Activate plugin\n");
-		fst_resume(jvst->fst);
-	}
+	// Activate plugin
+	if (! jvst->bypassed) fst_resume(jvst->fst);
 
-	printf( "Calling Jack activate\n" );
+	printf( "Jack Activate\n" );
 	jack_activate (jvst->client);
 
 	if (connect_to)
 		jvst_connect(jvst, client_name, connect_to);
 
 	if (jvst->with_editor) {
-		printf( "ok.... RockNRoll\n" );
+		printf( "Start GUI\n" );
 		gtk_gui_init (&argc, &argv);
 		gtk_gui_start(jvst);
 	} else {
 		signal(SIGINT, signal_callback_handler);
-		printf("Editor Disabled\n");
+		printf("GUI Disabled\n");
 		sem_init(&jvst_quit, 0, 0);
 		sem_wait(&jvst_quit);
 	}
 
-	printf("Call Jack deactivate\n");
+	printf("Jack Deactivate\n");
         jack_deactivate( jvst->client );
 
-	printf("FST close\n");
+	printf("Close plugin\n");
         fst_close(jvst->fst);
 
 	free(jvst);

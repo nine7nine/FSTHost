@@ -1,9 +1,7 @@
-#include <stdio.h>
 #include <libgen.h>
 #include <windows.h>
 #include <winnt.h>
 #include <wine/exception.h>
-#include <pthread.h>
 #include <signal.h>
 
 #include "fst.h"
@@ -355,12 +353,16 @@ fst_create_editor (FST* fst)
 	fst->height =  er->bottom - er->top;
 
 	SetWindowPos (fst->window, HWND_BOTTOM, 0, 0, fst->width, fst->height, 
-		SWP_NOACTIVATE | SWP_NOMOVE);
+		SWP_NOACTIVATE | SWP_NOMOVE | SWP_DEFERERASE | SWP_NOCOPYBITS | SWP_NOSENDCHANGING);
 
 	ShowWindow (fst->window, SW_SHOWMINNOACTIVE);
 
 	fst->xid = (int) GetPropA (window, "__wine_x11_whole_window");
 	printf( "And xid = %x\n", fst->xid );
+	
+	EnableWindow(fst->window, TRUE);
+	UpdateWindow(fst->window);
+	ShowWindow (fst->window, SW_RESTORE);
 
 	return 1;
 }
@@ -380,12 +382,14 @@ fst_destroy_editor (FST* fst)
 
 void
 fst_suspend (FST *fst) {
+	printf("Suspend plugin\n");
 	fst_call_dispatcher (fst, effStopProcess, 0, 0, NULL, 0.0f);
 	fst_call_dispatcher (fst, effMainsChanged, 0, 0, NULL, 0.0f);
 } 
 
 void
 fst_resume (FST *fst) {
+	printf("Resume plugin\n");
 	fst_call_dispatcher (fst, effMainsChanged, 0, 1, NULL, 0.0f);
 	fst_call_dispatcher (fst, effStartProcess, 0, 0, NULL, 0.0f);
 } 
@@ -423,91 +427,65 @@ fst_event_loop_add_plugin (FST* fst)
 	}
 }
 
-HMODULE
-fst_load_vst_library(FSTHandle* fhandle, const char * path) {
-	HMODULE dll;
-	char * full_path;
-	char * envdup;
-	char * vst_path;
-	size_t len1;
-	size_t len2;
-
-	if ((dll = LoadLibraryA (path)) != NULL) {
-		fhandle->path = strdup(path);
-		return dll;
-	}
-
-	envdup = getenv ("VST_PATH");
-	if (envdup == NULL)
-		return NULL;
-
-	envdup = strdup (envdup);
-	if (envdup == NULL) {
-		fst_error ("strdup failed");
-		return NULL;
-	}
-
-	len2 = strlen(path);
-
-	vst_path = strtok (envdup, ":");
-	while (vst_path != NULL) {
-		fst_error ("\"%s\"", vst_path);
-		len1 = strlen(vst_path);
-		full_path = malloc (len1 + 1 + len2 + 1);
-		memcpy(full_path, vst_path, len1);
-		full_path[len1] = '/';
-		memcpy(full_path + len1 + 1, path, len2);
-		full_path[len1 + 1 + len2] = '\0';
-
-		if ((dll = LoadLibraryA (full_path)) != NULL)
-			break;
-
-		free(full_path);
-		vst_path = strtok (NULL, ":");
-	}
-
-	free(envdup);
-
-	fhandle->path = full_path;
-	return dll;
-}
-
 FSTHandle*
 fst_load (const char * path) {
 	char mypath[MAX_PATH];
-	char * period;
-	WCHAR* wbuf;
+	char *base, *envdup, *vst_path, *last, *name;
+	size_t len;
+	HMODULE dll = NULL;
+	main_entry_t main_entry;
 	FSTHandle* fhandle;
-	LPWSTR dos_file_name;
-
 
 	strcpy(mypath, path);
 	if (strstr (path, ".dll") == NULL)
 		strcat (mypath, ".dll");
 
+	/* Get name */
+	base = strdup(basename (mypath));
+	len =  strrchr(base, '.') - base;
+	name = strndup(base, len);
+
+	// If we got full path
+	dll = LoadLibraryA(mypath);
+
+	// Try find plugin in VST_PATH
+	if ( (dll == NULL) && (envdup = getenv("VST_PATH")) != NULL ) {
+		envdup = strdup (envdup);
+		vst_path = strtok (envdup, ":");
+		while (vst_path != NULL) {
+			last = vst_path + strlen(vst_path) - 1;
+			if (*last == '/') *last='\0';
+
+			sprintf(mypath, "%s/%s", vst_path, base);
+			printf("Search in %s\n", mypath);
+
+			if ( (dll = LoadLibraryA(mypath)) != NULL)
+				break;
+			vst_path = strtok (NULL, ":");
+		}
+		free(envdup);
+		free(base);
+	}
+
+	if (dll == NULL) {
+		free(name);
+		fst_error("Can't load plugin\n");
+		return NULL;
+	}
+
+	if ((main_entry = (main_entry_t) GetProcAddress (dll, "main")) == NULL) {
+		free(name);
+		FreeLibrary (dll);
+		fst_error("Wrong main_entry in\n");
+		return NULL;
+	}
+	
 	fhandle = (FSTHandle*) calloc (1, sizeof (FSTHandle));
-	fhandle->name = basename (strdup(mypath));
-
-	/* strip off .dll */
-	if ((period = strrchr (fhandle->name, '.')) != NULL)
-		*period = '\0';
-
-	// Get wine path
-	printf("UnixPath: %s\n", mypath);
-	wbuf = wine_get_dos_file_name(mypath);
-	WideCharToMultiByte(CP_UNIXCP, 0, wbuf, -1, (LPSTR) &mypath, MAX_PATH, NULL, NULL);
-	printf("WinePath: %s\n", mypath);
-
-	if ((fhandle->dll = fst_load_vst_library (fhandle, (const char *) &mypath)) == NULL) {
-		fst_unload (fhandle);
-		return NULL;
-	}
-
-	if ((fhandle->main_entry = (main_entry_t) GetProcAddress (fhandle->dll, "main")) == NULL) {
-		fst_unload (fhandle);
-		return NULL;
-	}
-
+	fhandle->dll = dll;
+	fhandle->main_entry = main_entry;
+	fhandle->path = strdup(mypath);
+	fhandle->name = name;
+	
 	return fhandle;
 }
 

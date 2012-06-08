@@ -1,12 +1,9 @@
 #include <glib.h>
-#include <stdio.h>
 #include <string.h>
-#include <stdbool.h>
 
 #include <libxml/parser.h>
 #include <libxml/tree.h>
 
-#include "fst.h"
 #include "jackvst.h"
 
 // Concept from: http://stackoverflow.com/questions/122616/how-do-i-trim-leading-trailing-whitespace-in-a-standard-way
@@ -106,7 +103,7 @@ process_node(FST *fst, xmlNode *a_node)
 	  pthread_mutex_lock( &fst->lock );
 	  fst->plugin->setParameter( fst->plugin, index, val );
 	  pthread_mutex_unlock( &fst->lock );
-       // Channel
+       // MIDI Channel
        } else if (strcmp(cur_node->name, "channel") == 0) {
 	  if (! jvst)
 	     continue;
@@ -115,7 +112,13 @@ process_node(FST *fst, xmlNode *a_node)
 
 	  if (channel >= 1 && channel <= 16)
 	     jvst->channel = channel - 1;
-       // Program
+       // Volume
+       } else if (strcmp(cur_node->name, "volume") == 0) {
+	  if ( (! jvst) || (jvst->volume == -1) )
+             continue;
+
+          jvst_set_volume(jvst, strtol(xmlGetProp(cur_node, "level"), NULL, 10));
+       // Current Program
        } else if (strcmp(cur_node->name, "program") == 0) {
           short currentProgram = strtol(xmlGetProp(cur_node, "number"), NULL, 10);
           fst_program_change(fst, currentProgram);
@@ -240,6 +243,13 @@ fst_save_fps (FST * fst, const char * filename) {
    if (jvst && jvst->channel >= 0 && jvst->channel <= 15) {
       cur_node = xmlNewChild(plugin_state_node, NULL, "channel", NULL);
       xmlNewProp(cur_node, "number", int2str(tString, &jvst->channel));
+   }
+
+   // Volume
+   if (jvst && jvst->volume != -1) {
+      int level = jvst_get_volume(jvst);
+      cur_node = xmlNewChild(plugin_state_node, NULL, "volume", NULL);
+      xmlNewProp(cur_node, "level", int2str(tString, &level));
    }
 
    // Current Program
