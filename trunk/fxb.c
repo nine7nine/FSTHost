@@ -1,7 +1,4 @@
-#include <stdio.h>
-#include <pthread.h>
-
-#include <fst.h>
+#include "fst.h"
 
 /** Root chunk identifier for Programs (fxp) and Banks (fxb). */
 #define cMagic			'CcnK'
