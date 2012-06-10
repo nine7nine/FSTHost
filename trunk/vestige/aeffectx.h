@@ -272,8 +272,8 @@ typedef struct AEffect
 	// flags 24-27
 	int32_t flags;
 	// Fill somewhere 28-2b
-	intptr_t *ptr1;
-	intptr_t *ptr2;
+	intptr_t *resvd1;
+	intptr_t *resvd2;
 	// Zeroes 2c-2f 30-33 34-37 38-3b
 	int32_t empty3[3];
 	// 1.0f 3c-3f
