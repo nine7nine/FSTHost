@@ -30,6 +30,11 @@ struct _JackVST {
     double         tempo;
     float          volume; /* wehere 0.0 mean silence */
 
+    int            midi_map[128];
+    bool           midi_learn;
+    short          midi_learn_CC;
+    int            midi_learn_PARAM;
+
     /* For VST/i support */
     int	   want_midi_in;
     struct VstMidiEvent* event_array;
@@ -55,6 +60,16 @@ jvst_get_volume(JackVST* jvst)
 	return ret;
 }
 
+/* Structures & Prototypes for midi output and associated queue */
+typedef struct _MidiMessage MidiMessage;
+
+struct _MidiMessage {
+	jack_nframes_t	time;
+	int		len; /* Length of MIDI message, in bytes. */
+	unsigned char	data[3];
+};
+
+#define RINGBUFFER_SIZE 1024*sizeof(MidiMessage)
 #define MIDI_EVENT_MAX 1024
 
 #endif /* __jack_vst_h__ */

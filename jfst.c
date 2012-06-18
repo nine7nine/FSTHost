@@ -24,7 +24,6 @@
 #include <glib.h>
 #include <semaphore.h>
 #include <signal.h>
-#include <vestige/aeffectx.h>
 #include <windows.h>
 
 #include "fst.h"
@@ -37,25 +36,12 @@
 #endif
 
 /* audiomaster.c */
-
 extern long jack_host_callback (struct AEffect*, int32_t, int32_t, intptr_t, void *, float );
 
 /* gtk.c */
-
 extern void gtk_gui_init (int* argc, char** argv[]);
 extern int gtk_gui_start (JackVST * jvst);
 
-/* Structures & Prototypes for midi output and associated queue */
-typedef struct _MidiMessage MidiMessage;
-
-struct _MidiMessage {
-	jack_nframes_t	time;
-	int				len;	/* Length of MIDI message, in bytes. */
-	unsigned char	data[3];
-};
-#define RINGBUFFER_SIZE	1024*sizeof(MidiMessage)
-//static inline void process_midi_output(JackVST* jvst, jack_nframes_t nframes);
-//static inline void process_midi_input(JackVST* jvst, jack_nframes_t nframes)
 void queue_midi_message(JackVST* jvst, int status, int d1, int d2, jack_nframes_t delta);
 
 #ifdef HAVE_LASH
@@ -69,6 +55,51 @@ static sem_t sema;
 static sem_t jvst_quit;
 
 JackVST *jvst_first;
+
+bool
+jvst_load_state (JackVST* jvst, const char * filename)
+{
+	bool success;
+	char* file_ext = strrchr(filename, '.');
+
+	if (strcasecmp(file_ext, ".fps") == 0) {
+		success = fps_load(jvst, filename);
+	} else if ( (strcasecmp(file_ext, ".fxp") == 0) || 
+	            (strcasecmp(file_ext, ".fxb") == 0) )
+	{
+		success = fst_load_fxfile(jvst->fst, filename);
+	} else {
+		printf("Unkown file type\n");
+		success = FALSE;
+	}
+
+	if (success) {
+		printf("File %s loaded\n", filename);
+	} else {
+		printf("Unable to load file %s\n", filename);
+	}
+
+	return success;
+}
+
+bool
+jvst_save_state (JackVST* jvst, const char * filename)
+{
+	char* file_ext = strrchr(filename, '.');
+
+	if (strcasecmp(file_ext, ".fxp") == 0) {
+		fst_save_fxfile(jvst->fst, filename, 0);
+	} else if (strcasecmp(file_ext, ".fxb") == 0) {
+		fst_save_fxfile(jvst->fst, filename, 1);
+	} else if (strcasecmp(file_ext, ".fps") == 0) {
+		fps_save(jvst, filename);
+	} else {
+		printf("Unkown file type\n");
+		return FALSE;
+	}
+
+	return TRUE;
+}
 
 void
 signal_callback_handler(int signum)
@@ -93,7 +124,8 @@ static DWORD WINAPI wine_thread_aux( LPVOID arg )
   return 0;
 }
 
-int wine_pthread_create (pthread_t* thread_id, const pthread_attr_t* attr, void *(*function)(void*), void* arg)
+int
+wine_pthread_create (pthread_t* thread_id, const pthread_attr_t* attr, void *(*function)(void*), void* arg)
 {
   sem_init( &sema, 0, 0 );
   the_function = function;
@@ -191,11 +223,11 @@ process_midi_input(JackVST* jvst, jack_nframes_t nframes)
 			continue;
 		}
 		// Mapping MIDI
-		if ( (jackevent.buffer[0] & 0xf0) == 0xb0 && jvst->fst->midi_learn ) {
-			jvst->fst->midi_learn_CC = jackevent.buffer[1];
+		if ( (jackevent.buffer[0] & 0xf0) == 0xb0 && jvst->midi_learn ) {
+			jvst->midi_learn_CC = jackevent.buffer[1];
 		// handle MIDI mapped
-		} else if( (jackevent.buffer[0] & 0xf0) == 0xb0 && jvst->fst->midi_map[jackevent.buffer[1]] != -1 ) {
-			int parameter = jvst->fst->midi_map[jackevent.buffer[1]];
+		} else if( (jackevent.buffer[0] & 0xf0) == 0xb0 && jvst->midi_map[jackevent.buffer[1]] != -1 ) {
+			int parameter = jvst->midi_map[jackevent.buffer[1]];
 			float value = 1.0/127.0 * (float) jackevent.buffer[2];
 			plugin->setParameter( plugin, parameter, value );
 		// .. let's play
@@ -218,7 +250,8 @@ process_midi_input(JackVST* jvst, jack_nframes_t nframes)
 	}
 }
 
-void queue_midi_message(JackVST* jvst, int status, int d1, int d2, jack_nframes_t delta )
+void
+queue_midi_message(JackVST* jvst, int status, int d1, int d2, jack_nframes_t delta )
 {
 	jack_ringbuffer_t* ringbuffer;
 	int	written;
@@ -281,7 +314,8 @@ void queue_midi_message(JackVST* jvst, int status, int d1, int d2, jack_nframes_
 	}
 }
 
-int process_callback( jack_nframes_t nframes, void* data) 
+int
+process_callback( jack_nframes_t nframes, void* data) 
 {
 	short i, o;
 	JackVST* jvst = (JackVST*) data;
@@ -308,14 +342,13 @@ int process_callback( jack_nframes_t nframes, void* data)
 	}
 
 	// Bypass - because all audio jobs are done  - simply return
-	if (jvst->bypassed)
-		return 0;
+	if (jvst->bypassed) return 0;
 
 	// Process MIDI Input
 	if (jvst->midi_inport) 
 		process_midi_input(jvst, nframes);
 
-	// Get Data from plugin
+	// Deal with plugin
 	if (plugin->flags & effFlagsCanReplacing) {
 		plugin->processReplacing (plugin, jvst->ins, jvst->outs, nframes);
 	} else {
@@ -344,7 +377,8 @@ int process_callback( jack_nframes_t nframes, void* data)
 	return 0;      
 }
 
-int session_callback( void *arg )
+int
+session_callback( void *arg )
 {
 	printf("session callback\n");
 
@@ -355,8 +389,8 @@ int session_callback( void *arg )
         char filename[MAX_PATH];
 
         snprintf( filename, sizeof(filename), "%sstate.fps", event->session_dir );
-        fst_save_state( jvst->fst, filename );
-        snprintf( retval, sizeof(retval), "fst -u %s -s ${SESSION_DIR}state.fps %s", event->client_uuid, jvst->handle->path );
+        jvst_save_state( jvst, filename );
+        snprintf( retval, sizeof(retval), "fsthost -u %s -s ${SESSION_DIR}state.fps %s", event->client_uuid, jvst->handle->path );
         event->command_line = strdup( retval );
 
         jack_session_reply( jvst->client, event );
@@ -366,7 +400,8 @@ int session_callback( void *arg )
         return 0;
 }
 
-void session_callback_aux( jack_session_event_t *event, void *arg )
+void
+session_callback_aux( jack_session_event_t *event, void *arg )
 {
         JackVST* jvst = (JackVST*) arg;
         jvst->session_event = event;
@@ -381,306 +416,7 @@ enum ParseMode {
     MODE_ESCAPED,
     MODE_WHITESPACE,
     MODE_EOL
-
 };
-
-void create_argc_argv_from_cmdline( char *cmdline, char *argv0, int *argc, char ***argv ) {
-    // first count argc
-    char *pos = cmdline;
-    enum ParseMode parseMode = MODE_WHITESPACE;
-    enum ParseMode parseMode_before_ESC = MODE_NORMAL;
-    unsigned short i;
-
-    int myargc = 1; 
-    char **myargv;
-
-    while( parseMode != MODE_EOL ) {
-	switch( parseMode ) {
-	    case MODE_NORMAL:
-		switch( *pos ) {
-		    case '\"':
-			parseMode = MODE_DOUBLEQUOTE;
-			break;
-		    case '\'':
-			parseMode = MODE_QUOTE;
-			break;
-		    case '\\':
-			parseMode_before_ESC = parseMode;
-			parseMode = MODE_ESCAPED;
-			break;
-		    case ' ':	// First Space after an arg;
-			parseMode = MODE_WHITESPACE;
-			myargc++;
-			break;
-		    case 0:	// EOL after arg.
-			parseMode = MODE_EOL;
-			break;
-		    default:
-			// Normal char;
-			break;
-		}
-		break;
-	    case MODE_QUOTE:
-		switch( *pos ) {
-		    case '\'':
-			parseMode = MODE_NORMAL;
-			break;
-		    case '\\':
-			parseMode_before_ESC = parseMode;
-			parseMode = MODE_ESCAPED;
-			break;
-		    case 0:
-			fst_error( "parse Error on cmdline" );
-			parseMode = MODE_EOL;
-			break;
-		    default:
-			// Normal char;
-			break;
-		}
-		break;
-	    case MODE_DOUBLEQUOTE:
-		switch( *pos ) {
-		    case '\"':
-			parseMode = MODE_NORMAL;
-			break;
-		    case '\\':
-			parseMode_before_ESC = parseMode;
-			parseMode = MODE_ESCAPED;
-			break;
-		    case 0:
-			fst_error( "parse Error on cmdline" );
-			parseMode = MODE_EOL;
-			break;
-		    default:
-			// Normal char;
-			break;
-		}
-		break;
-	    case MODE_ESCAPED:
-		switch( *pos ) {
-		    case '\"':
-			// emit escaped char;
-			parseMode = parseMode_before_ESC;
-			break;
-		    case '\'':
-			// emit escaped char;
-			parseMode = parseMode_before_ESC;
-			break;
-		    case '\\':
-			// emit escaped char;
-			parseMode = parseMode_before_ESC;
-			break;
-		    case 0:
-			fst_error( "EOL after escape: ignored" );
-			parseMode = MODE_EOL;
-			break;
-		    default:
-			fst_error( "Unknown Escapecharacter: ignored" );
-			parseMode = parseMode_before_ESC;
-			// Normal char;
-			break;
-		}
-		break;
-	    case MODE_WHITESPACE:
-		switch( *pos ) {
-		    case '\"':
-			parseMode = MODE_DOUBLEQUOTE;
-			myargc++;
-			break;
-		    case '\'':
-			parseMode = MODE_QUOTE;
-			myargc++;
-			break;
-		    case '\\':
-			parseMode_before_ESC = MODE_NORMAL;
-			parseMode = MODE_ESCAPED;
-			myargc++;
-			break;
-		    case ' ':
-			parseMode = MODE_WHITESPACE;
-			break;
-		    case 0:
-			parseMode = MODE_EOL;
-			break;
-		    default:
-			// 
-			parseMode = MODE_NORMAL;
-			// Normal char;
-			myargc++;
-			break;
-		}
-		break;
-	}
-	pos++;
-    }
-
-    myargv = malloc( myargc * sizeof( char * ) );
-    if( !myargv ) {
-	fst_error( "cant alloc memory" );
-	exit( 10 );
-    }
-
-    // alloc strlen(cmdline) + 1 for each argv.
-    // this avoids another parsing pass.
-    for( i=0; i<myargc; i++ ) {
-	myargv[i] = malloc( strlen(cmdline) + 1 );
-	if( !myargv[i] ) {
-	    fst_error( "cant alloc memory" );
-	    exit( 10 );
-	}
-	myargv[i][0] = 0;
-    }
-
-    // Now rerun theparser and actually emit chars.
-    pos = cmdline;
-    parseMode = MODE_WHITESPACE;
-    parseMode_before_ESC = MODE_NORMAL;
-    int current_arg = 0;
-    char *emit_pos = myargv[0];
-    
-    while( parseMode != MODE_EOL ) {
-	switch( parseMode ) {
-	    case MODE_NORMAL:
-		switch( *pos ) {
-		    case '\"':
-			parseMode = MODE_DOUBLEQUOTE;
-			break;
-		    case '\'':
-			parseMode = MODE_QUOTE;
-			break;
-		    case '\\':
-			parseMode_before_ESC = parseMode;
-			parseMode = MODE_ESCAPED;
-			break;
-		    case ' ':	// First Space after an arg;
-			parseMode = MODE_WHITESPACE;
-			*emit_pos = 0;
-
-			break;
-		    case 0:	// EOL after arg.
-			parseMode = MODE_EOL;
-		        *emit_pos = 0;	
-			break;
-		    default:
-
-			*(emit_pos++) = *pos;
-			break;
-		}
-		break;
-	    case MODE_QUOTE:
-		switch( *pos ) {
-		    case '\'':
-			parseMode = MODE_NORMAL;
-			break;
-		    case '\\':
-			parseMode_before_ESC = parseMode;
-			parseMode = MODE_ESCAPED;
-			break;
-		    case 0:
-			fst_error( "parse Error on cmdline" );
-			parseMode = MODE_EOL;
-		        *emit_pos = 0;	
-			break;
-		    default:
-			// Normal char;
-			*(emit_pos++) = *pos;
-			break;
-		}
-		break;
-	    case MODE_DOUBLEQUOTE:
-		switch( *pos ) {
-		    case '"':
-			parseMode = MODE_NORMAL;
-			break;
-		    case '\\':
-			parseMode_before_ESC = parseMode;
-			parseMode = MODE_ESCAPED;
-			break;
-		    case 0:
-			fst_error( "parse Error on cmdline" );
-			parseMode = MODE_EOL;
-		        *emit_pos = 0;	
-			break;
-		    default:
-			// Normal char;
-			*(emit_pos++) = *pos;
-			break;
-		}
-		break;
-	    case MODE_ESCAPED:
-		switch( *pos ) {
-		    case '\"':
-			// emit escaped char;
-			parseMode = parseMode_before_ESC;
-			*(emit_pos++) = *pos;
-			break;
-		    case '\'':
-			// emit escaped char;
-			parseMode = parseMode_before_ESC;
-			*(emit_pos++) = *pos;
-			break;
-		    case '\\':
-			// emit escaped char;
-			parseMode = parseMode_before_ESC;
-			*(emit_pos++) = *pos;
-			break;
-		    case 0:
-			fst_error( "EOL after escape: ignored" );
-			parseMode = MODE_EOL;
-		        *emit_pos = 0;	
-			break;
-		    default:
-			fst_error( "Unknown Escapecharacter: ignored" );
-			parseMode = parseMode_before_ESC;
-			break;
-		}
-		break;
-	    case MODE_WHITESPACE:
-		switch( *pos ) {
-		    case '\"':
-			parseMode = MODE_DOUBLEQUOTE;
-			// ok... arg begins
-			current_arg++;
-			emit_pos = myargv[current_arg];
-			break;
-		    case '\'':
-			parseMode = MODE_QUOTE;
-			// ok... arg begins
-			current_arg++;
-			emit_pos = myargv[current_arg];
-			break;
-		    case '\\':
-			parseMode_before_ESC = MODE_NORMAL;
-			parseMode = MODE_ESCAPED;
-			// ok... arg begins
-			current_arg++;
-			emit_pos = myargv[current_arg];
-			break;
-		    case ' ':
-			parseMode = MODE_WHITESPACE;
-			break;
-		    case 0:
-			parseMode = MODE_EOL;
-			break;
-		    default:
-			parseMode = MODE_NORMAL;
-			// ok... arg begins
-			current_arg++;
-			emit_pos = myargv[current_arg];
-			// Normal char;
-			*(emit_pos++) = *pos;
-			break;
-		}
-		break;
-	}
-	pos++;
-    }
-
-    strncpy( myargv[0], argv0, strlen(cmdline) );
-    
-    *argc = myargc;
-    *argv = myargv;
-}
 
 int
 jvst_connect(JackVST *jvst, const char *myname, const char *connect_to)
@@ -712,38 +448,71 @@ jvst_connect(JackVST *jvst, const char *myname, const char *connect_to)
 	return 1;
 }
 
+void
+usage(char* appname) {
+	const char* format = "%-20s%s\n";
+
+	fprintf(stderr, "\nUsage: %s [ options ] <plugin>\n", appname);
+	fprintf(stderr, "Options:\n");
+	fprintf(stderr, format, "-b", "Bypass");
+	fprintf(stderr, format, "-n", "Disable Editor and GTK GUI");
+	fprintf(stderr, format, "-e", "Hide Editor");
+	fprintf(stderr, format, "-s state_file", "Load state_file");
+	fprintf(stderr, format, "-c client_name", "Jack Client name");
+	fprintf(stderr, format, "-k channel", "MIDI Channel filter");
+	fprintf(stderr, format, "-i num_in", "Jack number In ports");
+	fprintf(stderr, format, "-j connect_to", "Connect Audio Out to connect_to");
+	fprintf(stderr, format, "-o num_out", "Jack number Out ports");
+	fprintf(stderr, format, "-t tempo", "Set fixed Tempo rather than using JackTransport");
+	fprintf(stderr, format, "-u uuid", "JackSession UUID");
+	fprintf(stderr, format, "-V", "Disable Volume control (and filter CC7 messages)");
+}
+
 int WINAPI
 WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 //int 
 //main( int argc, char **argv ) 
 {
-	JackVST* jvst;
-	FST* fst;
-	struct AEffect* plugin;
-	char *client_name = 0;
-	char* period;
-	int opt_uuid = 0;
-	int opt_channel = -1;
-	short i;
-	short opt_numIns = 0;
-	short opt_numOuts = 0;
-	short opt_with_editor = 2;
-	bool load_state = FALSE;
-	bool opt_bypassed = FALSE;
-	bool opt_disable_volume = FALSE;
-	double opt_tempo = -1;
-	const char *connect_to = NULL;
-	const char *state_file = 0;
-	const char *plug;
-	int vst_version;
+	LPWSTR*		szArgList;
+	int		argc;
+	char**		argv;
+	JackVST*	jvst;
+	FST*		fst;
+	struct AEffect*	plugin;
+	char*		client_name = NULL;
+	short		i;
+	int		opt_uuid = 0;
+	int		opt_channel = -1;
+	short		opt_numIns = 0;
+	short		opt_numOuts = 0;
+	short		opt_with_editor = 2;
+	bool		load_state = FALSE;
+	bool		opt_bypassed = FALSE;
+	bool		opt_disable_volume = FALSE;
+	double		opt_tempo = -1;
+	const char*	connect_to = NULL;
+	const char*	state_file = 0;
+	const char*	plug;
 
-	float sample_rate = 0;
-	long  block_size = 0;
+	float		sample_rate = 0;
+	long		block_size = 0;
 
-	int argc;
-	char **argv;
+	// Parse command line
+	szArgList = CommandLineToArgvW(GetCommandLineW(), &argc);
+	if (szArgList == NULL) {
+		fprintf(stderr, "Unable to parse command line\n");
+		return 10;
+	}
 
-	create_argc_argv_from_cmdline( cmdline, "./fst", &argc, &argv );
+    	argv = malloc(argc * sizeof(char*));
+	for (i=0; i < argc; ++i) {
+		int nsize = WideCharToMultiByte(CP_UNIXCP, 0, szArgList[i], -1, NULL, 0, NULL, NULL);
+		
+		argv[i] = malloc( nsize );
+		WideCharToMultiByte(CP_UNIXCP, 0, szArgList[i], -1, (LPSTR) argv[i], nsize, NULL, NULL);
+	}
+	LocalFree(szArgList);
+	strcpy(argv[0], "fsthost");
 
 #ifdef HAVE_LASH
 	lash_event_t *event;
@@ -754,7 +523,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 
         // Parse command line options
 	int c;
-	while ( (c = getopt (argc, argv, "bners:c:k:i:j:o:t:u:V")) != -1) {
+	while ( (c = getopt (argc, argv, "bnes:c:k:i:j:o:t:u:V")) != -1) {
 		switch (c) {
 			case 'b':
 				opt_bypassed = TRUE;
@@ -796,19 +565,18 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 				opt_disable_volume = TRUE;
 				break;
 			default:
-				fprintf (stderr, "usage: %s <plugin>\n", argv[0]);
+				usage (argv[0]);
 				return 1;
 		}
 	}
 
 	if (optind >= argc) {
-		fprintf (stderr, "usage: [ -b | -n | -e | -s state_file | -j connect_to | -c client_name | -V ] %s <plugin>\n",
-			argv[0]);
+		usage (argv[0]);
 		return 1;
 	}
 	plug = argv[optind];
 
-	// Init VST
+	// Init JackVST
 	jvst = (JackVST*) calloc (1, sizeof (JackVST));
 	jvst_first = jvst;
 	jvst->bypassed = opt_bypassed;
@@ -821,6 +589,11 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	} else {
 		jvst_set_volume(jvst, 63);
 	}
+	jvst->midi_learn = FALSE;
+	jvst->midi_learn_CC = -1;
+	jvst->midi_learn_PARAM = -1;
+	for(i=0; i<128;++i)
+		jvst->midi_map[i] = -1;
 
 	printf( "yo... lets see...\n" );
 	if ((jvst->handle = fst_load (plug)) == NULL) {
@@ -835,7 +608,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	fst_init();
 
 	printf( "Revive plugin: %s\n", client_name);
-	if ((jvst->fst = fst_instantiate (jvst->handle, (audioMasterCallback) jack_host_callback, jvst)) == NULL) {
+	if ((jvst->fst = fst_open (jvst->handle, (audioMasterCallback) jack_host_callback, jvst)) == NULL) {
 		fst_error ("can't instantiate plugin %s", plug);
 		return 1;
 	}
@@ -856,8 +629,8 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	printf("Sample Rate = %.2f\n", sample_rate);
 	printf("Block Size = %ld\n", block_size);
 
-	fst_call_dispatcher (fst, effSetSampleRate, 0, 0, NULL, (float) jack_get_sample_rate (jvst->client));
-	fst_call_dispatcher (fst, effSetBlockSize, 0, jack_get_buffer_size (jvst->client), NULL, 0.0f);
+	fst->plugin->dispatcher (fst->plugin, effSetSampleRate, 0, 0, NULL, (float) jack_get_sample_rate (jvst->client));
+	fst->plugin->dispatcher (fst->plugin, effSetBlockSize, 0, jack_get_buffer_size (jvst->client), NULL, 0.0f);
 
 	// ok.... plugin is running... lets bind to lash...
 	
@@ -973,10 +746,8 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	}
 #endif
         // load state if requested
-	if ( load_state && ! fst_load_state (jvst->fst, state_file)) {
-		jack_deactivate( jvst->client );
+	if ( load_state && ! jvst_load_state (jvst, state_file) )
 		return 1;
-	}
 
 	// Activate plugin
 	if (! jvst->bypassed) fst_resume(jvst->fst);
@@ -994,6 +765,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	} else {
 		signal(SIGINT, signal_callback_handler);
 		printf("GUI Disabled\n");
+
 		sem_init(&jvst_quit, 0, 0);
 		sem_wait(&jvst_quit);
 	}
