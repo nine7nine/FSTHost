@@ -41,14 +41,14 @@ fps_check_this(FST *fst, char *field, char *value) {
 
    printf("Check %s : %s == ", field, value);
    if ( strcmp(  field, "productString" ) == 0 ) {
-      success = fst_call_dispatcher( fst, effGetProductString, 0, 0, testString, 0 );
+      success = fst->plugin->dispatcher( fst->plugin, effGetProductString, 0, 0, testString, 0 );
    } else if( strcmp( field, "effectName" ) == 0 ) {
-      success = fst_call_dispatcher( fst, effGetEffectName, 0, 0, testString, 0 );
+      success = fst->plugin->dispatcher( fst->plugin, effGetEffectName, 0, 0, testString, 0 );
    } else if( strcmp( field, "vendorString" ) == 0 ) {
-      success = fst_call_dispatcher( fst, effGetVendorString, 0, 0, testString, 0 );
+      success = fst->plugin->dispatcher( fst->plugin, effGetVendorString, 0, 0, testString, 0 );
    }
 
-   if (success == 1) {
+   if (success) {
       if (strcmp (testString, value) == 0) {
          printf("%s [PASS]\n", testString);
          return TRUE;
@@ -63,10 +63,10 @@ fps_check_this(FST *fst, char *field, char *value) {
 }
 
 static int
-process_node(FST *fst, xmlNode *a_node)
+fps_process_node(JackVST* jvst, xmlNode *a_node)
 {
     xmlNode *cur_node = NULL;
-    JackVST* jvst = fst->plugin ? ((JackVST*) fst->plugin->user) : NULL;
+    FST* fst = jvst->fst;
 
     for (cur_node = a_node; cur_node; cur_node = cur_node->next) {
        if (cur_node->type != XML_ELEMENT_NODE)
@@ -89,7 +89,7 @@ process_node(FST *fst, xmlNode *a_node)
           if ( cc < 0 || cc >= 128 || index < 0 || index >= fst->plugin->numParams )
              continue;
 
-          fst->midi_map[cc] = index;
+          jvst->midi_map[cc] = index;
        // Param
        } else if (strcmp(cur_node->name, "param") == 0) {
           if (fst->plugin->flags & effFlagsProgramChunks) {
@@ -105,16 +105,13 @@ process_node(FST *fst, xmlNode *a_node)
 	  pthread_mutex_unlock( &fst->lock );
        // MIDI Channel
        } else if (strcmp(cur_node->name, "channel") == 0) {
-	  if (! jvst)
-	     continue;
-
 	  int channel = strtol(xmlGetProp(cur_node, "number"), NULL, 10);
 
 	  if (channel >= 1 && channel <= 16)
 	     jvst->channel = channel - 1;
        // Volume
        } else if (strcmp(cur_node->name, "volume") == 0) {
-	  if ( (! jvst) || (jvst->volume == -1) )
+	  if (jvst->volume == -1)
              continue;
 
           jvst_set_volume(jvst, strtol(xmlGetProp(cur_node, "level"), NULL, 10));
@@ -149,12 +146,12 @@ process_node(FST *fst, xmlNode *a_node)
              printf ("Problem while decode base64. DecodedChunkSize: %d\n", (int) out_len);
              return FALSE;
           }
-          fst_call_dispatcher( fst, effSetChunk, 0, chunk_size, chunk_data, 0 );
+          fst->plugin->dispatcher( fst->plugin, effSetChunk, 0, chunk_size, chunk_data, 0 );
           printf("Load chunk [DONE]\n");
 
           g_free(chunk_data);
        } else {
-          if (! process_node(fst, cur_node->children))
+          if (! fps_process_node(jvst, cur_node->children))
 		return FALSE;
        }
     }
@@ -162,8 +159,8 @@ process_node(FST *fst, xmlNode *a_node)
     return TRUE;
 }
 
-int
-fst_load_fps ( FST *fst, const char *filename ) {
+bool
+fps_load ( JackVST* jvst, const char* filename ) {
    bool success;
    xmlDoc *doc = NULL;
    xmlNode *plugin_state_node = NULL;
@@ -178,7 +175,7 @@ fst_load_fps ( FST *fst, const char *filename ) {
    }
 
    plugin_state_node = xmlDocGetRootElement(doc);
-   success = process_node(fst, plugin_state_node);
+   success = fps_process_node(jvst, plugin_state_node);
 
    xmlFreeDoc(doc);
 
@@ -187,11 +184,11 @@ fst_load_fps ( FST *fst, const char *filename ) {
 
 // SAVE --------------
 static int
-xml_add_check (FST *fst, xmlNode *node, int opcode, const char *field) {
+fps_add_check (FST *fst, xmlNode *node, int opcode, const char *field) {
    char tString[64];
    xmlNode *myNode;
 
-   if (fst_call_dispatcher( fst, opcode, 0, 0, tString, 0 )) {
+   if (fst->plugin->dispatcher( fst->plugin, opcode, 0, 0, tString, 0 )) {
       myNode = xmlNewChild(node, NULL, "check", NULL);
       xmlNewProp(myNode, "field", field);
       xmlNewProp(myNode, "value", tString);
@@ -202,8 +199,8 @@ xml_add_check (FST *fst, xmlNode *node, int opcode, const char *field) {
    }
 } 
 
-int
-fst_save_fps (FST * fst, const char * filename) {
+bool
+fps_save (JackVST* jvst, const char * filename) {
    int paramIndex;
    unsigned int cc;
    char tString[64];
@@ -215,19 +212,19 @@ fst_save_fps (FST * fst, const char * filename) {
       return FALSE;
    }
 
-   JackVST* jvst = fst->plugin ? ((JackVST*) fst->plugin->user) : NULL;
+   FST* fst = jvst->fst;
    xmlDoc  *doc = xmlNewDoc("1.0");
    xmlNode *plugin_state_node = xmlNewDocRawNode(doc, NULL, "plugin_state", NULL);
    xmlDocSetRootElement(doc, plugin_state_node);
 
    // Check
-   xml_add_check(fst, plugin_state_node, effGetProductString, "productString");
-   xml_add_check(fst, plugin_state_node, effGetVendorString, "vendorString");
-   xml_add_check(fst, plugin_state_node, effGetEffectName, "effectName");
+   fps_add_check(fst, plugin_state_node, effGetProductString, "productString");
+   fps_add_check(fst, plugin_state_node, effGetVendorString, "vendorString");
+   fps_add_check(fst, plugin_state_node, effGetEffectName, "effectName");
 
    // MIDI Map
    for (cc = 0; cc < 128; cc++ ) {
-      paramIndex = fst->midi_map[cc];
+      paramIndex = jvst->midi_map[cc];
       if( paramIndex < 0 || paramIndex >= fst->plugin->numParams )
           continue;
 
@@ -240,13 +237,13 @@ fst_save_fps (FST * fst, const char * filename) {
    }
 
    // MIDI Channel
-   if (jvst && jvst->channel >= 0 && jvst->channel <= 15) {
+   if (jvst->channel >= 0 && jvst->channel <= 15) {
       cur_node = xmlNewChild(plugin_state_node, NULL, "channel", NULL);
       xmlNewProp(cur_node, "number", int2str(tString, &jvst->channel));
    }
 
    // Volume
-   if (jvst && jvst->volume != -1) {
+   if (jvst->volume != -1) {
       int level = jvst_get_volume(jvst);
       cur_node = xmlNewChild(plugin_state_node, NULL, "volume", NULL);
       xmlNewProp(cur_node, "level", int2str(tString, &level));
@@ -261,7 +258,7 @@ fst_save_fps (FST * fst, const char * filename) {
       int chunk_size;
       void * chunk_data;
       printf( "getting chunk ... " );
-      chunk_size = fst_call_dispatcher( fst, effGetChunk, 0, 0, &chunk_data, 0 );
+      chunk_size = fst->plugin->dispatcher( fst->plugin, effGetChunk, 0, 0, &chunk_data, 0 );
       printf( "%d B [DONE]\n", chunk_size );
 
       if ( chunk_size <= 0 ) {

@@ -36,16 +36,16 @@ learn_handler (GtkToggleButton *but, gboolean ptr)
 	JackVST* jvst = (JackVST*) ptr;
 	
 	if ( ! gtk_toggle_button_get_active (but) ) {
-		jvst->fst->midi_learn = 0;
+		jvst->midi_learn = FALSE;
 		gtk_widget_grab_focus( gtk_socket );
 		return;
 	}
 
 
 	pthread_mutex_lock( &(jvst->fst->lock) );		
-	jvst->fst->midi_learn = 1;
-	jvst->fst->midi_learn_CC = -1;
-	jvst->fst->midi_learn_PARAM = -1;
+	jvst->midi_learn = TRUE;
+	jvst->midi_learn_CC = -1;
+	jvst->midi_learn_PARAM = -1;
 	pthread_mutex_unlock( &(jvst->fst->lock) );		
 
 
@@ -123,19 +123,19 @@ save_handler (GtkToggleButton *but, gboolean ptr)
 
 		// F1 Filter - FPS
 		if ( strcmp(gtk_file_filter_get_name(f1), fa_name) == 0) {
-			if (strcmp (".fps", last4) != 0)
+			if (strcasecmp (".fps", last4) != 0)
 				strcat (filename, ".fps");
 		// F2 filter - FXB
 		} else if ( strcmp(gtk_file_filter_get_name(f2), fa_name) == 0) {
-			if (strcmp (".fxb", last4) != 0 && strcmp (".FXB", last4) != 0)
+			if (strcasecmp (".fxb", last4) != 0)
 				strcat (filename, ".fxb");
 		// F3 Filter - FXP
 		} else if ( strcmp(gtk_file_filter_get_name(f3), fa_name) == 0) {
-			if (strcmp (".fxp", last4) != 0 && strcmp (".FXP", last4) != 0)
+			if (strcasecmp (".fxp", last4) != 0)
 				strcat (filename, ".fxp");
 		}
 
-		if (!fst_save_state (jvst->fst, filename)) {
+		if (! jvst_save_state (jvst, filename)) {
 			GtkWidget * errdialog = gtk_message_dialog_new (GTK_WINDOW (window),
 					GTK_DIALOG_DESTROY_WITH_PARENT,
 					GTK_MESSAGE_ERROR,
@@ -191,7 +191,7 @@ load_handler (GtkToggleButton *but, gboolean ptr)
 		char *filename;
 		filename = gtk_file_chooser_get_filename (GTK_FILE_CHOOSER (dialog));
 
-		if (!fst_load_state (jvst->fst, filename)) {
+		if (! jvst_load_state (jvst, filename)) {
 			GtkWidget * errdialog = gtk_message_dialog_new (GTK_WINDOW (window),
 					GTK_DIALOG_DESTROY_WITH_PARENT,
 					GTK_MESSAGE_ERROR,
@@ -368,7 +368,7 @@ save_data( JackVST *jvst )
 	    
 	    snprintf( buf, 15, "midi_map%d", i );
 	    config = lash_config_new_with_key( buf );
-	    lash_config_set_value_int(config, jvst->fst->midi_map[i]);
+	    lash_config_set_value_int(config, jvst->midi_map[i]);
 	    lash_send_config(lash_client, config);
 	    //lash_config_destroy( config );
 	}
@@ -383,7 +383,7 @@ save_data( JackVST *jvst )
 	    //bytelen = jvst->fst->plugin->dispatcher( jvst->fst->plugin, 23, 0, 0, &chunk, 0 );
 	    //pthread_mutex_unlock( &(fst->lock) );
 
-	    bytelen = fst_call_dispatcher( jvst->fst, effGetChunk, 0, 0, &chunk, 0 );
+	    bytelen = jvst->fst->plugin->dispatcher( jvst->fst->plugin, effGetChunk, 0, 0, &chunk, 0 );
 	    printf( "got tha chunk..\n" );
 	    if( bytelen ) {
 		if( bytelen < 0 ) {
@@ -415,13 +415,13 @@ restore_data(lash_config_t * config, JackVST *jvst )
 	    if( cc < 0 || cc>=128 || param<0 || param>=jvst->fst->plugin->numParams ) 
 		return;
 
-	    jvst->fst->midi_map[cc] = param;
+	    jvst->midi_map[cc] = param;
 	    return;
 	}
 
 	if ( jvst->fst->plugin->flags & effFlagsProgramChunks) {
 	    if (strcmp(key, "bin_chunk") == 0) {
-		fst_call_dispatcher( jvst->fst, effSetChunk, 0, lash_config_get_value_size( config ), (void *) lash_config_get_value( config ), 0 );
+		jvst->fst->plugin->dispatcher( jvst->fst->plugin, effSetChunk, 0, lash_config_get_value_size( config ), (void *) lash_config_get_value( config ), 0 );
 		return;
 	    } 
 	} else {
@@ -453,16 +453,16 @@ idle_cb(JackVST *jvst)
         	g_signal_handler_unblock (preset_listbox, preset_listbox_signal);
 	}
 
-	if( fst->midi_learn && fst->midi_learn_CC != -1 && fst->midi_learn_PARAM != -1 ) {
-		if( fst->midi_learn_CC < 128 ) {
-			fst->midi_map[fst->midi_learn_CC] = fst->midi_learn_PARAM;
+	if( jvst->midi_learn && jvst->midi_learn_CC != -1 && jvst->midi_learn_PARAM != -1 ) {
+		if( jvst->midi_learn_CC < 128 ) {
+			jvst->midi_map[jvst->midi_learn_CC] = jvst->midi_learn_PARAM;
 			char name[32];
 			gboolean success;
-			success = fst->plugin->dispatcher( fst->plugin, effGetParamName, fst->midi_learn_PARAM, 0, name, 0 );
+			success = fst->plugin->dispatcher( fst->plugin, effGetParamName, jvst->midi_learn_PARAM, 0, name, 0 );
 			if (success) {
-				printf("MIDIMAP CC: %d => %s\n", fst->midi_learn_CC, name);
+				printf("MIDIMAP CC: %d => %s\n", jvst->midi_learn_CC, name);
 			} else {
-				printf("MIDIMAP CC: %d => %d\n", fst->midi_learn_CC, fst->midi_learn_PARAM);
+				printf("MIDIMAP CC: %d => %d\n", jvst->midi_learn_CC, jvst->midi_learn_PARAM);
 			}
 
 			short cc;
@@ -473,7 +473,7 @@ idle_cb(JackVST *jvst)
 			char tooltip[96 * 128];
 			tooltip[0] = 0;
 		   	for (cc = 0; cc < 128; cc++) {
-				paramIndex = fst->midi_map[cc];
+				paramIndex = jvst->midi_map[cc];
 				if ( paramIndex < 0 || paramIndex >= fst->plugin->numParams )
 					continue;
 
@@ -493,7 +493,7 @@ idle_cb(JackVST *jvst)
 				gtk_widget_set_tooltip_text(midi_learn_toggle, tooltip);
 
 		}
-		fst->midi_learn = 0;
+		jvst->midi_learn = FALSE;
 		gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON( midi_learn_toggle ), 0 );
 	}
 
@@ -544,20 +544,22 @@ idle_cb(JackVST *jvst)
 	return TRUE;
 }
 
-int create_preset_store( GtkListStore *store, FST *fst )
+int
+create_preset_store( GtkListStore *store, FST *fst )
 {
 	unsigned short i;
 
-
-	int vst_version = fst->plugin->dispatcher (fst->plugin, effGetVstVersion, 0, 0, NULL, 0.0f);
 	for( i = 0; i < fst->plugin->numPrograms; i++ )
 	{
 		char buf[100];
 		GtkTreeIter new_row_iter;
 
 		snprintf( buf, 90, "preset %d", i );
-		if( vst_version >= 2 ) 
+		if( fst->vst_version >= 2 ) {
 			fst->plugin->dispatcher( fst->plugin, effGetProgramNameIndexed, i, 0, buf, 0.0 );
+		} else {
+			// NOT SUPPORTED - rarely used ;-)
+		}
 
 		gtk_list_store_insert( store, &new_row_iter, i );
 		gtk_list_store_set( store, &new_row_iter, 0, buf, 1, i, -1 );
