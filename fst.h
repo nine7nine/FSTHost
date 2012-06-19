@@ -81,8 +81,6 @@ enum EventCall {
 	EDITOR_OPEN,
 	EDITOR_SHOW,
 	EDITOR_CLOSE,
-	OPEN,
-	CLOSE,
 	PROGRAM_CHANGE
 };
 
@@ -99,6 +97,7 @@ struct _FST
 
 	enum EventCall	event_call;
 
+	bool		program_changed;
 	short		want_program;
 	short		current_program;
 	float		*want_params;

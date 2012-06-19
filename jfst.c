@@ -35,6 +35,8 @@
 #include <lash/lash.h>
 #endif
 
+const char* my_motherfuckin_name = "fsthost";
+
 /* audiomaster.c */
 extern long jack_host_callback (struct AEffect*, int32_t, int32_t, intptr_t, void *, float );
 
@@ -52,7 +54,6 @@ static void *(*the_function)(void*);
 static void *the_arg;
 static pthread_t the_thread_id;
 static sem_t sema;
-static sem_t jvst_quit;
 
 JackVST *jvst_first;
 
@@ -101,7 +102,7 @@ jvst_save_state (JackVST* jvst, const char * filename)
 	return TRUE;
 }
 
-void
+static void
 signal_callback_handler(int signum)
 {
 	JackVST *jvst;
@@ -110,11 +111,24 @@ signal_callback_handler(int signum)
 
 	printf("Caught signal to terminate\n");
 
-  	sem_post( &jvst_quit );
+	jvst->quit = TRUE;
 }
 
+void
+jvst_want_mode_check(JackVST* jvst)
+{
+	if (jvst->want_mode == WANT_MODE_BYPASS && !jvst->bypassed) {
+		jvst->bypassed = TRUE;
+		fst_suspend(jvst->fst);
+	} else if (jvst->want_mode == WANT_MODE_RESUME && jvst->bypassed) {
+		fst_resume(jvst->fst);
+		jvst->bypassed = FALSE;
+	}
+	jvst->want_mode = WANT_MODE_NO;
+}
 
-static DWORD WINAPI wine_thread_aux( LPVOID arg )
+static DWORD WINAPI
+wine_thread_aux( LPVOID arg )
 {
   printf("Audio ThID: %d\n", GetCurrentThreadId ());
 
@@ -212,26 +226,48 @@ process_midi_input(JackVST* jvst, jack_nframes_t nframes)
 		// Midi channel
 		if ( (jvst->channel != -1 )
 			&&  ( jackevent.buffer[0] >= 0x80 && jackevent.buffer[0] <= 0xEF)
-			&&  ( (jackevent.buffer[0] & 0x0f) != jvst->channel ) )
+			&&  ( (jackevent.buffer[0] & 0x0F) != jvst->channel ) )
 			continue;
-		// If Volume control is enabled then grab CC7 messages
-		if ( (jvst->volume != -1) && 
-			( (jackevent.buffer[0] & 0xf0) == 0xB0 ) && 
-			(jackevent.buffer[1] == 0x07) )
-		{
-			jvst_set_volume(jvst, jackevent.buffer[2]);
-			continue;
+
+		// CC assigments
+		if ( (jackevent.buffer[0] & 0xF0) == 0xB0 ) {
+			short CC = jackevent.buffer[1];
+			short VALUE = jackevent.buffer[2];
+
+			// Want Mode
+			if (CC == jvst->want_mode_cc) {
+				// 0-63 mean want bypass
+				if (VALUE >= 0 && VALUE <= 63) {
+					jvst->want_mode = WANT_MODE_BYPASS;
+				// 64-127 mean want resume
+				} else if (VALUE > 63 && VALUE <= 127) {
+					jvst->want_mode = WANT_MODE_RESUME;
+				// other values are wrong
+				} else {
+					jvst->want_mode = WANT_MODE_NO;
+				}
+				continue;
+			}
+			// If Volume control is enabled then grab CC7 messages
+			if ( (jvst->volume != -1) && (CC == 7) ) {
+				jvst_set_volume(jvst, VALUE);
+				continue;
+			}
+			// In bypass mode do not touch plugin
+			if (jvst->bypassed)
+				continue;
+			// Mapping MIDI CC
+			if ( jvst->midi_learn ) {
+				jvst->midi_learn_CC = CC;
+			// handle mapped MIDI CC
+			} else if ( jvst->midi_map[CC] != -1 ) {
+				int parameter = jvst->midi_map[CC];
+				float value = 1.0/127.0 * (float) VALUE;
+				plugin->setParameter( plugin, parameter, value );
+			}
 		}
-		// Mapping MIDI
-		if ( (jackevent.buffer[0] & 0xf0) == 0xb0 && jvst->midi_learn ) {
-			jvst->midi_learn_CC = jackevent.buffer[1];
-		// handle MIDI mapped
-		} else if( (jackevent.buffer[0] & 0xf0) == 0xb0 && jvst->midi_map[jackevent.buffer[1]] != -1 ) {
-			int parameter = jvst->midi_map[jackevent.buffer[1]];
-			float value = 1.0/127.0 * (float) jackevent.buffer[2];
-			plugin->setParameter( plugin, parameter, value );
 		// .. let's play
-		} else if( jvst->want_midi_in ) {
+		if ( !jvst->bypassed && jvst->want_midi_in ) {
 			jvst->event_array[stuffed_events].type = kVstMidiType;
 			jvst->event_array[stuffed_events].byteSize = 24;
 			jvst->event_array[stuffed_events].deltaFrames = jackevent.time;
@@ -244,7 +280,7 @@ process_midi_input(JackVST* jvst, jack_nframes_t nframes)
 		}
 	}
 
-	if ( stuffed_events > 0 ) {
+	if ( ! jvst->bypassed && jvst->want_midi_in && stuffed_events > 0 ) {
 		jvst->events->numEvents = stuffed_events;
 		plugin->dispatcher (plugin, effProcessEvents, 0, 0, jvst->events, 0.0f);
 	}
@@ -341,12 +377,12 @@ process_callback( jack_nframes_t nframes, void* data)
 		}
 	}
 
+	// Process MIDI Input
+	// NOTE: we process MIDI even in bypass mode bacause of want_mode handling
+	process_midi_input(jvst, nframes);
+
 	// Bypass - because all audio jobs are done  - simply return
 	if (jvst->bypassed) return 0;
-
-	// Process MIDI Input
-	if (jvst->midi_inport) 
-		process_midi_input(jvst, nframes);
 
 	// Deal with plugin
 	if (plugin->flags & effFlagsCanReplacing) {
@@ -377,12 +413,11 @@ process_callback( jack_nframes_t nframes, void* data)
 	return 0;      
 }
 
-int
-session_callback( void *arg )
+static int
+session_callback( JackVST* jvst )
 {
 	printf("session callback\n");
 
-        JackVST* jvst = (JackVST*) arg;
         jack_session_event_t *event = jvst->session_event;
 
         char retval[256];
@@ -390,7 +425,8 @@ session_callback( void *arg )
 
         snprintf( filename, sizeof(filename), "%sstate.fps", event->session_dir );
         jvst_save_state( jvst, filename );
-        snprintf( retval, sizeof(retval), "fsthost -u %s -s ${SESSION_DIR}state.fps %s", event->client_uuid, jvst->handle->path );
+        snprintf( retval, sizeof(retval), "%s -u %s -s ${SESSION_DIR}state.fps %s",
+		my_motherfuckin_name, event->client_uuid, jvst->handle->path );
         event->command_line = strdup( retval );
 
         jack_session_reply( jvst->client, event );
@@ -400,23 +436,15 @@ session_callback( void *arg )
         return 0;
 }
 
-void
-session_callback_aux( jack_session_event_t *event, void *arg )
+static void
+session_callback_aux( jack_session_event_t *event, void* arg )
 {
-        JackVST* jvst = (JackVST*) arg;
+	JackVST* jvst = (JackVST*) arg;
+
         jvst->session_event = event;
 
-        g_idle_add( session_callback, arg );
+        g_idle_add( (GSourceFunc) session_callback, jvst );
 }
-
-enum ParseMode {
-    MODE_NORMAL,
-    MODE_QUOTE,
-    MODE_DOUBLEQUOTE,
-    MODE_ESCAPED,
-    MODE_WHITESPACE,
-    MODE_EOL
-};
 
 int
 jvst_connect(JackVST *jvst, const char *myname, const char *connect_to)
@@ -462,6 +490,7 @@ usage(char* appname) {
 	fprintf(stderr, format, "-k channel", "MIDI Channel filter");
 	fprintf(stderr, format, "-i num_in", "Jack number In ports");
 	fprintf(stderr, format, "-j connect_to", "Connect Audio Out to connect_to");
+	fprintf(stderr, format, "-m mode_midi_cc", "Bypass/Resume MIDI CC (default: 122)");
 	fprintf(stderr, format, "-o num_out", "Jack number Out ports");
 	fprintf(stderr, format, "-t tempo", "Set fixed Tempo rather than using JackTransport");
 	fprintf(stderr, format, "-u uuid", "JackSession UUID");
@@ -470,8 +499,6 @@ usage(char* appname) {
 
 int WINAPI
 WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
-//int 
-//main( int argc, char **argv ) 
 {
 	LPWSTR*		szArgList;
 	int		argc;
@@ -486,6 +513,8 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	short		opt_numIns = 0;
 	short		opt_numOuts = 0;
 	short		opt_with_editor = 2;
+	/* Local Keyboard MIDI CC message (122) is probably not used by any VST */
+	short		opt_want_mode_cc = 122;
 	bool		load_state = FALSE;
 	bool		opt_bypassed = FALSE;
 	bool		opt_disable_volume = FALSE;
@@ -512,7 +541,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 		WideCharToMultiByte(CP_UNIXCP, 0, szArgList[i], -1, (LPSTR) argv[i], nsize, NULL, NULL);
 	}
 	LocalFree(szArgList);
-	strcpy(argv[0], "fsthost");
+	strcpy(argv[0], my_motherfuckin_name); // Force APP name
 
 #ifdef HAVE_LASH
 	lash_event_t *event;
@@ -522,9 +551,8 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 #endif
 
         // Parse command line options
-	int c;
-	while ( (c = getopt (argc, argv, "bnes:c:k:i:j:o:t:u:V")) != -1) {
-		switch (c) {
+	while ( (i = getopt (argc, argv, "bnes:c:k:i:j:m:o:t:u:V")) != -1) {
+		switch (i) {
 			case 'b':
 				opt_bypassed = TRUE;
 				break;
@@ -555,6 +583,9 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 			case 'o':
 				opt_numOuts = strtol(optarg, NULL, 10);
 				break;
+			case 'm':
+				opt_want_mode_cc = strtol(optarg, NULL, 10);
+				break;
 			case 't':
 				opt_tempo = strtod(optarg, NULL);
 				break;
@@ -584,6 +615,9 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	jvst->with_editor = opt_with_editor;
 	jvst->uuid = opt_uuid;
 	jvst->tempo = opt_tempo; // -1 here mean get it from Jack
+	jvst->want_mode = WANT_MODE_NO;
+	jvst->want_mode_cc = opt_want_mode_cc; 
+	jvst->quit = FALSE;
 	if (opt_disable_volume) {
 		jvst->volume = -1;
 	} else {
@@ -759,6 +793,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 		jvst_connect(jvst, client_name, connect_to);
 
 	if (jvst->with_editor) {
+		CPUusage_init();
 		printf( "Start GUI\n" );
 		gtk_gui_init (&argc, &argv);
 		gtk_gui_start(jvst);
@@ -766,8 +801,16 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 		signal(SIGINT, signal_callback_handler);
 		printf("GUI Disabled\n");
 
-		sem_init(&jvst_quit, 0, 0);
-		sem_wait(&jvst_quit);
+		while (! jvst->quit) {
+			if (jvst->want_mode == WANT_MODE_BYPASS && !jvst->bypassed) {
+				jvst->bypassed = TRUE;
+				fst_suspend(jvst->fst);
+			} else if (jvst->want_mode == WANT_MODE_RESUME && jvst->bypassed) {
+				fst_resume(jvst->fst);
+				jvst->bypassed = FALSE;
+			}
+			sleep(1);
+		}
 	}
 
 	printf("Jack Deactivate\n");
