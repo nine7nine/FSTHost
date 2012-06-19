@@ -54,8 +54,28 @@ static void *(*the_function)(void*);
 static void *the_arg;
 static pthread_t the_thread_id;
 static sem_t sema;
+GMainLoop*	glib_main_loop;
 
 JackVST *jvst_first;
+
+JackVST* jvst_new()
+{
+	JackVST* jvst = (JackVST*) calloc (1, sizeof (JackVST));
+	short i;
+
+	jvst->channel = -1;
+	jvst->with_editor = WITH_EDITOR_SHOW;
+	jvst->tempo = -1; // -1 here mean get it from Jack
+        /* Local Keyboard MIDI CC message (122) is probably not used by any VST */
+	jvst->want_mode_cc = 122;
+	jvst->midi_learn = FALSE;
+	jvst->midi_learn_CC = -1;
+	jvst->midi_learn_PARAM = -1;
+	for(i=0; i<128;++i)
+		jvst->midi_map[i] = -1;
+
+	return jvst;
+}
 
 bool
 jvst_load_state (JackVST* jvst, const char * filename)
@@ -111,20 +131,23 @@ signal_callback_handler(int signum)
 
 	printf("Caught signal to terminate\n");
 
-	jvst->quit = TRUE;
+	g_main_loop_quit(glib_main_loop);
 }
 
-void
+bool
 jvst_want_mode_check(JackVST* jvst)
 {
 	if (jvst->want_mode == WANT_MODE_BYPASS && !jvst->bypassed) {
+		jvst->want_mode = WANT_MODE_NO;
 		jvst->bypassed = TRUE;
 		fst_suspend(jvst->fst);
 	} else if (jvst->want_mode == WANT_MODE_RESUME && jvst->bypassed) {
+		jvst->want_mode = WANT_MODE_NO;
 		fst_resume(jvst->fst);
 		jvst->bypassed = FALSE;
 	}
-	jvst->want_mode = WANT_MODE_NO;
+
+	return TRUE;
 }
 
 static DWORD WINAPI
@@ -413,7 +436,7 @@ process_callback( jack_nframes_t nframes, void* data)
 	return 0;      
 }
 
-static int
+static bool
 session_callback( JackVST* jvst )
 {
 	printf("session callback\n");
@@ -425,15 +448,25 @@ session_callback( JackVST* jvst )
 
         snprintf( filename, sizeof(filename), "%sstate.fps", event->session_dir );
         jvst_save_state( jvst, filename );
-        snprintf( retval, sizeof(retval), "%s -u %s -s ${SESSION_DIR}state.fps %s",
+        snprintf( retval, sizeof(retval), "%s -u %s -s \"${SESSION_DIR}state.fps\" \"%s\"",
 		my_motherfuckin_name, event->client_uuid, jvst->handle->path );
         event->command_line = strdup( retval );
 
         jack_session_reply( jvst->client, event );
 
-        jack_session_event_free( event );
+	if (event->type == JackSessionSaveAndQuit) {
+		printf("JackSession manager ask for quit\n");
 
-        return 0;
+		if (jvst->with_editor == WITH_EDITOR_NO) {
+			g_main_loop_quit(glib_main_loop);
+		} else {
+			gtk_main_quit();
+		}
+	}
+
+        jack_session_event_free(event);
+
+        return FALSE;
 }
 
 static void
@@ -503,22 +536,13 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	LPWSTR*		szArgList;
 	int		argc;
 	char**		argv;
-	JackVST*	jvst;
+	JackVST*	jvst = jvst_new();
 	FST*		fst;
 	struct AEffect*	plugin;
-	char*		client_name = NULL;
 	short		i;
-	int		opt_uuid = 0;
-	int		opt_channel = -1;
 	short		opt_numIns = 0;
 	short		opt_numOuts = 0;
-	short		opt_with_editor = 2;
-	/* Local Keyboard MIDI CC message (122) is probably not used by any VST */
-	short		opt_want_mode_cc = 122;
 	bool		load_state = FALSE;
-	bool		opt_bypassed = FALSE;
-	bool		opt_disable_volume = FALSE;
-	double		opt_tempo = -1;
 	const char*	connect_to = NULL;
 	const char*	state_file = 0;
 	const char*	plug;
@@ -554,25 +578,25 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	while ( (i = getopt (argc, argv, "bnes:c:k:i:j:m:o:t:u:V")) != -1) {
 		switch (i) {
 			case 'b':
-				opt_bypassed = TRUE;
+				jvst->bypassed = TRUE;
 				break;
 			case 'e':
-				opt_with_editor = 1;
+				jvst->with_editor = WITH_EDITOR_HIDE;
 				break;
 			case 'n':
-				opt_with_editor = 0;
+				jvst->with_editor = WITH_EDITOR_NO;
 				break;
 			case 's':
 				load_state = 1;
                                 state_file = optarg;
 				break;
 			case 'c':
-				client_name = optarg;
+				jvst->client_name = optarg;
 				break;
 			case 'k':
-				opt_channel = strtol(optarg, NULL, 10) - 1;
-				if (opt_channel < 0 || opt_channel > 15)
-					opt_channel = -1;
+				jvst->channel = strtol(optarg, NULL, 10) - 1;
+				if (jvst->channel < 0 || jvst->channel > 15)
+					jvst->channel = -1;
 				break;
 			case 'i':
 				opt_numIns = strtol(optarg, NULL, 10);
@@ -584,16 +608,16 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 				opt_numOuts = strtol(optarg, NULL, 10);
 				break;
 			case 'm':
-				opt_want_mode_cc = strtol(optarg, NULL, 10);
+				jvst->want_mode_cc = strtol(optarg, NULL, 10);
 				break;
 			case 't':
-				opt_tempo = strtod(optarg, NULL);
+				jvst->tempo = strtod(optarg, NULL);
 				break;
 			case 'u':
-				opt_uuid = (int) optarg;
+				jvst->uuid = optarg;
 				break;
 			case 'V':
-				opt_disable_volume = TRUE;
+				jvst->volume = -1;
 				break;
 			default:
 				usage (argv[0]);
@@ -605,29 +629,12 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 		usage (argv[0]);
 		return 1;
 	}
-	plug = argv[optind];
 
-	// Init JackVST
-	jvst = (JackVST*) calloc (1, sizeof (JackVST));
+	plug = argv[optind];
 	jvst_first = jvst;
-	jvst->bypassed = opt_bypassed;
-	jvst->channel = opt_channel;
-	jvst->with_editor = opt_with_editor;
-	jvst->uuid = opt_uuid;
-	jvst->tempo = opt_tempo; // -1 here mean get it from Jack
-	jvst->want_mode = WANT_MODE_NO;
-	jvst->want_mode_cc = opt_want_mode_cc; 
-	jvst->quit = FALSE;
-	if (opt_disable_volume) {
-		jvst->volume = -1;
-	} else {
+
+	if (jvst->volume != -1)
 		jvst_set_volume(jvst, 63);
-	}
-	jvst->midi_learn = FALSE;
-	jvst->midi_learn_CC = -1;
-	jvst->midi_learn_PARAM = -1;
-	for(i=0; i<128;++i)
-		jvst->midi_map[i] = -1;
 
 	printf( "yo... lets see...\n" );
 	if ((jvst->handle = fst_load (plug)) == NULL) {
@@ -635,13 +642,13 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 		return 1;
 	}
 
-	if (!client_name)
-		client_name = jvst->handle->name;
+	if (!jvst->client_name)
+		jvst->client_name = jvst->handle->name;
 
 	printf("FST init\n");
 	fst_init();
 
-	printf( "Revive plugin: %s\n", client_name);
+	printf( "Revive plugin: %s\n", jvst->client_name);
 	if ((jvst->fst = fst_open (jvst->handle, (audioMasterCallback) jack_host_callback, jvst)) == NULL) {
 		fst_error ("can't instantiate plugin %s", plug);
 		return 1;
@@ -651,7 +658,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	plugin = fst->plugin;
 
 	printf("Start Jack thread ...\n");
-	if ((jvst->client = jack_client_open (client_name, JackSessionID, NULL, jvst->uuid )) == 0) {
+	if ((jvst->client = jack_client_open (jvst->client_name, JackSessionID, NULL, jvst->uuid )) == 0) {
 		fst_error ("can't connect to JACK");
 		return 1;
 	}
@@ -663,8 +670,8 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	printf("Sample Rate = %.2f\n", sample_rate);
 	printf("Block Size = %ld\n", block_size);
 
-	fst->plugin->dispatcher (fst->plugin, effSetSampleRate, 0, 0, NULL, (float) jack_get_sample_rate (jvst->client));
-	fst->plugin->dispatcher (fst->plugin, effSetBlockSize, 0, jack_get_buffer_size (jvst->client), NULL, 0.0f);
+	plugin->dispatcher (plugin, effSetSampleRate, 0, 0, NULL, (float) jack_get_sample_rate (jvst->client));
+	plugin->dispatcher (plugin, effSetBlockSize, 0, jack_get_buffer_size (jvst->client), NULL, 0.0f);
 
 	// ok.... plugin is running... lets bind to lash...
 	
@@ -786,13 +793,17 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	// Activate plugin
 	if (! jvst->bypassed) fst_resume(jvst->fst);
 
-	printf( "Jack Activate\n" );
-	jack_activate (jvst->client);
+	printf("Jack Activate\n");
+	jack_activate(jvst->client);
+
+	glib_main_loop = g_main_loop_new(NULL, FALSE);
+	g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 500, 
+		(GSourceFunc) jvst_want_mode_check, jvst, NULL);
 
 	if (connect_to)
-		jvst_connect(jvst, client_name, connect_to);
+		jvst_connect(jvst, jvst->client_name, connect_to);
 
-	if (jvst->with_editor) {
+	if (jvst->with_editor != WITH_EDITOR_NO) {
 		CPUusage_init();
 		printf( "Start GUI\n" );
 		gtk_gui_init (&argc, &argv);
@@ -801,20 +812,11 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 		signal(SIGINT, signal_callback_handler);
 		printf("GUI Disabled\n");
 
-		while (! jvst->quit) {
-			if (jvst->want_mode == WANT_MODE_BYPASS && !jvst->bypassed) {
-				jvst->bypassed = TRUE;
-				fst_suspend(jvst->fst);
-			} else if (jvst->want_mode == WANT_MODE_RESUME && jvst->bypassed) {
-				fst_resume(jvst->fst);
-				jvst->bypassed = FALSE;
-			}
-			sleep(1);
-		}
+		g_main_loop_run(glib_main_loop);
 	}
 
 	printf("Jack Deactivate\n");
-        jack_deactivate( jvst->client );
+        jack_deactivate(jvst->client);
 
 	printf("Close plugin\n");
         fst_close(jvst->fst);

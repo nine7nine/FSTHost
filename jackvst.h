@@ -16,15 +16,22 @@ extern void CPUusage_init();
 extern double CPUusage_getCurrentValue();
 
 enum WantMode {
-   WANT_MODE_NO,
-   WANT_MODE_RESUME,
-   WANT_MODE_BYPASS,
+   WANT_MODE_NO		= 0,
+   WANT_MODE_RESUME	= 1,
+   WANT_MODE_BYPASS	= 2
+};
+
+enum WithEditor {
+   WITH_EDITOR_NO,
+   WITH_EDITOR_HIDE,
+   WITH_EDITOR_SHOW
 };
 
 struct _JackVST {
     jack_client_t *client;
     FSTHandle*     handle;
     FST*           fst;
+    char*          client_name;
     short          numIns;
     short          numOuts;
     float**        ins;
@@ -37,7 +44,7 @@ struct _JackVST {
     bool           bypassed;
     enum WantMode  want_mode;
     short          want_mode_cc;
-    short          with_editor;
+    enum WithEditor with_editor;
     double         tempo;
     float          volume; /* wehere 0.0 mean silence */
 
@@ -46,21 +53,19 @@ struct _JackVST {
     short          midi_learn_CC;
     int            midi_learn_PARAM;
 
-    bool           quit;
-
     /* For VST/i support */
-    int	   want_midi_in;
+    int    want_midi_in;
     struct VstMidiEvent* event_array;
-    struct VstEvents*    events;
+    struct VstEvents* events;
 
-    int uuid;
-    jack_session_event_t *session_event;
+    char*                 uuid;
+    jack_session_event_t* session_event;
 
     /* For VST midi effects & synth source (like audio to midi VSTs) support */
     jack_ringbuffer_t* ringbuffer;
 };
 
-void jvst_want_mode_check(JackVST* jvst);
+bool jvst_want_mode_check(JackVST* jvst);
 
 static inline float 
 jvst_set_volume(JackVST* jvst, short volume) { jvst->volume = powf(volume / 63.0f, 2); }

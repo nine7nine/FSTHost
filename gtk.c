@@ -506,7 +506,6 @@ idle_cb(JackVST *jvst)
 	sprintf(tmpstr, "%06.2f", CPUusage_getCurrentValue());
 	gtk_label_set_text(GTK_LABEL(cpu_usage), tmpstr);
 
-	jvst_want_mode_check(jvst);
 	if (jvst->bypassed != gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(bypass_button))) {
 		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(bypass_button), jvst->bypassed);
 	}
@@ -677,7 +676,7 @@ gtk_gui_start (JackVST* jvst)
  	gtk_widget_show_all (window);
 
 	// Nasty hack ;-)
-	if (jvst->with_editor == 2)
+	if (jvst->with_editor == WITH_EDITOR_SHOW)
 		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(editor_button), TRUE);
 
 	g_timeout_add(500, (GSourceFunc) idle_cb, jvst);
