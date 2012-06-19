@@ -29,7 +29,7 @@ LIBRARIES             := $(shell pkg-config --libs $(PKG_CONFIG_MODULES)) -L/usr
 
 ### fst.exe sources and settings
 fsthost_exe_MODULE       = fsthost
-fsthost_exe_C_SRCS       = audiomaster.c fst.c gtk.c jfst.c fxb.c fpsparser.c vstwin.c
+fsthost_exe_C_SRCS       = audiomaster.c fst.c gtk.c jfst.c fxb.c fpsparser.c vstwin.c cpuusage.c
 fsthost_exe_CXX_SRCS     =
 fsthost_exe_RC_SRCS      =
 fsthost_exe_LDFLAGS      = -mwindows
@@ -109,3 +109,4 @@ $(fsthost_exe_MODULE): $(fsthost_exe_OBJS)
 # Add support for WINE_RT
 	sed -i -e '3i \export WINE_RT=$${WINE_RT:-10}' $(fsthost_exe_MODULE).exe
 	sed -i -e '3i \export WINE_SRV_RT=$${WINE_SRV_RT:-15}' $(fsthost_exe_MODULE).exe
+	mv $(fsthost_exe_MODULE).exe $(fsthost_exe_MODULE)

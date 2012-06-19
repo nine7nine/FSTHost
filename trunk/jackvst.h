@@ -12,6 +12,15 @@
 
 typedef struct _JackVST JackVST;
 
+extern void CPUusage_init();
+extern double CPUusage_getCurrentValue();
+
+enum WantMode {
+   WANT_MODE_NO,
+   WANT_MODE_RESUME,
+   WANT_MODE_BYPASS,
+};
+
 struct _JackVST {
     jack_client_t *client;
     FSTHandle*     handle;
@@ -26,6 +35,8 @@ struct _JackVST {
     jack_port_t**  outports;
     int            channel;
     bool           bypassed;
+    enum WantMode  want_mode;
+    short          want_mode_cc;
     short          with_editor;
     double         tempo;
     float          volume; /* wehere 0.0 mean silence */
@@ -34,6 +45,8 @@ struct _JackVST {
     bool           midi_learn;
     short          midi_learn_CC;
     int            midi_learn_PARAM;
+
+    bool           quit;
 
     /* For VST/i support */
     int	   want_midi_in;
@@ -46,6 +59,8 @@ struct _JackVST {
     /* For VST midi effects & synth source (like audio to midi VSTs) support */
     jack_ringbuffer_t* ringbuffer;
 };
+
+void jvst_want_mode_check(JackVST* jvst);
 
 static inline float 
 jvst_set_volume(JackVST* jvst, short volume) { jvst->volume = powf(volume / 63.0f, 2); }

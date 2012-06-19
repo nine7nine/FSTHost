@@ -67,7 +67,8 @@ fst_update_current_program(FST* fst) {
 	char progName[24];
 
 	newProg = fst->plugin->dispatcher( fst->plugin, effGetProgram, 0, 0, NULL, 0.0f );
-	if (newProg != fst->current_program) {
+	if (newProg != fst->current_program || fst->program_changed) {
+		fst->program_changed = FALSE;
 		fst->current_program = newProg;
 		fst->plugin->dispatcher (fst->plugin, effGetProgramName, 0, 0, &progName, 0.0f);
 		printf("Program: %d : %s\n", newProg, progName);
@@ -105,8 +106,10 @@ fst_event_handler(FST* fst) {
 		plugin->dispatcher (plugin, effBeginSetProgram, 0, 0, NULL, 0);
 		plugin->dispatcher (plugin, effSetProgram, 0,(int32_t) fst->want_program, NULL, 0);
 		plugin->dispatcher (plugin, effEndSetProgram, 0, 0, NULL, 0);
-		
+		fst->current_program = fst->want_program;
+		fst->program_changed = TRUE;
 		fst->want_program = -1;
+		
 		break;
 	case DISPATCHER:
 		fst->dispatcher_retval = fst->plugin->dispatcher( plugin, 
@@ -249,7 +252,7 @@ fst_show_editor (FST *fst) {
 void
 fst_program_change (FST *fst, short want_program)
 {
-        pthread_mutex_lock (&fst->event_call_lock);
+	pthread_mutex_lock (&fst->event_call_lock);
 	pthread_mutex_lock (&fst->lock);
 
 	if (fst->current_program != want_program) {
@@ -259,8 +262,8 @@ fst_program_change (FST *fst, short want_program)
 		pthread_cond_wait (&fst->event_called, &fst->lock);
 	}
 
-        pthread_mutex_unlock (&fst->lock);
-        pthread_mutex_unlock (&fst->event_call_lock);
+	pthread_mutex_unlock (&fst->lock);
+	pthread_mutex_unlock (&fst->event_call_lock);
 }
 
 int 
@@ -353,14 +356,14 @@ fst_destroy_editor (FST* fst)
 
 void
 fst_suspend (FST *fst) {
-	printf("Suspend plugin\n");
+	fst_error("Suspend plugin");
 	fst->plugin->dispatcher (fst->plugin, effStopProcess, 0, 0, NULL, 0.0f);
 	fst->plugin->dispatcher (fst->plugin, effMainsChanged, 0, 0, NULL, 0.0f);
 } 
 
 void
 fst_resume (FST *fst) {
-	printf("Resume plugin\n");
+	fst_error("Resume plugin");
 	fst->plugin->dispatcher (fst->plugin, effMainsChanged, 0, 1, NULL, 0.0f);
 	fst->plugin->dispatcher (fst->plugin, effStartProcess, 0, 0, NULL, 0.0f);
 } 
