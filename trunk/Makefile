@@ -4,7 +4,7 @@ SUBDIRS               =
 DLLS                  =
 EXES                  = fsthost
 
-#LASH_EXISTS := $(shell if pkg-config --exists lash-1.0; then echo yes; else echo no; fi)
+LASH_EXISTS := $(shell if pkg-config --exists lash-1.0; then echo yes; else echo no; fi)
 
 ### Common settings
 
@@ -12,20 +12,23 @@ PKG_CONFIG_MODULES    := glib-2.0
 PKG_CONFIG_MODULES    += gtk+-2.0
 PKG_CONFIG_MODULES    += jack
 PKG_CONFIG_MODULES    += libxml-2.0
-#ifeq ($(LASH_EXISTS),yes)
-#PKG_CONFIG_MODULES    += lash-1.0
-#endif
+ifeq ($(LASH_EXISTS),yes)
+PKG_CONFIG_MODULES    += lash-1.0
+endif
 
 CEXTRA                := $(shell pkg-config --cflags $(PKG_CONFIG_MODULES)) -fPIC -m32 -g -Wno-multichar -O2
-#ifneq (,$(findstring lash-1.0,$(PKG_CONFIG_MODULES)))
-#CEXTRA                += -DHAVE_LASH
-#endif
+ifneq (,$(findstring lash-1.0,$(PKG_CONFIG_MODULES)))
+CEXTRA                += -DHAVE_LASH
+endif
 CXXEXTRA              = -mno-cygwin
 RCEXTRA               =
 INCLUDE_PATH          = -I. -I/usr/include -I/usr/include -I/usr/include/wine -I/usr/include/wine/windows -I/usr/local/include/wine -I/usr/local/include/wine/windows
 DLL_PATH              =
 LIBRARY_PATH          = -L/usr/lib/i386-linux-gnu/wine
 LIBRARIES             := $(shell pkg-config --libs $(PKG_CONFIG_MODULES)) -L/usr/X11R6/lib -lpthread -lrt -lX11 -m32
+PREFIX                = /usr
+LIB_INST_PATH         = $(PREFIX)/lib/i386-linux-gnu/wine
+BIN_INST_PATH         = $(PREFIX)/bin
 
 ### fst.exe sources and settings
 fsthost_exe_MODULE       = fsthost
@@ -63,7 +66,7 @@ all: $(SUBDIRS) $(DLLS:%=%.so) $(EXES:%=%)
 
 ### Build rules
 
-.PHONY: all clean dummy
+.PHONY: all clean dummy install
 
 $(SUBDIRS): dummy
 	@cd $@ && $(MAKE)
@@ -95,6 +98,10 @@ clean:: $(SUBDIRS:%=%/__clean__) $(EXTRASUBDIRS:%=%/__clean__)
 	$(RM) $(EXES:%=%.dbg.o) $(EXES:%=%.so) $(EXES:%.exe=%)
 	$(RM) -rf ./vst
 
+install: $(fsthost_exe_MODULE)
+	install -m 0644 fsthost.exe.so $(LIB_INST_PATH)
+	install -m 0755 fsthost $(BIN_INST_PATH)
+
 $(SUBDIRS:%=%/__clean__): dummy
 	cd `dirname $@` && $(MAKE) clean
 
@@ -107,6 +114,9 @@ DEFLIB = $(LIBRARY_PATH) $(LIBRARIES) $(DLL_PATH)
 $(fsthost_exe_MODULE): $(fsthost_exe_OBJS)
 	$(LINK) $(fsthost_exe_LDFLAGS) -o $@ $(fsthost_exe_OBJS) $(fsthost_exe_LIBRARY_PATH) $(DEFLIB) $(fsthost_exe_DLLS:%=-l%) $(fsthost_exe_LIBRARIES:%=-l%)
 # Add support for WINE_RT
+	sed -i -e '/^# determine the application directory/,/^esac/d' $(fsthost_exe_MODULE).exe
+	sed -i -e 's/-n "$$appdir"/! -r "$$appname"/' $(fsthost_exe_MODULE).exe
+	sed -i -e '3i \appdir="$(LIB_INST_PATH)"' $(fsthost_exe_MODULE).exe
 	sed -i -e '3i \export WINE_RT=$${WINE_RT:-10}' $(fsthost_exe_MODULE).exe
 	sed -i -e '3i \export WINE_SRV_RT=$${WINE_SRV_RT:-15}' $(fsthost_exe_MODULE).exe
 	mv $(fsthost_exe_MODULE).exe $(fsthost_exe_MODULE)
