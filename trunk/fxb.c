@@ -15,16 +15,13 @@
 /** Bank (fxb) identifier for opaque chunk data. */
 #define chunkBankMagic		'FBCh'
 
-#define FXBANK    0
-#define FXPROGRAM 1
-
 static unsigned int endian_swap(unsigned int x)
 {
 //	return (x>>24) | ((x<<8) & 0x00FF0000) | ((x>>8) & 0x0000FF00) | (x<<24);
 	return __builtin_bswap32 (x);
 }
 
-static void fx_load_chunk ( FST *fst, FILE *fxfile, int chunkType )
+static void fx_load_chunk ( FST *fst, FILE *fxfile, enum FxFileType chunkType )
 {
 	void * chunk = NULL;
 	size_t chunkSize;
@@ -207,7 +204,7 @@ static int fx_save_params ( FST *fst, FILE *fxfile )
 	fwrite(&Params, sizeof(float), fst->plugin->numParams, fxfile);
 }
 
-int fst_save_fxfile ( FST *fst, const char *filename, bool isBank )
+int fst_save_fxfile ( FST *fst, const char *filename, enum FxFileType fileType )
 {
 	FXHeader fxHeader;
         void * chunk = NULL;
@@ -216,8 +213,9 @@ int fst_save_fxfile ( FST *fst, const char *filename, bool isBank )
 	char prgName[28];
 	short p;
 
+	bool isBank = (fileType == FXBANK) ? TRUE : FALSE;
 	bool isChunk = (fst->plugin->flags & effFlagsProgramChunks);
-	short chunkType = (isBank) ? FXBANK : FXPROGRAM;
+	enum FxFileType chunkType = fileType;
 
         fxHeader.chunkMagic = endian_swap( cMagic );
 
@@ -239,7 +237,6 @@ int fst_save_fxfile ( FST *fst, const char *filename, bool isBank )
 			fxHeader.fxMagic = fMagic;
                         printf("fMagic\n");
 		}
-			
 	}
 
 	fxHeader.fxMagic = endian_swap ( fxHeader.fxMagic );

@@ -11,6 +11,10 @@
 extern lash_client_t *lash_client;
 #endif
 
+/* from cpuusage.c */
+extern void CPUusage_init();
+extern double CPUusage_getCurrentValue();
+
 gboolean quit = FALSE;
 short	mode_cc = 0;
 
@@ -716,4 +720,5 @@ gtk_gui_init (int *argc, char **argv[])
 	gtk_init (argc, argv);
 	the_gtk_display = gdk_x11_display_get_xdisplay( gdk_display_get_default() );
 	gtk_error_handler = XSetErrorHandler( fst_xerror_handler );
+	CPUusage_init();
 }
