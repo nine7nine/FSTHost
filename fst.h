@@ -3,7 +3,6 @@
 
 #include <stdio.h>
 #include <setjmp.h>
-#include <signal.h>
 #include <pthread.h>
 #include <stdbool.h>
 
@@ -123,6 +122,11 @@ struct _FST
 	pthread_cond_t	event_called;
 };
 
+enum FxFileType {
+	FXBANK		= 0,
+	FXPROGRAM	= 1
+};
+
 struct _FXHeader {
         unsigned int chunkMagic;
         unsigned int byteSize;
@@ -157,7 +161,7 @@ extern int fst_call_dispatcher(FST *fst, int opcode, int index, int val, void *p
  */
 extern int fst_save_state (FST * fst, const char * filename);
 extern int fst_save_fps (FST * fst, const char * filename);
-extern int fst_save_fxfile (FST * fst, const char * filename, bool isBank);
+extern int fst_save_fxfile (FST * fst, const char * filename, enum FxFileType fileType);
 
 #ifdef __cplusplus
 }

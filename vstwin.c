@@ -1,13 +1,7 @@
 #include <libgen.h>
-#include <windows.h>
-#include <winnt.h>
-#include <wine/exception.h>
 #include <signal.h>
 
 #include "fst.h"
-
-#include <X11/X.h>
-#include <X11/Xlib.h>
 
 static FST* fst_first = NULL;
 
@@ -182,12 +176,7 @@ register_window_class (HMODULE hInst)
 {
 	WNDCLASSEX wclass;
 	HANDLE t_thread; 
-	//HMODULE hInst;
 
-	//if ((hInst = GetModuleHandleA (NULL)) == NULL) {
-	//	fst_error ("can't get module handle");
-	//	return -1;
-	//}
 	wclass.cbSize = sizeof(WNDCLASSEX);
 	wclass.style = 0;
 //	wclass.style = (CS_HREDRAW | CS_VREDRAW);
@@ -295,9 +284,6 @@ fst_create_editor (FST* fst)
 	struct ERect* er;
 
 	/* "guard point" to trap errors that occur during plugin loading */
-
-	/* Note: fst->lock is held while this function is called */
-
 	if (!(fst->plugin->flags & effFlagsHasEditor)) {
 		fst_error ("Plugin \"%s\" has no editor", fst->handle->name);
 		return 0;

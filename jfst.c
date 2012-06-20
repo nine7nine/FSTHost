@@ -17,19 +17,15 @@
     Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 */
 
-#include <sys/types.h>
 #include <string.h>
 #include <unistd.h>
 #include <libgen.h>
 #include <glib.h>
 #include <semaphore.h>
 #include <signal.h>
-#include <windows.h>
-
-#include "fst.h"
+#include "jack/midiport.h"
 
 #include "jackvst.h"
-#include "jack/midiport.h"
 
 #ifdef HAVE_LASH
 #include <lash/lash.h>
@@ -44,7 +40,15 @@ extern long jack_host_callback (struct AEffect*, int32_t, int32_t, intptr_t, voi
 extern void gtk_gui_init (int* argc, char** argv[]);
 extern int gtk_gui_start (JackVST * jvst);
 
-void queue_midi_message(JackVST* jvst, int status, int d1, int d2, jack_nframes_t delta);
+/* Structures & Prototypes for midi output and associated queue */
+struct MidiMessage {
+        jack_nframes_t  time;
+        int             len; /* Length of MIDI message, in bytes. */
+        unsigned char   data[3];
+};
+
+#define RINGBUFFER_SIZE 1024*sizeof(struct MidiMessage)
+#define MIDI_EVENT_MAX 1024
 
 #ifdef HAVE_LASH
 lash_client_t * lash_client;
@@ -54,8 +58,7 @@ static void *(*the_function)(void*);
 static void *the_arg;
 static pthread_t the_thread_id;
 static sem_t sema;
-GMainLoop*	glib_main_loop;
-
+GMainLoop* glib_main_loop;
 JackVST *jvst_first;
 
 JackVST* jvst_new()
@@ -109,9 +112,9 @@ jvst_save_state (JackVST* jvst, const char * filename)
 	char* file_ext = strrchr(filename, '.');
 
 	if (strcasecmp(file_ext, ".fxp") == 0) {
-		fst_save_fxfile(jvst->fst, filename, 0);
+		fst_save_fxfile(jvst->fst, filename, FXPROGRAM);
 	} else if (strcasecmp(file_ext, ".fxb") == 0) {
-		fst_save_fxfile(jvst->fst, filename, 1);
+		fst_save_fxfile(jvst->fst, filename, FXBANK);
 	} else if (strcasecmp(file_ext, ".fps") == 0) {
 		fps_save(jvst, filename);
 	} else {
@@ -134,7 +137,7 @@ signal_callback_handler(int signum)
 	g_main_loop_quit(glib_main_loop);
 }
 
-bool
+static bool
 jvst_want_mode_check(JackVST* jvst)
 {
 	if (jvst->want_mode == WANT_MODE_BYPASS && !jvst->bypassed) {
@@ -153,26 +156,26 @@ jvst_want_mode_check(JackVST* jvst)
 static DWORD WINAPI
 wine_thread_aux( LPVOID arg )
 {
-  printf("Audio ThID: %d\n", GetCurrentThreadId ());
+	printf("Audio ThID: %d\n", GetCurrentThreadId ());
 
-  the_thread_id = pthread_self();
-  sem_post( &sema );
-  the_function( the_arg );
-  return 0;
+	the_thread_id = pthread_self();
+	sem_post( &sema );
+	the_function( the_arg );
+	return 0;
 }
 
-int
+static int
 wine_pthread_create (pthread_t* thread_id, const pthread_attr_t* attr, void *(*function)(void*), void* arg)
 {
-  sem_init( &sema, 0, 0 );
-  the_function = function;
-  the_arg = arg;
+	sem_init( &sema, 0, 0 );
+	the_function = function;
+	the_arg = arg;
 
-  CreateThread( NULL, 0, wine_thread_aux, arg, 0,0 );
-  sem_wait( &sema );
+	CreateThread( NULL, 0, wine_thread_aux, arg, 0,0 );
+	sem_wait( &sema );
 
-  *thread_id = the_thread_id;
-  return 0;
+	*thread_id = the_thread_id;
+	return 0;
 }
 
 static pthread_t audio_thread = 0;
@@ -187,7 +190,7 @@ process_midi_output(JackVST* jvst, jack_nframes_t nframes)
 	void           *port_buffer;
 	jack_nframes_t	last_frame_time;
 	jack_ringbuffer_t* ringbuffer;
-	MidiMessage ev;
+	struct MidiMessage ev;
 
 	last_frame_time = jack_last_frame_time(jvst->client);
 
@@ -309,6 +312,7 @@ process_midi_input(JackVST* jvst, jack_nframes_t nframes)
 	}
 }
 
+// This function is used in audiomaster.c
 void
 queue_midi_message(JackVST* jvst, int status, int d1, int d2, jack_nframes_t delta )
 {
@@ -316,7 +320,7 @@ queue_midi_message(JackVST* jvst, int status, int d1, int d2, jack_nframes_t del
 	int	written;
 	int	statusHi = (status >> 4) & 0xF;
 	int	statusLo = status & 0xF;
-	MidiMessage ev;
+	struct  MidiMessage ev;
 
 	/*fst_error("queue_new_message = 0x%hhX, %d, %d\n", status, d1, d2);*/
 	/* fst_error("statusHi = %d, statusLo = %d\n", statusHi, statusLo);*/
@@ -373,7 +377,7 @@ queue_midi_message(JackVST* jvst, int status, int d1, int d2, jack_nframes_t del
 	}
 }
 
-int
+static int
 process_callback( jack_nframes_t nframes, void* data) 
 {
 	short i, o;
@@ -509,7 +513,7 @@ jvst_connect(JackVST *jvst, const char *myname, const char *connect_to)
 	return 1;
 }
 
-void
+static void
 usage(char* appname) {
 	const char* format = "%-20s%s\n";
 
@@ -536,7 +540,6 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	LPWSTR*		szArgList;
 	int		argc;
 	char**		argv;
-	JackVST*	jvst = jvst_new();
 	FST*		fst;
 	struct AEffect*	plugin;
 	short		i;
@@ -549,6 +552,8 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 
 	float		sample_rate = 0;
 	long		block_size = 0;
+
+	JackVST*	jvst = jvst_new();
 
 	// Parse command line
 	szArgList = CommandLineToArgvW(GetCommandLineW(), &argc);
@@ -701,7 +706,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 
 		/* should we send the plugin VST events (i.e. MIDI) */
 		if (fst->isSynth || fst->canReceiveVstEvents || fst->canReceiveVstMidiEvent) {
-			jvst->want_midi_in = 1;
+			jvst->want_midi_in = TRUE;
 
 			/* The VstEvents structure already contains an array of 2    */
 			/* pointers to VstEvent so I guess that this malloc actually */
@@ -796,6 +801,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	printf("Jack Activate\n");
 	jack_activate(jvst->client);
 
+	// Init Glib main event loop initialize
 	glib_main_loop = g_main_loop_new(NULL, FALSE);
 	g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 500, 
 		(GSourceFunc) jvst_want_mode_check, jvst, NULL);
@@ -804,7 +810,6 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 		jvst_connect(jvst, jvst->client_name, connect_to);
 
 	if (jvst->with_editor != WITH_EDITOR_NO) {
-		CPUusage_init();
 		printf( "Start GUI\n" );
 		gtk_gui_init (&argc, &argv);
 		gtk_gui_start(jvst);
