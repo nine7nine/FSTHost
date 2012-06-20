@@ -114,9 +114,9 @@ DEFLIB = $(LIBRARY_PATH) $(LIBRARIES) $(DLL_PATH)
 $(fsthost_exe_MODULE): $(fsthost_exe_OBJS)
 	$(LINK) $(fsthost_exe_LDFLAGS) -o $@ $(fsthost_exe_OBJS) $(fsthost_exe_LIBRARY_PATH) $(DEFLIB) $(fsthost_exe_DLLS:%=-l%) $(fsthost_exe_LIBRARIES:%=-l%)
 # Add support for WINE_RT
-	sed -i -e '/^# determine the application directory/,/^esac/d' $(fsthost_exe_MODULE).exe
-	sed -i -e 's/-n "$$appdir"/! -r "$$appname"/' $(fsthost_exe_MODULE).exe
-	sed -i -e '3i \appdir="$(LIB_INST_PATH)"' $(fsthost_exe_MODULE).exe
-	sed -i -e '3i \export WINE_RT=$${WINE_RT:-10}' $(fsthost_exe_MODULE).exe
-	sed -i -e '3i \export WINE_SRV_RT=$${WINE_SRV_RT:-15}' $(fsthost_exe_MODULE).exe
+	sed -i -e '/^# determine the application directory/,/^esac/d' \
+		-e 's/-n "$$appdir"/! -r "$$appname"/' \
+		-e '3i \appdir="$(LIB_INST_PATH)"' \
+		-e '3i \export WINE_RT=$${WINE_RT:-10}' \
+		-e '3i \export WINE_SRV_RT=$${WINE_SRV_RT:-15}' $(fsthost_exe_MODULE).exe
 	mv $(fsthost_exe_MODULE).exe $(fsthost_exe_MODULE)
