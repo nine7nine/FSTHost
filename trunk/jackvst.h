@@ -42,15 +42,21 @@ struct _JackVST {
     short          want_mode_cc;
     enum WithEditor with_editor;
     double         tempo;
-    float          volume; /* wehere 0.0 mean silence */
+    float          volume; /* where 0.0 mean silence */
 
     int            midi_map[128];
     bool           midi_learn;
     short          midi_learn_CC;
     int            midi_learn_PARAM;
 
+    /* SysEx support */
+    bool          sysex_send;
+    bool          sysex_ident;
+    unsigned char sysex_uuid;
+
     /* For VST/i support */
     bool want_midi_in;
+    bool want_midi_out;
     struct VstMidiEvent* event_array;
     struct VstEvents* events;
 

@@ -42,13 +42,33 @@ extern int gtk_gui_start (JackVST * jvst);
 
 /* Structures & Prototypes for midi output and associated queue */
 struct MidiMessage {
-        jack_nframes_t  time;
-        int             len; /* Length of MIDI message, in bytes. */
-        unsigned char   data[3];
+        jack_nframes_t time;
+        int            len; /* Length of MIDI message, in bytes. */
+        unsigned char  data[3];
+};
+
+struct SysExHeader {
+	jack_midi_data_t begin;
+	jack_midi_data_t id;
+	jack_midi_data_t version;
+	jack_midi_data_t uuid;
+};
+
+struct SysExV1 {
+	struct SysExHeader header;
+	jack_midi_data_t program;
+	jack_midi_data_t mode;
+	jack_midi_data_t end;
 };
 
 #define RINGBUFFER_SIZE 1024*sizeof(struct MidiMessage)
 #define MIDI_EVENT_MAX 1024
+#define SYSEX_BEGIN 0xF0
+#define SYSEX_END 0xF7
+#define SYSEX_ID 0x5B
+#define SYSEX_IDENT_REQUEST { 0xF0, 0x7E, 0x7F, 0x06, 0x01 }
+#define SYSEX_IDENT_REPLY   { 0xF0, 0x7E, 0x7F, 0x06, 0x02 }
+#define SYSEX_VERSION 1
 
 #ifdef HAVE_LASH
 lash_client_t * lash_client;
@@ -185,14 +205,8 @@ process_midi_output(JackVST* jvst, jack_nframes_t nframes)
 {
 	/* This jack ringbuffer consume code was largely taken from jack-keyboard */
 	/* written by Edward Tomasz Napierala <trasz@FreeBSD.org>                 */
-	int		read, t;
-	unsigned char  *buffer;
-	void           *port_buffer;
-	jack_nframes_t	last_frame_time;
-	jack_ringbuffer_t* ringbuffer;
-	struct MidiMessage ev;
-
-	last_frame_time = jack_last_frame_time(jvst->client);
+	void *port_buffer;
+	int t;
 
 	port_buffer = jack_port_get_buffer(jvst->midi_outport, nframes);
 	if (port_buffer == NULL) {
@@ -202,8 +216,13 @@ process_midi_output(JackVST* jvst, jack_nframes_t nframes)
 
 	jack_midi_clear_buffer(port_buffer);
 
-	ringbuffer = jvst->ringbuffer;
-	while (jack_ringbuffer_read_space(ringbuffer)) {
+	if (jvst->want_midi_out) {
+	   int			read;
+	   struct MidiMessage	ev;
+
+	   jack_nframes_t last_frame_time = jack_last_frame_time(jvst->client);
+	   jack_ringbuffer_t* ringbuffer = jvst->ringbuffer;
+	   while (jack_ringbuffer_read_space(ringbuffer)) {
 		read = jack_ringbuffer_peek(ringbuffer, (char*)&ev, sizeof(ev));
 		if (read != sizeof(ev)) {
 			fst_error("Short read from the ringbuffer, possible note loss.");
@@ -221,13 +240,54 @@ process_midi_output(JackVST* jvst, jack_nframes_t nframes)
 
 		jack_ringbuffer_read_advance(ringbuffer, sizeof(ev));
 
-		buffer = jack_midi_event_reserve(port_buffer, t, ev.len);
-		if (buffer == NULL) {
-			fst_error("queue: jack_midi_event_reserve failed, NOTE LOST.");
-			break;
-		}
+		if ( jack_midi_event_write(port_buffer, t, ev.data, ev.len) )
+			fst_error("queue: jack_midi_event_write failed, NOTE LOST.");
+	   }
+	}
 
-		memcpy(buffer, ev.data, ev.len);
+	// Send SysEx
+	if (jvst->sysex_send) {
+		jvst->sysex_send = FALSE;
+		struct SysExV1 sysex_data;
+		sysex_data.header.begin   = SYSEX_BEGIN;
+		sysex_data.header.id      = SYSEX_ID;
+		sysex_data.header.version = SYSEX_VERSION;
+		sysex_data.header.uuid    = jvst->sysex_uuid;
+		sysex_data.program        = jvst->fst->current_program;
+		sysex_data.mode           = (jvst->bypassed) ? WANT_MODE_BYPASS : WANT_MODE_RESUME;
+		sysex_data.end            = SYSEX_END;
+
+		if ( (sysex_data.program & 0x80) ) {
+		   fst_error("SysEx - program - first byte can be set, this is not supported now :-(\n");
+		} else {
+		   t = jack_frame_time(jvst->client) - jack_last_frame_time(jvst->client);
+		   if (t < 0) t = 0;
+
+		   if ( jack_midi_event_write(port_buffer, t,
+				(jack_midi_data_t*) &sysex_data, sizeof(struct SysExV1))
+		   ) fst_error("SysEx error: jack_midi_event_write failed.");
+		}
+	}
+	// Identity reply
+	if (jvst->sysex_ident) {
+		jvst->sysex_ident = FALSE;
+		jack_midi_data_t reply[15] = SYSEX_IDENT_REPLY;
+		reply[5] = SYSEX_ID;
+		// Family code - not used for now
+		//   reply[6] = reply[7] = 0;
+		// Model number
+		//   reply[8] = 0;
+		reply[9] = jvst->sysex_uuid;
+		// Version number
+		//   reply[10] = reply[11] = reply[12] = 0;
+		reply[13] = SYSEX_VERSION;
+		reply[14] = SYSEX_END;
+
+		t = jack_frame_time(jvst->client) - jack_last_frame_time(jvst->client);
+		if (t < 0) t = 0;
+		if ( jack_midi_event_write(port_buffer, t,
+			(jack_midi_data_t*) &reply, 15)
+		) fst_error("SysEx error: jack_midi_event_write failed.");
 	}
 }
 
@@ -248,6 +308,54 @@ process_midi_input(JackVST* jvst, jack_nframes_t nframes)
 	for( i=0; i < num_jackevents; i++ ) {
 		if ( jack_midi_event_get( &jackevent, port_buffer, i ) != 0 )
 			break;
+
+		// SysEx Version 1
+		if ( jackevent.buffer[0] == SYSEX_BEGIN) {
+			// Our sysex
+			if (jackevent.buffer[1] == SYSEX_ID) {
+				printf("Got SysEx - ");
+
+				if (jackevent.size < sizeof(struct SysExHeader)) {
+					printf("wrong size !\n");
+					continue;
+				}
+				struct SysExHeader* sysex_header =
+					(struct SysExHeader*) jackevent.buffer;
+
+				// Version
+				printf("version %d - ", sysex_header->version);
+				switch(sysex_header->version) {
+				case 1:
+					if (jackevent.size < sizeof(struct SysExV1)) {
+						printf("wrong size !\n");
+						continue;
+					}
+					printf("OK\n");
+
+					struct SysExV1* sysex_v1 = 
+						(struct SysExV1*) jackevent.buffer;
+				
+					jvst->fst->want_program = sysex_v1->program;
+					jvst->fst->event_call = PROGRAM_CHANGE;
+					jvst->want_mode = sysex_v1->mode;
+
+					break;
+				default:
+					printf("not supported\n");
+				}
+				continue;
+			// Identity request
+			} else if (jackevent.size >= 6) {
+				jack_midi_data_t buf[6] = SYSEX_IDENT_REQUEST;
+				buf[5] = SYSEX_END;
+				// mask sysex channel - we don't need this
+				jackevent.buffer[2] = 0x7F;
+				if ( memcmp(jackevent.buffer, buf, 6 ) == 0) {
+					printf("Got Identity request\n");
+					jvst->sysex_ident = TRUE;
+				}
+			}
+		}
 
 		// Midi channel
 		if ( (jvst->channel != -1 )
@@ -409,33 +517,32 @@ process_callback( jack_nframes_t nframes, void* data)
 	process_midi_input(jvst, nframes);
 
 	// Bypass - because all audio jobs are done  - simply return
-	if (jvst->bypassed) return 0;
+	if (! jvst->bypassed) {
 
-	// Deal with plugin
-	if (plugin->flags & effFlagsCanReplacing) {
-		plugin->processReplacing (plugin, jvst->ins, jvst->outs, nframes);
-	} else {
-		plugin->process (plugin, jvst->ins, jvst->outs, nframes);
-	}
+		// Deal with plugin
+		if (plugin->flags & effFlagsCanReplacing) {
+			plugin->processReplacing (plugin, jvst->ins, jvst->outs, nframes);
+		} else {
+			plugin->process (plugin, jvst->ins, jvst->outs, nframes);
+		}
 
-	// Ouput volume control
-	if (jvst->volume != -1) {
-		jack_nframes_t n=0;
-		o = 0;
-		while(o < jvst->numOuts) {
-			jvst->outs[o][n] *= jvst->volume;
-			if (n < nframes) {
-				n++;
-			} else {
-				++o;
-				n=0;
+		// Ouput volume control
+		if (jvst->volume != -1) {
+			jack_nframes_t n=0;
+			for(o=0; o < jvst->numOuts; ) {
+				jvst->outs[o][n] *= jvst->volume;
+				if (n < nframes) {
+					n++;
+				} else {
+					++o;
+					n=0;
+				}
 			}
 		}
 	}
 
 	// Process MIDI Output
-	if (jvst->midi_outport)
-		process_midi_output(jvst, nframes);
+	process_midi_output(jvst, nframes);
 
 	return 0;      
 }
@@ -452,8 +559,8 @@ session_callback( JackVST* jvst )
 
         snprintf( filename, sizeof(filename), "%sstate.fps", event->session_dir );
         jvst_save_state( jvst, filename );
-        snprintf( retval, sizeof(retval), "%s -u %s -s \"${SESSION_DIR}state.fps\" \"%s\"",
-		my_motherfuckin_name, event->client_uuid, jvst->handle->path );
+        snprintf( retval, sizeof(retval), "%s -u %s -U %d -s \"${SESSION_DIR}state.fps\" \"%s\"",
+		my_motherfuckin_name, event->client_uuid, jvst->sysex_uuid, jvst->handle->path );
         event->command_line = strdup( retval );
 
         jack_session_reply( jvst->client, event );
@@ -531,6 +638,7 @@ usage(char* appname) {
 	fprintf(stderr, format, "-o num_out", "Jack number Out ports");
 	fprintf(stderr, format, "-t tempo", "Set fixed Tempo rather than using JackTransport");
 	fprintf(stderr, format, "-u uuid", "JackSession UUID");
+	fprintf(stderr, format, "-u sysex_uuid", "SysEx UUID");
 	fprintf(stderr, format, "-V", "Disable Volume control (and filter CC7 messages)");
 }
 
@@ -580,7 +688,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 #endif
 
         // Parse command line options
-	while ( (i = getopt (argc, argv, "bnes:c:k:i:j:m:o:t:u:V")) != -1) {
+	while ( (i = getopt (argc, argv, "bnes:c:k:i:j:m:o:t:u:U:V")) != -1) {
 		switch (i) {
 			case 'b':
 				jvst->bypassed = TRUE;
@@ -620,6 +728,9 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 				break;
 			case 'u':
 				jvst->uuid = optarg;
+				break;
+			case 'U':
+				jvst->sysex_uuid = strtol(optarg, NULL, 10);
 				break;
 			case 'V':
 				jvst->volume = -1;
@@ -701,6 +812,9 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	jvst->midi_inport = 
 		jack_port_register(jvst->client, "midi-in", JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
 
+	jvst->midi_outport =
+		jack_port_register(jvst->client, "midi-out", JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
+
 	if (fst->vst_version >= 2) {
 		printf("Plugin isSynth = %d\n", fst->isSynth);
 
@@ -727,6 +841,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 
 		/* Can the plugin send VST events (i.e. MIDI) */
 		if (fst->canSendVstEvents || fst->canSendVstMidiEvent) {
+			jvst->want_midi_out = TRUE;
 			jvst->ringbuffer = jack_ringbuffer_create(RINGBUFFER_SIZE);
 			if (jvst->ringbuffer == NULL) {
 				fst_error("Cannot create JACK ringbuffer.");
@@ -734,9 +849,6 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 			}
 
 			jack_ringbuffer_mlock(jvst->ringbuffer);
-
-			jvst->midi_outport =
-				jack_port_register(jvst->client, "midi-out", JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
 		}
 	}
 

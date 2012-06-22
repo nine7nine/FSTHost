@@ -30,10 +30,12 @@ static  GtkWidget* preset_listbox;
 static	GtkWidget* midi_learn_toggle;
 static	GtkWidget* load_button;
 static	GtkWidget* save_button;
+static	GtkWidget* sysex_button;
 static	GtkWidget* volume_slider;
 static	GtkWidget* cpu_usage;
 static	gulong preset_listbox_signal;
 static	gulong volume_signal;
+static	gulong bypass_signal;
 static	gulong gtk_socket_signal;
 
 static void
@@ -66,8 +68,6 @@ bypass_handler (GtkToggleButton *but, gboolean ptr)
 	jvst->want_mode = (gtk_toggle_button_get_active (but))
 		? WANT_MODE_BYPASS : WANT_MODE_RESUME;
 
-//	jvst_want_mode_check(jvst); // this is called in idle_cb
-
 	gtk_widget_grab_focus( gtk_socket );
 }
 
@@ -79,6 +79,14 @@ volume_handler (GtkVScale *slider, gboolean ptr)
 	short volume = gtk_range_get_value(GTK_RANGE(slider));
 	jvst_set_volume(jvst, volume);
 	printf("Volume: %d (%f)\n", volume, jvst->volume);
+}
+
+static void
+sysex_handler (GtkToggleButton *but, gboolean ptr)
+{
+	JackVST* jvst = (JackVST*) ptr;
+
+	jvst->sysex_send = TRUE;
 }
 
 static void
@@ -510,7 +518,9 @@ idle_cb(JackVST *jvst)
 	sprintf(tmpstr, "%06.2f", CPUusage_getCurrentValue());
 	gtk_label_set_text(GTK_LABEL(cpu_usage), tmpstr);
 
-	if (jvst->bypassed != gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(bypass_button))) {
+	if (jvst->bypassed != gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(bypass_button)) &&
+	    jvst->want_mode == WANT_MODE_NO
+	) {
 		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(bypass_button), jvst->bypassed);
 	}
 	if (jvst->want_mode_cc != mode_cc) {
@@ -623,8 +633,9 @@ gtk_gui_start (JackVST* jvst)
 	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(bypass_button), jvst->bypassed);
 	editor_button = gtk_toggle_button_new_with_label ("editor");
 	midi_learn_toggle = gtk_toggle_button_new_with_label ("midi Learn");
-	save_button = gtk_button_new_with_label ("save state");
-	load_button = gtk_button_new_with_label ("load state");
+	save_button = gtk_button_new_with_label ("save");
+	sysex_button = gtk_button_new_with_label ("SysEx");
+	load_button = gtk_button_new_with_label ("load");
 	cpu_usage = gtk_label_new ("0");
 
 	//----------------------------------------------------------------------------------
@@ -656,11 +667,13 @@ gtk_gui_start (JackVST* jvst)
 	preset_listbox_signal = g_signal_connect( G_OBJECT(preset_listbox), "changed", G_CALLBACK( program_change ), jvst ); 
 	//----------------------------------------------------------------------------------
 
-	g_signal_connect (G_OBJECT(bypass_button), "toggled", G_CALLBACK(bypass_handler), jvst); 
+	bypass_signal =
+		g_signal_connect (G_OBJECT(bypass_button), "toggled", G_CALLBACK(bypass_handler), jvst); 
 	g_signal_connect (G_OBJECT(midi_learn_toggle), "toggled", G_CALLBACK(learn_handler), jvst); 
 	g_signal_connect (G_OBJECT(editor_button), "toggled", G_CALLBACK(editor_handler), jvst); 
 	g_signal_connect (G_OBJECT(load_button), "clicked", G_CALLBACK(load_handler), jvst); 
 	g_signal_connect (G_OBJECT(save_button), "clicked", G_CALLBACK(save_handler), jvst); 
+	g_signal_connect (G_OBJECT(sysex_button), "clicked", G_CALLBACK(sysex_handler), jvst); 
 	gtk_container_set_border_width (GTK_CONTAINER(hpacker), 3); 
 	g_signal_connect (G_OBJECT(window), "delete_event", G_CALLBACK(destroy_handler), jvst);
 	
@@ -669,6 +682,7 @@ gtk_gui_start (JackVST* jvst)
 	gtk_box_pack_end   (GTK_BOX(hpacker), bypass_button, FALSE, FALSE, 0);
 	gtk_box_pack_end   (GTK_BOX(hpacker), load_button, FALSE, FALSE, 0);
 	gtk_box_pack_end   (GTK_BOX(hpacker), save_button, FALSE, FALSE, 0);
+	gtk_box_pack_end   (GTK_BOX(hpacker), sysex_button, FALSE, FALSE, 0);
 	gtk_box_pack_end   (GTK_BOX(hpacker), editor_button, FALSE, FALSE, 0);
 	gtk_box_pack_end   (GTK_BOX(hpacker), channel_listbox, FALSE, FALSE, 0);
 	gtk_box_pack_end   (GTK_BOX(hpacker), volume_slider, FALSE, FALSE, 0);
