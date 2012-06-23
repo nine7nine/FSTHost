@@ -1,10 +1,9 @@
 #include "jackvst.h"
+#include "sysex.h"
 #include <gtk/gtk.h>
 #include <gdk/gdkx.h>
 #include <gdk/gdkevents.h>
 #include <X11/Xlib.h>
-
-#include <glib-2.0/glib.h>
 
 #ifdef HAVE_LASH
 #include <lash/lash.h>
@@ -78,7 +77,6 @@ volume_handler (GtkVScale *slider, gboolean ptr)
 
 	short volume = gtk_range_get_value(GTK_RANGE(slider));
 	jvst_set_volume(jvst, volume);
-	printf("Volume: %d (%f)\n", volume, jvst->volume);
 }
 
 static void
@@ -86,7 +84,19 @@ sysex_handler (GtkToggleButton *but, gboolean ptr)
 {
 	JackVST* jvst = (JackVST*) ptr;
 
-	jvst->sysex_send = TRUE;
+	// Prepare data for RT thread
+	SysExDumpV1* sysex = sysex_dump_v1(
+		(uint8_t) jvst->sysex_uuid,
+		(uint8_t) jvst->fst->current_program,
+		(uint8_t) jvst->channel + 1,
+		(uint8_t) jvst_get_volume(jvst),
+		(jvst->bypassed) ? SYSEX_STATE_NOACTIVE : SYSEX_STATE_ACTIVE,
+		jvst->client_name
+	);
+
+	jvst_send_sysex(jvst, (unsigned char*) sysex, sizeof(SysExDumpV1));
+
+	free(sysex);
 }
 
 static void

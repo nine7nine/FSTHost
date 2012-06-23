@@ -32,7 +32,7 @@ BIN_INST_PATH         = $(PREFIX)/bin
 
 ### fst.exe sources and settings
 fsthost_exe_MODULE       = fsthost
-fsthost_exe_C_SRCS       = audiomaster.c fst.c gtk.c jfst.c fxb.c fpsparser.c vstwin.c cpuusage.c
+fsthost_exe_C_SRCS       = audiomaster.c fst.c gtk.c jfst.c fxb.c fpsparser.c vstwin.c sysex.c cpuusage.c
 fsthost_exe_CXX_SRCS     =
 fsthost_exe_RC_SRCS      =
 fsthost_exe_LDFLAGS      = -mwindows
