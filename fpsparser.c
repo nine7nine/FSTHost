@@ -111,9 +111,6 @@ fps_process_node(JackVST* jvst, xmlNode *a_node)
 	     jvst->channel = channel - 1;
        // Volume
        } else if (strcmp(cur_node->name, "volume") == 0) {
-	  if (jvst->volume == -1)
-             continue;
-
           jvst_set_volume(jvst, strtol(xmlGetProp(cur_node, "level"), NULL, 10));
        // Bypass/Resume MIDI CC
        } else if (strcmp(cur_node->name, "mode") == 0) {

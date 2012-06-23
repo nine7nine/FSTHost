@@ -23,9 +23,10 @@
 #include <glib.h>
 #include <semaphore.h>
 #include <signal.h>
-#include "jack/midiport.h"
+#include <jack/midiport.h>
 
 #include "jackvst.h"
+#include "sysex.h"
 
 #ifdef HAVE_LASH
 #include <lash/lash.h>
@@ -47,28 +48,14 @@ struct MidiMessage {
         unsigned char  data[3];
 };
 
-struct SysExHeader {
-	jack_midi_data_t begin;
-	jack_midi_data_t id;
-	jack_midi_data_t version;
-	jack_midi_data_t uuid;
-};
-
-struct SysExV1 {
-	struct SysExHeader header;
-	jack_midi_data_t program;
-	jack_midi_data_t mode;
-	jack_midi_data_t end;
+struct SysExEvent {
+	JackVST* jvst;
+	jack_midi_data_t* data;
+	size_t size;	
 };
 
 #define RINGBUFFER_SIZE 1024*sizeof(struct MidiMessage)
 #define MIDI_EVENT_MAX 1024
-#define SYSEX_BEGIN 0xF0
-#define SYSEX_END 0xF7
-#define SYSEX_ID 0x5B
-#define SYSEX_IDENT_REQUEST { 0xF0, 0x7E, 0x7F, 0x06, 0x01 }
-#define SYSEX_IDENT_REPLY   { 0xF0, 0x7E, 0x7F, 0x06, 0x02 }
-#define SYSEX_VERSION 1
 
 #ifdef HAVE_LASH
 lash_client_t * lash_client;
@@ -86,6 +73,8 @@ JackVST* jvst_new()
 	JackVST* jvst = (JackVST*) calloc (1, sizeof (JackVST));
 	short i;
 
+        pthread_mutex_init (&jvst->sysex_lock, NULL);
+        pthread_cond_init (&jvst->sysex_sent, NULL);
 	jvst->channel = -1;
 	jvst->with_editor = WITH_EDITOR_SHOW;
 	jvst->tempo = -1; // -1 here mean get it from Jack
@@ -98,6 +87,77 @@ JackVST* jvst_new()
 		jvst->midi_map[i] = -1;
 
 	return jvst;
+}
+
+bool
+jvst_send_sysex(JackVST* jvst, unsigned char* data, size_t size)
+{
+	pthread_mutex_lock (&jvst->sysex_lock);
+	jvst->sysex_data = data;
+	jvst->sysex_size = size;
+	jvst->sysex_want_send = TRUE;
+	pthread_cond_wait (&jvst->sysex_sent, &jvst->sysex_lock);
+	jvst->sysex_data = NULL;
+	jvst->sysex_size = 0;
+	pthread_mutex_unlock (&jvst->sysex_lock);
+}
+
+static bool
+jvst_sysex_handler(struct SysExEvent* sysex_event)
+{
+
+	JackVST* jvst = sysex_event->jvst;
+	jack_midi_data_t* data = sysex_event->data;
+	size_t size = sysex_event->size;
+	free(sysex_event);
+
+	switch(data[1]) {
+	case SYSEX_MYID:
+		// Our sysex
+		printf("Got Our SysEx - ");
+
+		if (size < sizeof(SysExDumpV1)) {
+			printf("wrong size !\n");
+			break;
+		}
+
+		SysExDumpV1* sysex_v1 = (SysExDumpV1*) data;
+
+		// Version
+		printf("version %d - ", sysex_v1->version);
+		switch(sysex_v1->version) {
+		case 1:
+			printf("OK\n");
+
+			jvst->want_mode = (sysex_v1->state == SYSEX_STATE_ACTIVE) ?
+					WANT_MODE_RESUME : WANT_MODE_BYPASS;
+			fst_program_change(jvst->fst, sysex_v1->program);
+			jvst->channel = sysex_v1->channel - 1;
+			jvst_set_volume(jvst, sysex_v1->volume);
+
+			break;
+		default:
+			printf("not supported\n");
+		}
+		break;
+	case SYSEX_NON_REALTIME:
+		// Identity request
+		if (size >= sizeof(SYSEX_IDENT_RQST)) {
+			// TODO: for now we just always answer ;-)
+			data[2] = 0;
+			if ( memcmp(data, SYSEX_IDENT_RQST, sizeof(SYSEX_IDENT_RQST) ) == 0) {
+				printf("Got Identity request\n");
+				SysExIdentReply* sysex_reply = sysex_ident_reply(jvst->sysex_uuid);
+				jvst_send_sysex(jvst, (unsigned char*) sysex_reply, sizeof(SysExIdentReply));
+				free(sysex_reply);
+			}
+		}
+		break;
+	}
+
+	free(data);
+
+	return FALSE;
 }
 
 bool
@@ -246,48 +306,22 @@ process_midi_output(JackVST* jvst, jack_nframes_t nframes)
 	}
 
 	// Send SysEx
-	if (jvst->sysex_send) {
-		jvst->sysex_send = FALSE;
-		struct SysExV1 sysex_data;
-		sysex_data.header.begin   = SYSEX_BEGIN;
-		sysex_data.header.id      = SYSEX_ID;
-		sysex_data.header.version = SYSEX_VERSION;
-		sysex_data.header.uuid    = jvst->sysex_uuid;
-		sysex_data.program        = jvst->fst->current_program;
-		sysex_data.mode           = (jvst->bypassed) ? WANT_MODE_BYPASS : WANT_MODE_RESUME;
-		sysex_data.end            = SYSEX_END;
+	if (jvst->sysex_want_send) {
+		// Are our lock is ready for us ?
+		// If not then we try next time
+		if (pthread_mutex_trylock(&jvst->sysex_lock) == 0) {
+			jvst->sysex_want_send = FALSE;
+	
+			t = jack_frame_time(jvst->client) - jack_last_frame_time(jvst->client);
+			if (t < 0) t = 0;
 
-		if ( (sysex_data.program & 0x80) ) {
-		   fst_error("SysEx - program - first byte can be set, this is not supported now :-(\n");
-		} else {
-		   t = jack_frame_time(jvst->client) - jack_last_frame_time(jvst->client);
-		   if (t < 0) t = 0;
-
-		   if ( jack_midi_event_write(port_buffer, t,
-				(jack_midi_data_t*) &sysex_data, sizeof(struct SysExV1))
-		   ) fst_error("SysEx error: jack_midi_event_write failed.");
+			if ( jack_midi_event_write(port_buffer, t,
+				(jack_midi_data_t*) jvst->sysex_data, jvst->sysex_size)
+			) fst_error("SysEx error: jack_midi_event_write failed.");
+			
+			pthread_cond_signal(&jvst->sysex_sent);
+			pthread_mutex_unlock(&jvst->sysex_lock);
 		}
-	}
-	// Identity reply
-	if (jvst->sysex_ident) {
-		jvst->sysex_ident = FALSE;
-		jack_midi_data_t reply[15] = SYSEX_IDENT_REPLY;
-		reply[5] = SYSEX_ID;
-		// Family code - not used for now
-		//   reply[6] = reply[7] = 0;
-		// Model number
-		//   reply[8] = 0;
-		reply[9] = jvst->sysex_uuid;
-		// Version number
-		//   reply[10] = reply[11] = reply[12] = 0;
-		reply[13] = SYSEX_VERSION;
-		reply[14] = SYSEX_END;
-
-		t = jack_frame_time(jvst->client) - jack_last_frame_time(jvst->client);
-		if (t < 0) t = 0;
-		if ( jack_midi_event_write(port_buffer, t,
-			(jack_midi_data_t*) &reply, 15)
-		) fst_error("SysEx error: jack_midi_event_write failed.");
 	}
 }
 
@@ -309,52 +343,18 @@ process_midi_input(JackVST* jvst, jack_nframes_t nframes)
 		if ( jack_midi_event_get( &jackevent, port_buffer, i ) != 0 )
 			break;
 
-		// SysEx Version 1
+		// SysEx
 		if ( jackevent.buffer[0] == SYSEX_BEGIN) {
-			// Our sysex
-			if (jackevent.buffer[1] == SYSEX_ID) {
-				printf("Got SysEx - ");
-
-				if (jackevent.size < sizeof(struct SysExHeader)) {
-					printf("wrong size !\n");
-					continue;
-				}
-				struct SysExHeader* sysex_header =
-					(struct SysExHeader*) jackevent.buffer;
-
-				// Version
-				printf("version %d - ", sysex_header->version);
-				switch(sysex_header->version) {
-				case 1:
-					if (jackevent.size < sizeof(struct SysExV1)) {
-						printf("wrong size !\n");
-						continue;
-					}
-					printf("OK\n");
-
-					struct SysExV1* sysex_v1 = 
-						(struct SysExV1*) jackevent.buffer;
-				
-					jvst->fst->want_program = sysex_v1->program;
-					jvst->fst->event_call = PROGRAM_CHANGE;
-					jvst->want_mode = sysex_v1->mode;
-
-					break;
-				default:
-					printf("not supported\n");
-				}
+			// FIXME: we shoudn't call malloc in RT thread - but I have no better idea :-(
+			struct SysExEvent* sysex_event = malloc(sizeof(struct SysExEvent));
+			sysex_event->data = malloc(jackevent.size);
+			sysex_event->jvst = jvst;
+			sysex_event->size = jackevent.size;
+			memcpy(sysex_event->data, jackevent.buffer, jackevent.size);
+			g_idle_add( (GSourceFunc) jvst_sysex_handler, sysex_event);
+			// If it's our SysEx then skip rest
+			if (jackevent.buffer[1] == SYSEX_MYID)
 				continue;
-			// Identity request
-			} else if (jackevent.size >= 6) {
-				jack_midi_data_t buf[6] = SYSEX_IDENT_REQUEST;
-				buf[5] = SYSEX_END;
-				// mask sysex channel - we don't need this
-				jackevent.buffer[2] = 0x7F;
-				if ( memcmp(jackevent.buffer, buf, 6 ) == 0) {
-					printf("Got Identity request\n");
-					jvst->sysex_ident = TRUE;
-				}
-			}
 		}
 
 		// Midi channel
@@ -526,7 +526,7 @@ process_callback( jack_nframes_t nframes, void* data)
 			plugin->process (plugin, jvst->ins, jvst->outs, nframes);
 		}
 
-		// Ouput volume control
+		// Output volume control - if enabled
 		if (jvst->volume != -1) {
 			jack_nframes_t n=0;
 			for(o=0; o < jvst->numOuts; ) {
@@ -749,8 +749,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	plug = argv[optind];
 	jvst_first = jvst;
 
-	if (jvst->volume != -1)
-		jvst_set_volume(jvst, 63);
+	jvst_set_volume(jvst, 63);
 
 	printf( "yo... lets see...\n" );
 	if ((jvst->handle = fst_load (plug)) == NULL) {
