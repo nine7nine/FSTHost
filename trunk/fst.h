@@ -147,6 +147,9 @@ extern int fst_unload (FSTHandle*);
 extern FST* fst_open (FSTHandle*, audioMasterCallback amc, void* userptr);
 extern void fst_close (FST*);
 
+extern void fst_program_change (FST *fst, short want_program);
+extern bool fst_get_program_name (FST *fst, short program, char* name, size_t size);
+
 extern int fst_run_editor (FST*);
 extern void fst_destroy_editor (FST*);
 

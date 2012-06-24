@@ -10,6 +10,18 @@
 
 #include "sysex.h"
 
+static void
+makeASCII(char* name, uint8_t* ascii_midi_dest, size_t size_dest) {
+	size_t i;
+	for (i=0; i < strlen(name) && i < size_dest - 1; i++) {
+		if ( ! isprint( toascii( name[i]) ) )
+			continue;
+
+		ascii_midi_dest[i] = name[i];
+
+	} /* Last character of sysex->name remain 0 */
+}
+
 // Send SysEx
 SysExDumpV1*
 sysex_dump_v1(
@@ -18,7 +30,8 @@ sysex_dump_v1(
 	uint8_t channel,
 	uint8_t volume,
 	enum SysExState state,
-	char* name
+	char* program_name,
+	char* plugin_name
 ) {
 	SysExDumpV1* sysex = calloc(1, sizeof(SysExDumpV1));
 
@@ -38,14 +51,9 @@ sysex_dump_v1(
 		return NULL;
 	}
 
-	short i;
-	for (i=0; i < strlen(name) && i < sizeof(sysex->name) - 1; i++) {
-		if ( ! isprint( toascii( name[i]) ) )
-			continue;
-
-		sysex->name[i] = name[i];
-	} /* Last character of sysex->name remain 0 */
-
+	makeASCII(plugin_name, sysex->plugin_name, sizeof(sysex->plugin_name));
+	makeASCII(program_name, sysex->program_name, sizeof(sysex->program_name));
+	
 	return sysex;
 }
 

@@ -64,7 +64,7 @@ fst_update_current_program(FST* fst) {
 	if (newProg != fst->current_program || fst->program_changed) {
 		fst->program_changed = FALSE;
 		fst->current_program = newProg;
-		fst->plugin->dispatcher (fst->plugin, effGetProgramName, 0, 0, &progName, 0.0f);
+		fst_get_program_name(fst, fst->current_program, progName, sizeof(progName));
 		printf("Program: %d : %s\n", newProg, progName);
 	}
 }
@@ -236,6 +236,33 @@ fst_show_editor (FST *fst) {
 	pthread_mutex_unlock (&fst->event_call_lock);
 
 	return 0;
+}
+
+bool
+fst_get_program_name (FST *fst, short program, char* name, size_t size)
+{
+	char *m = NULL, *c;
+	struct AEffect* plugin = fst->plugin;
+
+	if (program == fst->current_program) {
+		plugin->dispatcher(plugin, effGetProgramName, 0, 0, name, 0.0f);
+	} else {
+		plugin->dispatcher(plugin, effGetProgramNameIndexed, program, 0, name, 0.0 );
+	}
+
+	// remove all non ascii signs
+	for (c = name; (*c != 0) && (c - name) < size; c++) {
+		if ( isprint(*c)) {
+			if (m != NULL) {
+				*m = *c;
+				m = c;
+			}
+		} else if (m == NULL) m = c;
+	}
+	// make sure of string terminator
+	if (m != NULL) *m = 0; else *c = 0;
+
+	return TRUE; 
 }
 
 void
