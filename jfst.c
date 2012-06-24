@@ -276,7 +276,7 @@ process_midi_output(JackVST* jvst, jack_nframes_t nframes)
 
 	jack_midi_clear_buffer(port_buffer);
 
-	if (jvst->want_midi_out)
+	if (! jvst->want_midi_out)
 		goto send_sysex;
 
 	int read;
