@@ -134,7 +134,13 @@
 
 #define kEffectMagic (CCONST( 'V', 's', 't', 'P' ))
 #define kVstLangEnglish 1
-#define kVstMidiType 1
+// MIDI Event Types
+#define kVstMidiType 1		// Standard MIDI event
+#define kVstAudioType 2		// Depracted Audio event
+#define kVstVideoType 3		// Depracted Video event  
+#define kVstParameterType 4	// Depracted Parameter event
+#define kVstTriggerType 5	// Depracted Trigger event
+#define kVstSysExType 6		// SystemExclusive event
 #define kVstTransportPlaying (1 << 1)
 #define kVstTransportChanged 1
 

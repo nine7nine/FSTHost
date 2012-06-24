@@ -680,13 +680,6 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	LocalFree(szArgList);
 	strcpy(argv[0], my_motherfuckin_name); // Force APP name
 
-#ifdef HAVE_LASH
-	lash_event_t *event;
-	lash_args_t *lash_args;
-
-	lash_args = lash_extract_args(&argc, &argv);
-#endif
-
         // Parse command line options
 	while ( (i = getopt (argc, argv, "bnes:c:k:i:j:m:o:t:u:U:V")) != -1) {
 		switch (i) {
@@ -790,24 +783,6 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 
 	// ok.... plugin is running... lets bind to lash...
 	
-#ifdef HAVE_LASH
-	int flags = LASH_Config_Data_Set;
-
-	lash_client = lash_init(lash_args, client_name, flags, LASH_PROTOCOL(2, 0));
-
-	if (!lash_client) {
-	    fprintf(stderr, "%s: could not initialise lash\n", __FUNCTION__);
-	    fprintf(stderr, "%s: running fst without lash session-support\n", __FUNCTION__);
-	    fprintf(stderr, "%s: to enable lash session-support launch the lash server prior fst\n", __FUNCTION__);
-	}
-
-	if (lash_enabled(lash_client)) {
-		event = lash_event_new_with_type(LASH_Client_Name);
-		lash_event_set_string(event, client_name);
-		lash_send_event(lash_client, event);
-	}
-#endif
-
 	jvst->midi_inport = 
 		jack_port_register(jvst->client, "midi-in", JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
 
@@ -896,10 +871,27 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
         }
 
 #ifdef HAVE_LASH
-	if( lash_enabled( lash_client ) ) {
-	    event = lash_event_new_with_type(LASH_Jack_Client_Name);
-	    lash_event_set_string(event, client_name);
-	    lash_send_event(lash_client, event);
+	lash_event_t *event;
+	lash_args_t* lash_args = lash_extract_args(&argc, &argv);
+
+	int flags = LASH_Config_Data_Set;
+
+	lash_client = lash_init(lash_args, jvst->client_name, flags, LASH_PROTOCOL(2, 0));
+
+	if (!lash_client) {
+		fprintf(stderr, "%s: could not initialise lash\n", __FUNCTION__);
+		fprintf(stderr, "%s: running fst without lash session-support\n", __FUNCTION__);
+		fprintf(stderr, "%s: to enable lash session-support launch the lash server prior fst\n", __FUNCTION__);
+	}
+
+	if (lash_enabled(lash_client)) {
+		event = lash_event_new_with_type(LASH_Client_Name);
+		lash_event_set_string(event, jvst->client_name);
+		lash_send_event(lash_client, event);
+
+		event = lash_event_new_with_type(LASH_Jack_Client_Name);
+		lash_event_set_string(event, jvst->client_name);
+		lash_send_event(lash_client, event);
 	}
 #endif
         // load state if requested
