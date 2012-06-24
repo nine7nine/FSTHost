@@ -83,6 +83,8 @@ static void
 sysex_handler (GtkToggleButton *but, gboolean ptr)
 {
 	JackVST* jvst = (JackVST*) ptr;
+	char progName[24];
+	fst_get_program_name(jvst->fst, jvst->fst->current_program, progName, sizeof(progName));
 
 	// Prepare data for RT thread
 	SysExDumpV1* sysex = sysex_dump_v1(
@@ -91,6 +93,7 @@ sysex_handler (GtkToggleButton *but, gboolean ptr)
 		(uint8_t) jvst->channel + 1,
 		(uint8_t) jvst_get_volume(jvst),
 		(jvst->bypassed) ? SYSEX_STATE_NOACTIVE : SYSEX_STATE_ACTIVE,
+		progName,
 		jvst->client_name
 	);
 
@@ -581,22 +584,24 @@ idle_cb(JackVST *jvst)
 int
 create_preset_store( GtkListStore *store, FST *fst )
 {
-	unsigned short i;
+	short i;
+	char progName[24];
 
-	for( i = 0; i < fst->plugin->numPrograms; i++ )
-	{
-		char buf[100];
+	for( i = 0; i < fst->plugin->numPrograms; i++ ) {
 		GtkTreeIter new_row_iter;
 
-		snprintf( buf, 90, "preset %d", i );
-		if( fst->vst_version >= 2 ) {
-			fst->plugin->dispatcher( fst->plugin, effGetProgramNameIndexed, i, 0, buf, 0.0 );
+		if ( fst->vst_version >= 2 ) {
+			fst_get_program_name(fst, i, progName, sizeof(progName));
 		} else {
-			// NOT SUPPORTED - rarely used ;-)
+			/* FIXME:
+			So what ? nasty plugin want that we iterate around all presets ?
+			no way - we don't have time for this
+			*/
+			sprintf ( progName, "preset %d", i );
 		}
 
 		gtk_list_store_insert( store, &new_row_iter, i );
-		gtk_list_store_set( store, &new_row_iter, 0, buf, 1, i, -1 );
+		gtk_list_store_set( store, &new_row_iter, 0, progName, 1, i, -1 );
 	}
 
 	return 1;

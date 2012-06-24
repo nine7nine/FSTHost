@@ -276,7 +276,7 @@ int fst_save_fxfile ( FST *fst, const char *filename, enum FxFileType fileType )
 		fwrite(&blank, sizeof(blank), 1, fxfile);
 	} else {
 //		prgName = endian_swap(prgName);
-		fst->plugin->dispatcher(fst->plugin, effGetProgramName, 0, 0, prgName, 0);
+		fst_get_program_name(fst, fst->current_program, prgName, sizeof(prgName));
 		fwrite(&prgName, sizeof(prgName), 1, fxfile);
 	}
 
@@ -293,7 +293,7 @@ int fst_save_fxfile ( FST *fst, const char *filename, enum FxFileType fileType )
 
 		for (p = 0; p < fst->plugin->numPrograms; p++) {
 			fst_program_change (fst, p);
-			fst->plugin->dispatcher(fst->plugin, effGetProgramName, 0, 0, prgName, 0);
+			fst_get_program_name(fst, fst->current_program, prgName, sizeof(prgName));
 
 			fwrite(&fxHeader, sizeof(FXHeader), 1, fxfile);
 			fwrite(&prgName, sizeof(prgName), 1, fxfile);

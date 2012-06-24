@@ -52,7 +52,8 @@ typedef struct _SysExDumpV1 {
 	uint8_t program;
 	uint8_t channel;
 	uint8_t volume;
-	uint8_t name[24]; /* Last is always 0 */
+	uint8_t program_name[24]; /* Last is always 0 */
+	uint8_t plugin_name[24]; /* Last is always 0 */
 	uint8_t end;
 } SysExDumpV1;
 
@@ -64,7 +65,8 @@ extern SysExDumpV1* sysex_dump_v1(
 	uint8_t channel,
 	uint8_t volume,
 	enum SysExState state,
-	char* name
+	char* program_name,
+	char* plugin_name
 );
 
 #endif /* __sysex_h__ */
