@@ -11,10 +11,10 @@
 
 typedef struct _JackVST JackVST;
 
-enum WantMode {
-   WANT_MODE_NO		= 0,
-   WANT_MODE_RESUME	= 1,
-   WANT_MODE_BYPASS	= 2
+enum WantState {
+   WANT_STATE_NO     = 0,
+   WANT_STATE_RESUME = 1,
+   WANT_STATE_BYPASS = 2
 };
 
 enum WithEditor {
@@ -38,8 +38,8 @@ struct _JackVST {
     jack_port_t**   outports;
     int             channel;
     bool            bypassed;
-    enum WantMode   want_mode;
-    short           want_mode_cc;
+    enum WantState  want_state;
+    short           want_state_cc;
     enum WithEditor with_editor;
     double          tempo;
     float           volume; /* where 0.0 mean silence */
@@ -59,9 +59,9 @@ struct _JackVST {
     unsigned char   sysex_uuid;
 
     /* For VST/i support */
-    bool                  want_midi_in;
-    struct VstMidiEvent*  event_array;
-    struct VstEvents*     events;
+    bool                 want_midi_in;
+    struct VstMidiEvent* event_array;
+    struct VstEvents*    events;
 
     char*                 uuid;
     jack_session_event_t* session_event;

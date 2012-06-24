@@ -116,7 +116,7 @@ fps_process_node(JackVST* jvst, xmlNode *a_node)
        } else if (strcmp(cur_node->name, "mode") == 0) {
 	  short cc = (short) strtol(xmlGetProp(cur_node, "cc"), NULL, 10);
           if (cc >= 0 && cc <= 127)
-             jvst->want_mode_cc = cc;
+             jvst->want_state_cc = cc;
        // Current Program
        } else if (strcmp(cur_node->name, "program") == 0) {
           short currentProgram = strtol(xmlGetProp(cur_node, "number"), NULL, 10);
@@ -252,9 +252,9 @@ fps_save (JackVST* jvst, const char * filename) {
    }
 
    // Bypass/Resume MIDI CC
-   if (jvst->want_mode_cc >= 0 && jvst->want_mode_cc <= 127) {
+   if (jvst->want_state_cc >= 0 && jvst->want_state_cc <= 127) {
       cur_node = xmlNewChild(plugin_state_node, NULL, "mode", NULL);
-      int cc = (int) jvst->want_mode_cc;
+      int cc = (int) jvst->want_state_cc;
       xmlNewProp(cur_node, "cc", int2str(tString, &cc));
    }
 
