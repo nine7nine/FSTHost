@@ -276,13 +276,15 @@ process_midi_output(JackVST* jvst, jack_nframes_t nframes)
 
 	jack_midi_clear_buffer(port_buffer);
 
-	if (jvst->want_midi_out) {
-	   int			read;
-	   struct MidiMessage	ev;
+	if (jvst->want_midi_out)
+		goto send_sysex;
 
-	   jack_nframes_t last_frame_time = jack_last_frame_time(jvst->client);
-	   jack_ringbuffer_t* ringbuffer = jvst->ringbuffer;
-	   while (jack_ringbuffer_read_space(ringbuffer)) {
+	int read;
+	struct MidiMessage ev;
+
+	jack_nframes_t last_frame_time = jack_last_frame_time(jvst->client);
+	jack_ringbuffer_t* ringbuffer = jvst->ringbuffer;
+	while (jack_ringbuffer_read_space(ringbuffer)) {
 		read = jack_ringbuffer_peek(ringbuffer, (char*)&ev, sizeof(ev));
 		if (read != sizeof(ev)) {
 			fst_error("Short read from the ringbuffer, possible note loss.");
@@ -302,27 +304,29 @@ process_midi_output(JackVST* jvst, jack_nframes_t nframes)
 
 		if ( jack_midi_event_write(port_buffer, t, ev.data, ev.len) )
 			fst_error("queue: jack_midi_event_write failed, NOTE LOST.");
-	   }
 	}
 
+send_sysex:
 	// Send SysEx
-	if (jvst->sysex_want_send) {
-		// Are our lock is ready for us ?
-		// If not then we try next time
-		if (pthread_mutex_trylock(&jvst->sysex_lock) == 0) {
-			jvst->sysex_want_send = FALSE;
-	
-			t = jack_frame_time(jvst->client) - jack_last_frame_time(jvst->client);
-			if (t < 0) t = 0;
+	if (! jvst->sysex_want_send)
+		return;
 
-			if ( jack_midi_event_write(port_buffer, t,
-				(jack_midi_data_t*) jvst->sysex_data, jvst->sysex_size)
-			) fst_error("SysEx error: jack_midi_event_write failed.");
-			
-			pthread_cond_signal(&jvst->sysex_sent);
-			pthread_mutex_unlock(&jvst->sysex_lock);
-		}
-	}
+	// Are our lock is ready for us ?
+	// If not then we try next time
+	if (pthread_mutex_trylock(&jvst->sysex_lock) != 0)
+		return;
+
+	jvst->sysex_want_send = FALSE;
+
+	t = jack_frame_time(jvst->client) - jack_last_frame_time(jvst->client);
+	if (t < 0) t = 0;
+
+	if ( jack_midi_event_write(port_buffer, t,
+		(jack_midi_data_t*) jvst->sysex_data, jvst->sysex_size)
+	) fst_error("SysEx error: jack_midi_event_write failed.");
+	
+	pthread_cond_signal(&jvst->sysex_sent);
+	pthread_mutex_unlock(&jvst->sysex_lock);
 }
 
 static inline void
@@ -517,30 +521,32 @@ process_callback( jack_nframes_t nframes, void* data)
 	process_midi_input(jvst, nframes);
 
 	// Bypass - because all audio jobs are done  - simply return
-	if (! jvst->bypassed) {
+	if (jvst->bypassed)
+		goto midi_out;
 
-		// Deal with plugin
-		if (plugin->flags & effFlagsCanReplacing) {
-			plugin->processReplacing (plugin, jvst->ins, jvst->outs, nframes);
+	// Deal with plugin
+	if (plugin->flags & effFlagsCanReplacing) {
+		plugin->processReplacing (plugin, jvst->ins, jvst->outs, nframes);
+	} else {
+		plugin->process (plugin, jvst->ins, jvst->outs, nframes);
+	}
+
+	// Output volume control - if enabled
+	if (jvst->volume == -1)
+		goto midi_out;
+
+	jack_nframes_t n=0;
+	for(o=0; o < jvst->numOuts; ) {
+		jvst->outs[o][n] *= jvst->volume;
+		if (n < nframes) {
+			n++;
 		} else {
-			plugin->process (plugin, jvst->ins, jvst->outs, nframes);
-		}
-
-		// Output volume control - if enabled
-		if (jvst->volume != -1) {
-			jack_nframes_t n=0;
-			for(o=0; o < jvst->numOuts; ) {
-				jvst->outs[o][n] *= jvst->volume;
-				if (n < nframes) {
-					n++;
-				} else {
-					++o;
-					n=0;
-				}
-			}
+			++o;
+			n=0;
 		}
 	}
 
+midi_out:
 	// Process MIDI Output
 	process_midi_output(jvst, nframes);
 
