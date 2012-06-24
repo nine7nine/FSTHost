@@ -64,8 +64,8 @@ bypass_handler (GtkToggleButton *but, gboolean ptr)
 {
 	JackVST* jvst = (JackVST*) ptr;
 
-	jvst->want_mode = (gtk_toggle_button_get_active (but))
-		? WANT_MODE_BYPASS : WANT_MODE_RESUME;
+	jvst->want_state = (gtk_toggle_button_get_active (but))
+		? WANT_STATE_BYPASS : WANT_STATE_RESUME;
 
 	gtk_widget_grab_focus( gtk_socket );
 }
@@ -529,12 +529,12 @@ idle_cb(JackVST *jvst)
 	gtk_label_set_text(GTK_LABEL(cpu_usage), tmpstr);
 
 	if (jvst->bypassed != gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(bypass_button)) &&
-	    jvst->want_mode == WANT_MODE_NO
+	    jvst->want_state == WANT_STATE_NO
 	) {
 		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(bypass_button), jvst->bypassed);
 	}
-	if (jvst->want_mode_cc != mode_cc) {
-		mode_cc = jvst->want_mode_cc;
+	if (jvst->want_state_cc != mode_cc) {
+		mode_cc = jvst->want_state_cc;
 		sprintf(tmpstr, "%d", mode_cc);
 		gtk_widget_set_tooltip_text(bypass_button, tmpstr);
 	}

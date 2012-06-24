@@ -79,7 +79,7 @@ JackVST* jvst_new()
 	jvst->with_editor = WITH_EDITOR_SHOW;
 	jvst->tempo = -1; // -1 here mean get it from Jack
         /* Local Keyboard MIDI CC message (122) is probably not used by any VST */
-	jvst->want_mode_cc = 122;
+	jvst->want_state_cc = 122;
 	jvst->midi_learn = FALSE;
 	jvst->midi_learn_CC = -1;
 	jvst->midi_learn_PARAM = -1;
@@ -129,8 +129,8 @@ jvst_sysex_handler(struct SysExEvent* sysex_event)
 		case 1:
 			printf("OK\n");
 
-			jvst->want_mode = (sysex_v1->state == SYSEX_STATE_ACTIVE) ?
-					WANT_MODE_RESUME : WANT_MODE_BYPASS;
+			jvst->want_state = (sysex_v1->state == SYSEX_STATE_ACTIVE) ?
+					WANT_STATE_RESUME : WANT_STATE_BYPASS;
 			fst_program_change(jvst->fst, sysex_v1->program);
 			jvst->channel = sysex_v1->channel - 1;
 			jvst_set_volume(jvst, sysex_v1->volume);
@@ -218,14 +218,14 @@ signal_callback_handler(int signum)
 }
 
 static bool
-jvst_want_mode_check(JackVST* jvst)
+jvst_want_state_check(JackVST* jvst)
 {
-	if (jvst->want_mode == WANT_MODE_BYPASS && !jvst->bypassed) {
-		jvst->want_mode = WANT_MODE_NO;
+	if (jvst->want_state == WANT_STATE_BYPASS && !jvst->bypassed) {
+		jvst->want_state = WANT_STATE_NO;
 		jvst->bypassed = TRUE;
 		fst_suspend(jvst->fst);
-	} else if (jvst->want_mode == WANT_MODE_RESUME && jvst->bypassed) {
-		jvst->want_mode = WANT_MODE_NO;
+	} else if (jvst->want_state == WANT_STATE_RESUME && jvst->bypassed) {
+		jvst->want_state = WANT_STATE_NO;
 		fst_resume(jvst->fst);
 		jvst->bypassed = FALSE;
 	}
@@ -337,8 +337,7 @@ process_midi_input(JackVST* jvst, jack_nframes_t nframes)
 	void *port_buffer = jack_port_get_buffer( jvst->midi_inport, nframes );
 	jack_nframes_t num_jackevents = jack_midi_get_event_count( port_buffer );
 	jack_midi_event_t jackevent;
-	unsigned short i, j;
-	int stuffed_events = 0;
+	unsigned short i, j, stuffed_events = 0;
 
 	if( num_jackevents >= MIDI_EVENT_MAX )
 		num_jackevents = MIDI_EVENT_MAX;
@@ -349,16 +348,25 @@ process_midi_input(JackVST* jvst, jack_nframes_t nframes)
 
 		// SysEx
 		if ( jackevent.buffer[0] == SYSEX_BEGIN) {
-			// FIXME: we shoudn't call malloc in RT thread - but I have no better idea :-(
+			/* FIXME:
+			we shoudn't call malloc in RT thread
+			but I have no better idea :-(
+			this memory will be free in sysex handler function
+			*/
+
 			struct SysExEvent* sysex_event = malloc(sizeof(struct SysExEvent));
 			sysex_event->data = malloc(jackevent.size);
 			sysex_event->jvst = jvst;
 			sysex_event->size = jackevent.size;
 			memcpy(sysex_event->data, jackevent.buffer, jackevent.size);
 			g_idle_add( (GSourceFunc) jvst_sysex_handler, sysex_event);
-			// If it's our SysEx then skip rest
-			if (jackevent.buffer[1] == SYSEX_MYID)
-				continue;
+
+			/* TODO:
+			For now we simply drop all SysEx messages because VST standard
+			require special Event type for this (kVstSysExType)
+			and this type is not supported (yet ;-)
+			*/
+			continue;
 		}
 
 		// Midi channel
@@ -373,16 +381,16 @@ process_midi_input(JackVST* jvst, jack_nframes_t nframes)
 			short VALUE = jackevent.buffer[2];
 
 			// Want Mode
-			if (CC == jvst->want_mode_cc) {
+			if (CC == jvst->want_state_cc) {
 				// 0-63 mean want bypass
 				if (VALUE >= 0 && VALUE <= 63) {
-					jvst->want_mode = WANT_MODE_BYPASS;
+					jvst->want_state = WANT_STATE_BYPASS;
 				// 64-127 mean want resume
 				} else if (VALUE > 63 && VALUE <= 127) {
-					jvst->want_mode = WANT_MODE_RESUME;
+					jvst->want_state = WANT_STATE_RESUME;
 				// other values are wrong
 				} else {
-					jvst->want_mode = WANT_MODE_NO;
+					jvst->want_state = WANT_STATE_NO;
 				}
 				continue;
 			}
@@ -404,21 +412,24 @@ process_midi_input(JackVST* jvst, jack_nframes_t nframes)
 				plugin->setParameter( plugin, parameter, value );
 			}
 		}
-		// .. let's play
-		if ( !jvst->bypassed && jvst->want_midi_in ) {
-			jvst->event_array[stuffed_events].type = kVstMidiType;
-			jvst->event_array[stuffed_events].byteSize = 24;
-			jvst->event_array[stuffed_events].deltaFrames = jackevent.time;
 
-			for( j=0; (j<4); j++ ) {
-				jvst->event_array[stuffed_events].midiData[j] = 
-					(j<jackevent.size) ? jackevent.buffer[j] : 0;
-			}
-			stuffed_events += 1;
+		// ... wanna play ?
+		if ( jvst->bypassed || ! jvst->want_midi_in )
+			continue;
+		
+		// ... let's the music play
+		jvst->event_array[stuffed_events].type = kVstMidiType;
+		jvst->event_array[stuffed_events].byteSize = 24;
+		jvst->event_array[stuffed_events].deltaFrames = jackevent.time;
+
+		for (j=0; j < 4; j++) {
+			jvst->event_array[stuffed_events].midiData[j] = 
+				(j<jackevent.size) ? jackevent.buffer[j] : 0;
 		}
+		stuffed_events += 1;
 	}
 
-	if ( ! jvst->bypassed && jvst->want_midi_in && stuffed_events > 0 ) {
+	if ( stuffed_events > 0 ) {
 		jvst->events->numEvents = stuffed_events;
 		plugin->dispatcher (plugin, effProcessEvents, 0, 0, jvst->events, 0.0f);
 	}
@@ -517,7 +528,7 @@ process_callback( jack_nframes_t nframes, void* data)
 	}
 
 	// Process MIDI Input
-	// NOTE: we process MIDI even in bypass mode bacause of want_mode handling
+	// NOTE: we process MIDI even in bypass mode bacause of want_state handling
 	process_midi_input(jvst, nframes);
 
 	// Bypass - because all audio jobs are done  - simply return
@@ -720,7 +731,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 				opt_numOuts = strtol(optarg, NULL, 10);
 				break;
 			case 'm':
-				jvst->want_mode_cc = strtol(optarg, NULL, 10);
+				jvst->want_state_cc = strtol(optarg, NULL, 10);
 				break;
 			case 't':
 				jvst->tempo = strtod(optarg, NULL);
@@ -913,7 +924,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	// Init Glib main event loop initialize
 	glib_main_loop = g_main_loop_new(NULL, FALSE);
 	g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 500, 
-		(GSourceFunc) jvst_want_mode_check, jvst, NULL);
+		(GSourceFunc) jvst_want_state_check, jvst, NULL);
 
 	if (connect_to)
 		jvst_connect(jvst, jvst->client_name, connect_to);
