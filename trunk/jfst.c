@@ -206,6 +206,15 @@ jvst_save_state (JackVST* jvst, const char * filename)
 }
 
 static void
+jvst_quit(JackVST* jvst) {
+	if (jvst->with_editor == WITH_EDITOR_NO) {
+		g_main_loop_quit(glib_main_loop);
+	} else {
+		gtk_main_quit();
+	}
+}
+
+static void
 sigint_handler(int signum, siginfo_t *siginfo, void *context)
 {
 	JackVST *jvst;
@@ -213,8 +222,7 @@ sigint_handler(int signum, siginfo_t *siginfo, void *context)
 	jvst = jvst_first;
 
 	printf("Caught signal to terminate (SIGINT)\n");
-
-	g_main_loop_quit(glib_main_loop);
+	jvst_quit(jvst);
 }
 
 static void
@@ -573,12 +581,7 @@ session_callback( JackVST* jvst )
 
 	if (event->type == JackSessionSaveAndQuit) {
 		printf("JackSession manager ask for quit\n");
-
-		if (jvst->with_editor == WITH_EDITOR_NO) {
-			g_main_loop_quit(glib_main_loop);
-		} else {
-			gtk_main_quit();
-		}
+		jvst_quit(jvst);
 	}
 
         jack_session_event_free(event);
@@ -889,6 +892,13 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 		sigaction(SIGUSR1, &sa_sigusr1, NULL);
 	}
 
+	// Handling SIGINT for clean quit
+	struct sigaction sa_sigint;
+	memset(&sa_sigint, 0, sizeof(struct sigaction));
+	sa_sigint.sa_sigaction = &sigint_handler;
+	sa_sigint.sa_flags = SA_SIGINFO;
+	sigaction(SIGINT, &sa_sigint, NULL);
+
 #ifdef HAVE_LASH
 	lash_event_t *event;
 	lash_args_t* lash_args = lash_extract_args(&argc, &argv);
@@ -923,27 +933,22 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	printf("Jack Activate\n");
 	jack_activate(jvst->client);
 
-	// Init Glib main event loop initialize
+	// Init Glib main event loop
 	glib_main_loop = g_main_loop_new(NULL, FALSE);
 	g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 500, 
 		(GSourceFunc) jvst_want_state_check, jvst, NULL);
 
+	// Auto connect on start
 	if (connect_to)
 		jvst_connect(jvst, jvst->client_name, connect_to);
 
+	// Main loop
 	if (jvst->with_editor != WITH_EDITOR_NO) {
 		printf( "Start GUI\n" );
 		gtk_gui_init (&argc, &argv);
 		gtk_gui_start(jvst);
 	} else {
-		struct sigaction sa_sigint;
-		memset(&sa_sigint, 0, sizeof(struct sigaction));
-		sa_sigint.sa_sigaction = &sigint_handler;
-		sa_sigint.sa_flags = SA_SIGINFO;
-		sigaction(SIGINT, &sa_sigint, NULL);
-
 		printf("GUI Disabled\n");
-
 		g_main_loop_run(glib_main_loop);
 	}
 
