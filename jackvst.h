@@ -58,6 +58,9 @@ struct _JackVST {
     bool            sysex_want_ident;
     unsigned char   sysex_uuid;
 
+    /* Ladish support */
+    char*           default_state_file;
+
     /* For VST/i support */
     bool                 want_midi_in;
     struct VstMidiEvent* event_array;

@@ -206,15 +206,27 @@ jvst_save_state (JackVST* jvst, const char * filename)
 }
 
 static void
-signal_callback_handler(int signum)
+sigint_handler(int signum, siginfo_t *siginfo, void *context)
 {
 	JackVST *jvst;
 
 	jvst = jvst_first;
 
-	printf("Caught signal to terminate\n");
+	printf("Caught signal to terminate (SIGINT)\n");
 
 	g_main_loop_quit(glib_main_loop);
+}
+
+static void
+sigusr1_handler(int signum, siginfo_t *siginfo, void *context)
+{
+	JackVST *jvst;
+
+	jvst = jvst_first;
+
+	printf("Caught signal to save state (SIGUSR1)\n");
+
+	jvst_save_state(jvst, jvst->default_state_file);
 }
 
 static bool
@@ -651,6 +663,7 @@ usage(char* appname) {
 	fprintf(stderr, format, "-k channel", "MIDI Channel filter");
 	fprintf(stderr, format, "-i num_in", "Jack number In ports");
 	fprintf(stderr, format, "-j connect_to", "Connect Audio Out to connect_to");
+	fprintf(stderr, format, "-l", "save state to state_file on SIGUSR1 - require -s");
 	fprintf(stderr, format, "-m mode_midi_cc", "Bypass/Resume MIDI CC (default: 122)");
 	fprintf(stderr, format, "-o num_out", "Jack number Out ports");
 	fprintf(stderr, format, "-t tempo", "Set fixed Tempo rather than using JackTransport");
@@ -671,8 +684,8 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	short		opt_numIns = 0;
 	short		opt_numOuts = 0;
 	bool		load_state = FALSE;
+	bool		sigusr1_save_state = FALSE;
 	const char*	connect_to = NULL;
-	const char*	state_file = 0;
 	const char*	plug;
 
 	float		sample_rate = 0;
@@ -698,7 +711,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	strcpy(argv[0], my_motherfuckin_name); // Force APP name
 
         // Parse command line options
-	while ( (i = getopt (argc, argv, "bnes:c:k:i:j:m:o:t:u:U:V")) != -1) {
+	while ( (i = getopt (argc, argv, "bnes:c:k:i:j:lm:o:t:u:U:V")) != -1) {
 		switch (i) {
 			case 'b':
 				jvst->bypassed = TRUE;
@@ -711,7 +724,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 				break;
 			case 's':
 				load_state = 1;
-                                state_file = optarg;
+                                jvst->default_state_file = optarg;
 				break;
 			case 'c':
 				jvst->client_name = optarg;
@@ -726,6 +739,9 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 				break;
 			case 'j':
 				connect_to = optarg;
+				break;
+			case 'l':
+				sigusr1_save_state = TRUE;
 				break;
 			case 'o':
 				opt_numOuts = strtol(optarg, NULL, 10);
@@ -887,6 +903,15 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
              jack_set_session_callback( jvst->client, session_callback_aux, jvst );
         }
 
+	// Save state on signal SIGUSR1 - mostly for ladish support
+	if (sigusr1_save_state && jvst->default_state_file) {
+		struct sigaction sa_sigusr1;
+		memset(&sa_sigusr1, 0, sizeof(struct sigaction));
+		sa_sigusr1.sa_sigaction = &sigusr1_handler;
+		sa_sigusr1.sa_flags = SA_SIGINFO;
+		sigaction(SIGUSR1, &sa_sigusr1, NULL);
+	}
+
 #ifdef HAVE_LASH
 	lash_event_t *event;
 	lash_args_t* lash_args = lash_extract_args(&argc, &argv);
@@ -912,7 +937,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	}
 #endif
         // load state if requested
-	if ( load_state && ! jvst_load_state (jvst, state_file) )
+	if ( load_state && ! jvst_load_state (jvst, jvst->default_state_file) && ! sigusr1_save_state )
 		return 1;
 
 	// Activate plugin
@@ -934,7 +959,12 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 		gtk_gui_init (&argc, &argv);
 		gtk_gui_start(jvst);
 	} else {
-		signal(SIGINT, signal_callback_handler);
+		struct sigaction sa_sigint;
+		memset(&sa_sigint, 0, sizeof(struct sigaction));
+		sa_sigint.sa_sigaction = &sigint_handler;
+		sa_sigint.sa_flags = SA_SIGINFO;
+		sigaction(SIGINT, &sa_sigint, NULL);
+
 		printf("GUI Disabled\n");
 
 		g_main_loop_run(glib_main_loop);
