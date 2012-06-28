@@ -270,8 +270,6 @@ wine_pthread_create (pthread_t* thread_id, const pthread_attr_t* attr, void *(*f
 	return 0;
 }
 
-static pthread_t audio_thread = 0;
-
 static inline void
 process_midi_output(JackVST* jvst, jack_nframes_t nframes)
 {
@@ -479,25 +477,6 @@ queue_midi_message(JackVST* jvst, int status, int d1, int d2, jack_nframes_t del
 		ev.data[2] = d2;
 	}
 
-	if( pthread_self() == audio_thread ) {
-		unsigned char  *buffer;
-		void           *port_buffer;
-		port_buffer = jack_port_get_buffer(jvst->midi_outport, jack_get_buffer_size( jvst->client ) );
-		if (port_buffer == NULL) {
-			fst_error("jack_port_get_buffer failed, cannot send anything.");
-			return;
-		}
-
-		buffer = jack_midi_event_reserve(port_buffer, delta, ev.len);
-		if (buffer == NULL) {
-			fst_error("jack_midi_event_reserve failed, NOTE LOST.");
-			return;
-		}
-		memcpy(buffer, ev.data, ev.len);
-
-		return;
-	}
-
 	ev.time = jack_frame_time(jvst->client) + delta;
 
 	ringbuffer = jvst->ringbuffer;
@@ -518,8 +497,6 @@ process_callback( jack_nframes_t nframes, void* data)
 	short i, o;
 	JackVST* jvst = (JackVST*) data;
 	struct AEffect* plugin = jvst->fst->plugin;
-
-	audio_thread = pthread_self();
 
 	// Initialize input buffers
 	for (i = 0; i < jvst->numIns; ++i)
