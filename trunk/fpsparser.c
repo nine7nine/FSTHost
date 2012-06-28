@@ -185,7 +185,7 @@ fps_load ( JackVST* jvst, const char* filename ) {
 }
 
 // SAVE --------------
-static int
+static bool
 fps_add_check (FST *fst, xmlNode *node, int opcode, const char *field) {
    char tString[64];
    xmlNode *myNode;
@@ -194,10 +194,10 @@ fps_add_check (FST *fst, xmlNode *node, int opcode, const char *field) {
       myNode = xmlNewChild(node, NULL, "check", NULL);
       xmlNewProp(myNode, "field", field);
       xmlNewProp(myNode, "value", tString);
-      return 1;
+      return TRUE;
    } else {
       printf ("No %s string\n", field);
-      return 0;
+      return FALSE;
    }
 } 
 
