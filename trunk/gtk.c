@@ -90,7 +90,7 @@ sysex_handler (GtkToggleButton *but, gboolean ptr)
 	SysExDumpV1* sysex = sysex_dump_v1(
 		(uint8_t) jvst->sysex_uuid,
 		(uint8_t) jvst->fst->current_program,
-		(uint8_t) jvst->channel + 1,
+		(uint8_t) jvst->channel,
 		(uint8_t) jvst_get_volume(jvst),
 		(jvst->bypassed) ? SYSEX_STATE_NOACTIVE : SYSEX_STATE_ACTIVE,
 		progName,
@@ -354,10 +354,20 @@ program_change (GtkComboBox *combo, JackVST *jvst) {
 }
 
 static void
+channel_check(GtkComboBox *combo, JackVST *jvst) {
+	short channel = jvst->channel;
+
+	if (channel == gtk_combo_box_get_active (combo))
+		return;
+
+	gtk_combo_box_set_active(combo, (channel));
+}
+
+static void
 channel_change (GtkComboBox *combo, JackVST *jvst) {
 	short channel = gtk_combo_box_get_active (combo);
 
-	jvst->channel = channel - 1;
+	jvst->channel = channel;
 
         gtk_widget_grab_focus( gtk_socket );
 }
@@ -526,6 +536,9 @@ idle_cb(JackVST *jvst)
 		g_signal_handler_unblock(volume_slider, volume_signal);
 	}
 
+	// Channel combo
+	channel_check(GTK_COMBO_BOX(channel_listbox), jvst);
+
 	// All about Bypass/Resume
 	gchar tmpstr[7];
 	sprintf(tmpstr, "%06.2f", CPUusage_getCurrentValue());
@@ -609,15 +622,17 @@ create_preset_store( GtkListStore *store, FST *fst )
 GtkListStore * create_channel_store() {
 	GtkListStore *retval = gtk_list_store_new( 2, G_TYPE_STRING, G_TYPE_INT );
 	unsigned short i;
-	char buf[100];
+	char buf[10];
 	
-	for( i=0; i <= 16; i++ ) {
+	for( i=0; i <= 17; i++ ) {
 		GtkTreeIter new_row_iter;
 
 		if (i == 0) {
-			snprintf( buf, 90, "Omni");
+			strcpy( buf, "Omni");
+		} else if (i == 17) {
+			strcpy( buf, "None");
 		} else {
-			snprintf( buf, 90, "Ch %d", i);
+			sprintf( buf, "Ch %d", i);
 		}
 
 		gtk_list_store_insert( retval, &new_row_iter, i );
@@ -639,7 +654,7 @@ gtk_gui_start (JackVST* jvst)
 	GtkCellRenderer *renderer;
 	
 	window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
-	gtk_window_set_title (GTK_WINDOW(window), jvst->handle->name);
+	gtk_window_set_title (GTK_WINDOW(window), jvst->client_name);
 	gtk_window_set_resizable (GTK_WINDOW(window), FALSE);
 
 	vpacker = gtk_vbox_new (FALSE, 7);
@@ -667,7 +682,7 @@ gtk_gui_start (JackVST* jvst)
 	renderer = gtk_cell_renderer_text_new ();
 	gtk_cell_layout_pack_start (GTK_CELL_LAYOUT (channel_listbox), renderer, TRUE);
 	gtk_cell_layout_set_attributes (GTK_CELL_LAYOUT (channel_listbox), renderer, "text", 0, NULL);
-	gtk_combo_box_set_active( GTK_COMBO_BOX(channel_listbox), (jvst->channel == -1) ? 0 : jvst->channel + 1 );
+	channel_check( GTK_COMBO_BOX(channel_listbox), jvst );
 	g_signal_connect( G_OBJECT(channel_listbox), "changed", G_CALLBACK(channel_change), jvst ); 
 
 	//----------------------------------------------------------------------------------

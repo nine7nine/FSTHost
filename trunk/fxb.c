@@ -286,7 +286,7 @@ int fst_save_fxfile ( FST *fst, const char *filename, enum FxFileType fileType )
 		fwrite(&swapedChunkSize, sizeof(swapedChunkSize), 1, fxfile);
 		fwrite(chunk, chunkSize, 1, fxfile);
 	} else if (isBank) {
-		// Bank conatins multiple regular programs
+		// Bank with multiple regular programs
 		fxHeader.fxMagic = endian_swap( fMagic );
 		fxHeader.numPrograms = endian_swap( fst->plugin->numParams );
 		fxHeader.byteSize = endian_swap( programSize );

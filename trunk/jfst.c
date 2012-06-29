@@ -70,12 +70,11 @@ JackVST *jvst_first;
 
 JackVST* jvst_new()
 {
-	JackVST* jvst = (JackVST*) calloc (1, sizeof (JackVST));
+	JackVST* jvst = calloc (1, sizeof (JackVST));
 	short i;
 
         pthread_mutex_init (&jvst->sysex_lock, NULL);
         pthread_cond_init (&jvst->sysex_sent, NULL);
-	jvst->channel = -1;
 	jvst->with_editor = WITH_EDITOR_SHOW;
 	jvst->tempo = -1; // -1 here mean get it from Jack
         /* Local Keyboard MIDI CC message (122) is probably not used by any VST */
@@ -132,7 +131,7 @@ jvst_sysex_handler(struct SysExEvent* sysex_event)
 			jvst->want_state = (sysex_v1->state == SYSEX_STATE_ACTIVE) ?
 					WANT_STATE_RESUME : WANT_STATE_BYPASS;
 			fst_program_change(jvst->fst, sysex_v1->program);
-			jvst->channel = sysex_v1->channel - 1;
+			jvst->channel = sysex_v1->channel;
 			jvst_set_volume(jvst, sysex_v1->volume);
 
 			break;
@@ -388,9 +387,9 @@ process_midi_input(JackVST* jvst, jack_nframes_t nframes)
 		}
 
 		// Midi channel
-		if ( (jvst->channel != -1 )
+		if ( (jvst->channel > 0 )
 			&&  ( jackevent.buffer[0] >= 0x80 && jackevent.buffer[0] <= 0xEF)
-			&&  ( (jackevent.buffer[0] & 0x0F) != jvst->channel ) )
+			&&  ( (jackevent.buffer[0] & 0x0F) != jvst->channel - 1) )
 			continue;
 
 		// CC assigments
@@ -640,7 +639,7 @@ usage(char* appname) {
 	fprintf(stderr, format, "-e", "Hide Editor");
 	fprintf(stderr, format, "-s state_file", "Load state_file");
 	fprintf(stderr, format, "-c client_name", "Jack Client name");
-	fprintf(stderr, format, "-k channel", "MIDI Channel filter");
+	fprintf(stderr, format, "-k channel", "MIDI Channel (0: all, 17: none)");
 	fprintf(stderr, format, "-i num_in", "Jack number In ports");
 	fprintf(stderr, format, "-j connect_to", "Connect Audio Out to connect_to");
 	fprintf(stderr, format, "-l", "save state to state_file on SIGUSR1 - require -s");
@@ -666,9 +665,9 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	bool		load_state = FALSE;
 	bool		sigusr1_save_state = FALSE;
 	const char*	connect_to = NULL;
-	const char*	plug;
+	const char*	plug_path;
 
-	float		sample_rate = 0;
+	int		sample_rate = 0;
 	long		block_size = 0;
 
 	JackVST*	jvst = jvst_new();
@@ -710,9 +709,9 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 				jvst->client_name = optarg;
 				break;
 			case 'k':
-				jvst->channel = strtol(optarg, NULL, 10) - 1;
-				if (jvst->channel < 0 || jvst->channel > 15)
-					jvst->channel = -1;
+				jvst->channel = strtol(optarg, NULL, 10);
+				if (jvst->channel < 0 || jvst->channel > 17)
+					jvst->channel = 0;
 				break;
 			case 'i':
 				opt_numIns = strtol(optarg, NULL, 10);
@@ -752,14 +751,14 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 		return 1;
 	}
 
-	plug = argv[optind];
+	plug_path = argv[optind];
 	jvst_first = jvst;
 
 	jvst_set_volume(jvst, 63);
 
 	printf( "yo... lets see...\n" );
-	if ((jvst->handle = fst_load (plug)) == NULL) {
-		fst_error ("can't load plugin %s", plug);
+	if ((jvst->handle = fst_load (plug_path)) == NULL) {
+		fst_error ("can't load plugin %s", plug_path);
 		return 1;
 	}
 
@@ -771,7 +770,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 
 	printf( "Revive plugin: %s\n", jvst->client_name);
 	if ((jvst->fst = fst_open (jvst->handle, (audioMasterCallback) jack_host_callback, jvst)) == NULL) {
-		fst_error ("can't instantiate plugin %s", plug);
+		fst_error ("can't instantiate plugin %s", plug_path);
 		return 1;
 	}
 
@@ -785,13 +784,13 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	}
 
 	/* set rate and blocksize */
-	sample_rate = (float)jack_get_sample_rate(jvst->client);
+	sample_rate = (int) jack_get_sample_rate(jvst->client);
 	block_size = jack_get_buffer_size(jvst->client);
 
-	printf("Sample Rate = %.2f\n", sample_rate);
+	printf("Sample Rate = %d\n", sample_rate);
 	printf("Block Size = %ld\n", block_size);
 
-	plugin->dispatcher (plugin, effSetSampleRate, 0, 0, NULL, (float) jack_get_sample_rate (jvst->client));
+	plugin->dispatcher (plugin, effSetSampleRate, 0, 0, NULL, (float) sample_rate);
 	plugin->dispatcher (plugin, effSetBlockSize, 0, jack_get_buffer_size (jvst->client), NULL, 0.0f);
 
 	// ok.... plugin is running... lets bind to lash...
@@ -803,7 +802,6 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 		jack_port_register(jvst->client, "midi-out", JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
 
 	if (fst->vst_version >= 2) {
-		printf("Plugin isSynth = %d\n", fst->isSynth);
 
 		/* should we send the plugin VST events (i.e. MIDI) */
 		if (fst->isSynth || fst->canReceiveVstEvents || fst->canReceiveVstMidiEvent) {
@@ -957,6 +955,9 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 
 	printf("Close plugin\n");
         fst_close(jvst->fst);
+
+	printf("Unload plugin\n");
+	fst_unload(jvst->handle);
 
 	free(jvst);
 

@@ -28,6 +28,7 @@ struct _JackVST {
     FSTHandle*      handle;
     FST*            fst;
     char*           client_name;
+    char*           default_state_file;
     short           numIns;
     short           numOuts;
     float**         ins;
@@ -58,9 +59,6 @@ struct _JackVST {
     bool            sysex_want_ident;
     unsigned char   sysex_uuid;
 
-    /* Ladish support */
-    char*           default_state_file;
-
     /* For VST/i support */
     bool                 want_midi_in;
     struct VstMidiEvent* event_array;
@@ -70,18 +68,16 @@ struct _JackVST {
     jack_session_event_t* session_event;
 
     /* For VST midi effects & synth source (like audio to midi VSTs) support */
-    bool                  want_midi_out;
-    jack_ringbuffer_t*    ringbuffer;
-
+    bool               want_midi_out;
+    jack_ringbuffer_t* ringbuffer;
 };
 
 bool jvst_send_sysex(JackVST* jvst, unsigned char* data, size_t size);
 
 static inline void
-jvst_set_volume(JackVST* jvst, short volume) {
-	if (jvst->volume == -1) return;
-
-	jvst->volume = powf(volume / 63.0f, 2);
+jvst_set_volume(JackVST* jvst, short volume)
+{
+	if (jvst->volume != -1) jvst->volume = powf(volume / 63.0f, 2);
 }
 
 static unsigned short

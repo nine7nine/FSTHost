@@ -107,8 +107,8 @@ fps_process_node(JackVST* jvst, xmlNode *a_node)
        } else if (strcmp(cur_node->name, "channel") == 0) {
 	  int channel = strtol(xmlGetProp(cur_node, "number"), NULL, 10);
 
-	  if (channel >= 1 && channel <= 16)
-	     jvst->channel = channel - 1;
+	  if (channel >= 0 && channel <= 17)
+	     jvst->channel = channel;
        // Volume
        } else if (strcmp(cur_node->name, "volume") == 0) {
           jvst_set_volume(jvst, strtol(xmlGetProp(cur_node, "level"), NULL, 10));
@@ -239,10 +239,8 @@ fps_save (JackVST* jvst, const char * filename) {
    }
 
    // MIDI Channel
-   if (jvst->channel >= 0 && jvst->channel <= 15) {
-      cur_node = xmlNewChild(plugin_state_node, NULL, "channel", NULL);
-      xmlNewProp(cur_node, "number", int2str(tString, &jvst->channel));
-   }
+   cur_node = xmlNewChild(plugin_state_node, NULL, "channel", NULL);
+   xmlNewProp(cur_node, "number", int2str(tString, &jvst->channel));
 
    // Volume
    if (jvst->volume != -1) {
