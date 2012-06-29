@@ -43,7 +43,7 @@ long
 jack_host_callback (struct AEffect* effect, int32_t  opcode, int32_t  index, intptr_t value, void* ptr, float opt)
 {
 	static struct VstTimeInfo _timeInfo;
-	JackVST* jackvst = effect ? ((JackVST*) effect->resvd1) : NULL;
+	JackVST* jackvst = effect ? ((JackVST*) effect->user) : NULL;
 	jack_position_t jack_pos;
 	jack_transport_state_t tstate;
 
@@ -54,8 +54,10 @@ jack_host_callback (struct AEffect* effect, int32_t  opcode, int32_t  index, int
 	case audioMasterAutomate:
 		SHOW_CALLBACK ("amc: audioMasterAutomate\n");
 		// index, value, returns 0
-		if( jackvst && jackvst->midi_learn )
-			jackvst->midi_learn_PARAM = index;
+		//effect->setParameter (effect, index, opt);
+		if( jackvst && jackvst->fst->midi_learn ) {
+			jackvst->fst->midi_learn_PARAM = index;
+		}
 		return 0;
 
 	case audioMasterVersion:
@@ -73,7 +75,7 @@ jack_host_callback (struct AEffect* effect, int32_t  opcode, int32_t  index, int
 		SHOW_CALLBACK ("amc: audioMasterIdle\n");
 		// call application idle routine (this will
 		// call effEditIdle for all open editors too) 
-		effect->dispatcher(effect, effEditIdle, 0, 0, NULL, 0.0f);
+		// GUI-EVENT-LOOP call effEditIdle for all open editors
 		return 0;
 
 	case audioMasterPinConnected:		
@@ -310,7 +312,7 @@ jack_host_callback (struct AEffect* effect, int32_t  opcode, int32_t  index, int
 	case audioMasterGetProductString:
 		SHOW_CALLBACK ("amc: audioMasterGetProductString\n");
 		// fills <ptr> with a string with product name (max 64 char)
-//		strcpy ((char*) ptr, "FreeST");
+		strcpy ((char*) ptr, "FreeST");
 		return 0;
 
 	case audioMasterGetVendorVersion:
@@ -356,7 +358,8 @@ jack_host_callback (struct AEffect* effect, int32_t  opcode, int32_t  index, int
 	case audioMasterUpdateDisplay:
 		SHOW_CALLBACK ("amc: audioMasterUpdateDisplay\n");
 		// something has changed, update 'multi-fx' display
-		effect->dispatcher(effect, effEditIdle, 0, 0, NULL, 0.0f);
+		//effect->dispatcher(effect, effEditIdle, 0, 0, NULL, 0.0f);
+		// GUI-EVENT-LOOP call effEditIdle for all open editors
 		return 0;
 		
 	case audioMasterBeginEdit:

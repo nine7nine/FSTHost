@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <setjmp.h>
+#include <signal.h>
 #include <pthread.h>
 #include <stdbool.h>
 
@@ -80,6 +81,8 @@ enum EventCall {
 	EDITOR_OPEN,
 	EDITOR_SHOW,
 	EDITOR_CLOSE,
+	OPEN,
+	CLOSE,
 	PROGRAM_CHANGE
 };
 
@@ -96,11 +99,15 @@ struct _FST
 
 	enum EventCall	event_call;
 
-	bool		program_changed;
 	short		want_program;
 	short		current_program;
 	float		*want_params;
 	float		*set_params;
+
+	int		midi_map[128];
+	volatile int	midi_learn;
+	volatile int	midi_learn_CC;
+	volatile int	midi_learn_PARAM;
 
 	int		dispatcher_opcode;
 	int		dispatcher_index;
@@ -122,11 +129,6 @@ struct _FST
 	pthread_cond_t	event_called;
 };
 
-enum FxFileType {
-	FXBANK		= 0,
-	FXPROGRAM	= 1
-};
-
 struct _FXHeader {
         unsigned int chunkMagic;
         unsigned int byteSize;
@@ -144,11 +146,8 @@ extern "C" {
 extern FSTHandle* fst_load (const char * );
 extern int fst_unload (FSTHandle*);
 
-extern FST* fst_open (FSTHandle*, audioMasterCallback amc, void* userptr);
+extern FST* fst_instantiate (FSTHandle*, audioMasterCallback amc, void* userptr);
 extern void fst_close (FST*);
-
-extern void fst_program_change (FST *fst, short want_program);
-extern bool fst_get_program_name (FST *fst, short program, char* name, size_t size);
 
 extern int fst_run_editor (FST*);
 extern void fst_destroy_editor (FST*);
@@ -160,11 +159,18 @@ extern void fst_event_loop_add_plugin (FST* fst);
 extern int fst_call_dispatcher(FST *fst, int opcode, int index, int val, void *ptr, float opt );
 
 /**
+ * Load a plugin state from a file.
+ */
+extern int fst_load_state (FST * fst, const char * filename);
+extern int fst_load_fps (FST * fst, const char * filename);
+extern int fst_load_fxfile (FST * fst, const char * filename);
+
+/**
  * Save a plugin state to a file.
  */
 extern int fst_save_state (FST * fst, const char * filename);
 extern int fst_save_fps (FST * fst, const char * filename);
-extern int fst_save_fxfile (FST * fst, const char * filename, enum FxFileType fileType);
+extern int fst_save_fxfile (FST * fst, const char * filename, bool isBank);
 
 #ifdef __cplusplus
 }

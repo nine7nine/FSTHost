@@ -1,21 +1,17 @@
 #include "jackvst.h"
-#include "sysex.h"
 #include <gtk/gtk.h>
 #include <gdk/gdkx.h>
 #include <gdk/gdkevents.h>
 #include <X11/Xlib.h>
+
+#include <glib-2.0/glib.h>
 
 #ifdef HAVE_LASH
 #include <lash/lash.h>
 extern lash_client_t *lash_client;
 #endif
 
-/* from cpuusage.c */
-extern void CPUusage_init();
-extern double CPUusage_getCurrentValue();
-
 gboolean quit = FALSE;
-short	mode_cc = 0;
 
 static	GtkWidget* window;
 static	GtkWidget* gtk_socket;
@@ -29,12 +25,9 @@ static  GtkWidget* preset_listbox;
 static	GtkWidget* midi_learn_toggle;
 static	GtkWidget* load_button;
 static	GtkWidget* save_button;
-static	GtkWidget* sysex_button;
 static	GtkWidget* volume_slider;
-static	GtkWidget* cpu_usage;
 static	gulong preset_listbox_signal;
 static	gulong volume_signal;
-static	gulong bypass_signal;
 static	gulong gtk_socket_signal;
 
 static void
@@ -43,16 +36,16 @@ learn_handler (GtkToggleButton *but, gboolean ptr)
 	JackVST* jvst = (JackVST*) ptr;
 	
 	if ( ! gtk_toggle_button_get_active (but) ) {
-		jvst->midi_learn = FALSE;
+		jvst->fst->midi_learn = 0;
 		gtk_widget_grab_focus( gtk_socket );
 		return;
 	}
 
 
 	pthread_mutex_lock( &(jvst->fst->lock) );		
-	jvst->midi_learn = TRUE;
-	jvst->midi_learn_CC = -1;
-	jvst->midi_learn_PARAM = -1;
+	jvst->fst->midi_learn = 1;
+	jvst->fst->midi_learn_CC = -1;
+	jvst->fst->midi_learn_PARAM = -1;
 	pthread_mutex_unlock( &(jvst->fst->lock) );		
 
 
@@ -63,10 +56,14 @@ static void
 bypass_handler (GtkToggleButton *but, gboolean ptr)
 {
 	JackVST* jvst = (JackVST*) ptr;
-
-	jvst->want_state = (gtk_toggle_button_get_active (but))
-		? WANT_STATE_BYPASS : WANT_STATE_RESUME;
-
+	jvst->bypassed = gtk_toggle_button_get_active (but);
+	
+	if ( jvst->bypassed ) {
+		fst_suspend(jvst->fst);
+	} else {
+		fst_resume(jvst->fst);
+	}
+	
 	gtk_widget_grab_focus( gtk_socket );
 }
 
@@ -77,29 +74,7 @@ volume_handler (GtkVScale *slider, gboolean ptr)
 
 	short volume = gtk_range_get_value(GTK_RANGE(slider));
 	jvst_set_volume(jvst, volume);
-}
-
-static void
-sysex_handler (GtkToggleButton *but, gboolean ptr)
-{
-	JackVST* jvst = (JackVST*) ptr;
-	char progName[24];
-	fst_get_program_name(jvst->fst, jvst->fst->current_program, progName, sizeof(progName));
-
-	// Prepare data for RT thread
-	SysExDumpV1* sysex = sysex_dump_v1(
-		(uint8_t) jvst->sysex_uuid,
-		(uint8_t) jvst->fst->current_program,
-		(uint8_t) jvst->channel + 1,
-		(uint8_t) jvst_get_volume(jvst),
-		(jvst->bypassed) ? SYSEX_STATE_NOACTIVE : SYSEX_STATE_ACTIVE,
-		progName,
-		jvst->client_name
-	);
-
-	jvst_send_sysex(jvst, (unsigned char*) sysex, sizeof(SysExDumpV1));
-
-	free(sysex);
+	printf("Volume: %d (%f)\n", volume, jvst->volume);
 }
 
 static void
@@ -148,19 +123,19 @@ save_handler (GtkToggleButton *but, gboolean ptr)
 
 		// F1 Filter - FPS
 		if ( strcmp(gtk_file_filter_get_name(f1), fa_name) == 0) {
-			if (strcasecmp (".fps", last4) != 0)
+			if (strcmp (".fps", last4) != 0)
 				strcat (filename, ".fps");
 		// F2 filter - FXB
 		} else if ( strcmp(gtk_file_filter_get_name(f2), fa_name) == 0) {
-			if (strcasecmp (".fxb", last4) != 0)
+			if (strcmp (".fxb", last4) != 0 && strcmp (".FXB", last4) != 0)
 				strcat (filename, ".fxb");
 		// F3 Filter - FXP
 		} else if ( strcmp(gtk_file_filter_get_name(f3), fa_name) == 0) {
-			if (strcasecmp (".fxp", last4) != 0)
+			if (strcmp (".fxp", last4) != 0 && strcmp (".FXP", last4) != 0)
 				strcat (filename, ".fxp");
 		}
 
-		if (! jvst_save_state (jvst, filename)) {
+		if (!fst_save_state (jvst->fst, filename)) {
 			GtkWidget * errdialog = gtk_message_dialog_new (GTK_WINDOW (window),
 					GTK_DIALOG_DESTROY_WITH_PARENT,
 					GTK_MESSAGE_ERROR,
@@ -216,7 +191,7 @@ load_handler (GtkToggleButton *but, gboolean ptr)
 		char *filename;
 		filename = gtk_file_chooser_get_filename (GTK_FILE_CHOOSER (dialog));
 
-		if (! jvst_load_state (jvst, filename)) {
+		if (!fst_load_state (jvst->fst, filename)) {
 			GtkWidget * errdialog = gtk_message_dialog_new (GTK_WINDOW (window),
 					GTK_DIALOG_DESTROY_WITH_PARENT,
 					GTK_MESSAGE_ERROR,
@@ -393,7 +368,7 @@ save_data( JackVST *jvst )
 	    
 	    snprintf( buf, 15, "midi_map%d", i );
 	    config = lash_config_new_with_key( buf );
-	    lash_config_set_value_int(config, jvst->midi_map[i]);
+	    lash_config_set_value_int(config, jvst->fst->midi_map[i]);
 	    lash_send_config(lash_client, config);
 	    //lash_config_destroy( config );
 	}
@@ -408,7 +383,7 @@ save_data( JackVST *jvst )
 	    //bytelen = jvst->fst->plugin->dispatcher( jvst->fst->plugin, 23, 0, 0, &chunk, 0 );
 	    //pthread_mutex_unlock( &(fst->lock) );
 
-	    bytelen = jvst->fst->plugin->dispatcher( jvst->fst->plugin, effGetChunk, 0, 0, &chunk, 0 );
+	    bytelen = fst_call_dispatcher( jvst->fst, effGetChunk, 0, 0, &chunk, 0 );
 	    printf( "got tha chunk..\n" );
 	    if( bytelen ) {
 		if( bytelen < 0 ) {
@@ -440,13 +415,13 @@ restore_data(lash_config_t * config, JackVST *jvst )
 	    if( cc < 0 || cc>=128 || param<0 || param>=jvst->fst->plugin->numParams ) 
 		return;
 
-	    jvst->midi_map[cc] = param;
+	    jvst->fst->midi_map[cc] = param;
 	    return;
 	}
 
 	if ( jvst->fst->plugin->flags & effFlagsProgramChunks) {
 	    if (strcmp(key, "bin_chunk") == 0) {
-		jvst->fst->plugin->dispatcher( jvst->fst->plugin, effSetChunk, 0, lash_config_get_value_size( config ), (void *) lash_config_get_value( config ), 0 );
+		fst_call_dispatcher( jvst->fst, effSetChunk, 0, lash_config_get_value_size( config ), (void *) lash_config_get_value( config ), 0 );
 		return;
 	    } 
 	} else {
@@ -463,11 +438,14 @@ idle_cb(JackVST *jvst)
 {
 	FST* fst = (FST*) jvst->fst;
 	if (quit) {
+		jack_deactivate( jvst->client );
+		fst_close( fst);
+//		gtk_widget_destroy( window );
 		gtk_main_quit();
 		return FALSE;
 	}
 
-	if( fst->want_program == -1 &&
+	if( fst->want_program == -1 && 
 	    gtk_combo_box_get_active( GTK_COMBO_BOX( preset_listbox ) ) != fst->current_program )
 	{
 		g_signal_handler_block (preset_listbox, preset_listbox_signal);
@@ -475,16 +453,16 @@ idle_cb(JackVST *jvst)
         	g_signal_handler_unblock (preset_listbox, preset_listbox_signal);
 	}
 
-	if( jvst->midi_learn && jvst->midi_learn_CC != -1 && jvst->midi_learn_PARAM != -1 ) {
-		if( jvst->midi_learn_CC < 128 ) {
-			jvst->midi_map[jvst->midi_learn_CC] = jvst->midi_learn_PARAM;
+	if( fst->midi_learn && fst->midi_learn_CC != -1 && fst->midi_learn_PARAM != -1 ) {
+		if( fst->midi_learn_CC < 128 ) {
+			fst->midi_map[fst->midi_learn_CC] = fst->midi_learn_PARAM;
 			char name[32];
 			gboolean success;
-			success = fst->plugin->dispatcher( fst->plugin, effGetParamName, jvst->midi_learn_PARAM, 0, name, 0 );
+			success = fst->plugin->dispatcher( fst->plugin, effGetParamName, fst->midi_learn_PARAM, 0, name, 0 );
 			if (success) {
-				printf("MIDIMAP CC: %d => %s\n", jvst->midi_learn_CC, name);
+				printf("MIDIMAP CC: %d => %s\n", fst->midi_learn_CC, name);
 			} else {
-				printf("MIDIMAP CC: %d => %d\n", jvst->midi_learn_CC, jvst->midi_learn_PARAM);
+				printf("MIDIMAP CC: %d => %d\n", fst->midi_learn_CC, fst->midi_learn_PARAM);
 			}
 
 			short cc;
@@ -495,7 +473,7 @@ idle_cb(JackVST *jvst)
 			char tooltip[96 * 128];
 			tooltip[0] = 0;
 		   	for (cc = 0; cc < 128; cc++) {
-				paramIndex = jvst->midi_map[cc];
+				paramIndex = fst->midi_map[cc];
 				if ( paramIndex < 0 || paramIndex >= fst->plugin->numParams )
 					continue;
 
@@ -515,8 +493,8 @@ idle_cb(JackVST *jvst)
 				gtk_widget_set_tooltip_text(midi_learn_toggle, tooltip);
 
 		}
-		jvst->midi_learn = FALSE;
-		gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON( midi_learn_toggle ), FALSE );
+		fst->midi_learn = 0;
+		gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON( midi_learn_toggle ), 0 );
 	}
 
 	// If volume was changed by MIDI CC7 message
@@ -526,21 +504,6 @@ idle_cb(JackVST *jvst)
 		g_signal_handler_unblock(volume_slider, volume_signal);
 	}
 
-	// All about Bypass/Resume
-	gchar tmpstr[7];
-	sprintf(tmpstr, "%06.2f", CPUusage_getCurrentValue());
-	gtk_label_set_text(GTK_LABEL(cpu_usage), tmpstr);
-
-	if (jvst->bypassed != gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(bypass_button)) &&
-	    jvst->want_state == WANT_STATE_NO
-	) {
-		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(bypass_button), jvst->bypassed);
-	}
-	if (jvst->want_state_cc != mode_cc) {
-		mode_cc = jvst->want_state_cc;
-		sprintf(tmpstr, "%d", mode_cc);
-		gtk_widget_set_tooltip_text(bypass_button, tmpstr);
-	}
 #ifdef HAVE_LASH
 	if (lash_enabled(lash_client)) {
 	    lash_event_t *event;
@@ -581,27 +544,23 @@ idle_cb(JackVST *jvst)
 	return TRUE;
 }
 
-int
-create_preset_store( GtkListStore *store, FST *fst )
+int create_preset_store( GtkListStore *store, FST *fst )
 {
-	short i;
-	char progName[24];
+	unsigned short i;
 
-	for( i = 0; i < fst->plugin->numPrograms; i++ ) {
+
+	int vst_version = fst->plugin->dispatcher (fst->plugin, effGetVstVersion, 0, 0, NULL, 0.0f);
+	for( i = 0; i < fst->plugin->numPrograms; i++ )
+	{
+		char buf[100];
 		GtkTreeIter new_row_iter;
 
-		if ( fst->vst_version >= 2 ) {
-			fst_get_program_name(fst, i, progName, sizeof(progName));
-		} else {
-			/* FIXME:
-			So what ? nasty plugin want that we iterate around all presets ?
-			no way - we don't have time for this
-			*/
-			sprintf ( progName, "preset %d", i );
-		}
+		snprintf( buf, 90, "preset %d", i );
+		if( vst_version >= 2 ) 
+			fst->plugin->dispatcher( fst->plugin, effGetProgramNameIndexed, i, 0, buf, 0.0 );
 
 		gtk_list_store_insert( store, &new_row_iter, i );
-		gtk_list_store_set( store, &new_row_iter, 0, progName, 1, i, -1 );
+		gtk_list_store_set( store, &new_row_iter, 0, buf, 1, i, -1 );
 	}
 
 	return 1;
@@ -615,7 +574,7 @@ GtkListStore * create_channel_store() {
 		GtkTreeIter new_row_iter;
 
 		if (i == 0) {
-			snprintf( buf, 90, "Omni");
+			snprintf( buf, 90, "All");
 		} else {
 			snprintf( buf, 90, "Ch %d", i);
 		}
@@ -648,10 +607,8 @@ gtk_gui_start (JackVST* jvst)
 	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(bypass_button), jvst->bypassed);
 	editor_button = gtk_toggle_button_new_with_label ("editor");
 	midi_learn_toggle = gtk_toggle_button_new_with_label ("midi Learn");
-	save_button = gtk_button_new_with_label ("save");
-	sysex_button = gtk_button_new_with_label ("SysEx");
-	load_button = gtk_button_new_with_label ("load");
-	cpu_usage = gtk_label_new ("0");
+	save_button = gtk_button_new_with_label ("save state");
+	load_button = gtk_button_new_with_label ("load state");
 
 	//----------------------------------------------------------------------------------
 	if (jvst->volume != -1) {
@@ -682,13 +639,11 @@ gtk_gui_start (JackVST* jvst)
 	preset_listbox_signal = g_signal_connect( G_OBJECT(preset_listbox), "changed", G_CALLBACK( program_change ), jvst ); 
 	//----------------------------------------------------------------------------------
 
-	bypass_signal =
-		g_signal_connect (G_OBJECT(bypass_button), "toggled", G_CALLBACK(bypass_handler), jvst); 
+	g_signal_connect (G_OBJECT(bypass_button), "toggled", G_CALLBACK(bypass_handler), jvst); 
 	g_signal_connect (G_OBJECT(midi_learn_toggle), "toggled", G_CALLBACK(learn_handler), jvst); 
 	g_signal_connect (G_OBJECT(editor_button), "toggled", G_CALLBACK(editor_handler), jvst); 
 	g_signal_connect (G_OBJECT(load_button), "clicked", G_CALLBACK(load_handler), jvst); 
 	g_signal_connect (G_OBJECT(save_button), "clicked", G_CALLBACK(save_handler), jvst); 
-	g_signal_connect (G_OBJECT(sysex_button), "clicked", G_CALLBACK(sysex_handler), jvst); 
 	gtk_container_set_border_width (GTK_CONTAINER(hpacker), 3); 
 	g_signal_connect (G_OBJECT(window), "delete_event", G_CALLBACK(destroy_handler), jvst);
 	
@@ -697,11 +652,9 @@ gtk_gui_start (JackVST* jvst)
 	gtk_box_pack_end   (GTK_BOX(hpacker), bypass_button, FALSE, FALSE, 0);
 	gtk_box_pack_end   (GTK_BOX(hpacker), load_button, FALSE, FALSE, 0);
 	gtk_box_pack_end   (GTK_BOX(hpacker), save_button, FALSE, FALSE, 0);
-	gtk_box_pack_end   (GTK_BOX(hpacker), sysex_button, FALSE, FALSE, 0);
 	gtk_box_pack_end   (GTK_BOX(hpacker), editor_button, FALSE, FALSE, 0);
 	gtk_box_pack_end   (GTK_BOX(hpacker), channel_listbox, FALSE, FALSE, 0);
 	gtk_box_pack_end   (GTK_BOX(hpacker), volume_slider, FALSE, FALSE, 0);
-	gtk_box_pack_end   (GTK_BOX(hpacker), cpu_usage, FALSE, FALSE, 0);
 	gtk_box_pack_start (GTK_BOX(vpacker), hpacker, FALSE, FALSE, 0);
 
 	gtk_container_add (GTK_CONTAINER (window), vpacker);
@@ -709,7 +662,7 @@ gtk_gui_start (JackVST* jvst)
  	gtk_widget_show_all (window);
 
 	// Nasty hack ;-)
-	if (jvst->with_editor == WITH_EDITOR_SHOW)
+	if (jvst->with_editor == 2)
 		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(editor_button), TRUE);
 
 	g_timeout_add(500, (GSourceFunc) idle_cb, jvst);
@@ -749,5 +702,4 @@ gtk_gui_init (int *argc, char **argv[])
 	gtk_init (argc, argv);
 	the_gtk_display = gdk_x11_display_get_xdisplay( gdk_display_get_default() );
 	gtk_error_handler = XSetErrorHandler( fst_xerror_handler );
-	CPUusage_init();
 }

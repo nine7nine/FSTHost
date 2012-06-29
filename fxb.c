@@ -15,13 +15,16 @@
 /** Bank (fxb) identifier for opaque chunk data. */
 #define chunkBankMagic		'FBCh'
 
+#define FXBANK    0
+#define FXPROGRAM 1
+
 static unsigned int endian_swap(unsigned int x)
 {
 //	return (x>>24) | ((x<<8) & 0x00FF0000) | ((x>>8) & 0x0000FF00) | (x<<24);
 	return __builtin_bswap32 (x);
 }
 
-static void fx_load_chunk ( FST *fst, FILE *fxfile, enum FxFileType chunkType )
+static void fx_load_chunk ( FST *fst, FILE *fxfile, int chunkType )
 {
 	void * chunk = NULL;
 	size_t chunkSize;
@@ -38,9 +41,9 @@ static void fx_load_chunk ( FST *fst, FILE *fxfile, enum FxFileType chunkType )
 	chunkInfo.pluginVersion = fst->plugin->version;
 	chunkInfo.numElements = 1;
 	if ( chunkType == FXBANK) {
-		fst->plugin->dispatcher(fst->plugin, effBeginLoadBank, 0, 0, &chunkInfo, 0);
+		fst_call_dispatcher(fst, effBeginLoadBank, 0, 0, &chunkInfo, 0);
 	} else if (chunkType == FXPROGRAM) {
-		fst->plugin->dispatcher(fst->plugin, effBeginLoadProgram, 0, 0, &chunkInfo, 0);
+		fst_call_dispatcher(fst, effBeginLoadProgram, 0, 0, &chunkInfo, 0);
 	}
 
 	chunk = malloc ( chunkSize );
@@ -49,7 +52,7 @@ static void fx_load_chunk ( FST *fst, FILE *fxfile, enum FxFileType chunkType )
 	printf("SetChunk type : %d\n", chunkType);
 
 
-	fst->plugin->dispatcher(fst->plugin, effSetChunk, chunkType, chunkSize, chunk, 0);
+	fst_call_dispatcher(fst, effSetChunk, chunkType, chunkSize, chunk, 0);
 	free(chunk);
 }
 
@@ -97,7 +100,7 @@ static void fx_load_program ( FST *fst, FILE *fxfile, short programNumber )
 
 	br = fread ( &prgName, sizeof(prgName), 1, fxfile);
 //	prgName = endian_swap(prgName);
-	fst->plugin->dispatcher(fst->plugin, effSetProgramName, 0, 0, prgName, 0);
+	fst_call_dispatcher(fst, effSetProgramName, 0, 0, prgName, 0);
 
 	if (isChunk) {
 		fx_load_chunk(fst, fxfile, FXPROGRAM);
@@ -204,7 +207,7 @@ static int fx_save_params ( FST *fst, FILE *fxfile )
 	fwrite(&Params, sizeof(float), fst->plugin->numParams, fxfile);
 }
 
-int fst_save_fxfile ( FST *fst, const char *filename, enum FxFileType fileType )
+int fst_save_fxfile ( FST *fst, const char *filename, bool isBank )
 {
 	FXHeader fxHeader;
         void * chunk = NULL;
@@ -213,9 +216,8 @@ int fst_save_fxfile ( FST *fst, const char *filename, enum FxFileType fileType )
 	char prgName[28];
 	short p;
 
-	bool isBank = (fileType == FXBANK) ? TRUE : FALSE;
 	bool isChunk = (fst->plugin->flags & effFlagsProgramChunks);
-	enum FxFileType chunkType = fileType;
+	short chunkType = (isBank) ? FXBANK : FXPROGRAM;
 
         fxHeader.chunkMagic = endian_swap( cMagic );
 
@@ -237,6 +239,7 @@ int fst_save_fxfile ( FST *fst, const char *filename, enum FxFileType fileType )
 			fxHeader.fxMagic = fMagic;
                         printf("fMagic\n");
 		}
+			
 	}
 
 	fxHeader.fxMagic = endian_swap ( fxHeader.fxMagic );
@@ -254,7 +257,7 @@ int fst_save_fxfile ( FST *fst, const char *filename, enum FxFileType fileType )
 
 	if (isChunk) {
 		printf("Getting chunk ...");
-		chunkSize = fst->plugin->dispatcher( fst->plugin, effGetChunk, chunkType, 0, &chunk, 0 );
+		chunkSize = fst_call_dispatcher( fst, effGetChunk, chunkType, 0, &chunk, 0 );
 		printf("%d B -  DONE\n", chunkSize);
 		fxHeader.byteSize += chunkSize + sizeof(int);
 	} else {
@@ -276,7 +279,7 @@ int fst_save_fxfile ( FST *fst, const char *filename, enum FxFileType fileType )
 		fwrite(&blank, sizeof(blank), 1, fxfile);
 	} else {
 //		prgName = endian_swap(prgName);
-		fst_get_program_name(fst, fst->current_program, prgName, sizeof(prgName));
+		fst_call_dispatcher(fst, effGetProgramName, 0, 0, prgName, 0);
 		fwrite(&prgName, sizeof(prgName), 1, fxfile);
 	}
 
@@ -293,7 +296,7 @@ int fst_save_fxfile ( FST *fst, const char *filename, enum FxFileType fileType )
 
 		for (p = 0; p < fst->plugin->numPrograms; p++) {
 			fst_program_change (fst, p);
-			fst_get_program_name(fst, fst->current_program, prgName, sizeof(prgName));
+			fst_call_dispatcher(fst, effGetProgramName, 0, 0, prgName, 0);
 
 			fwrite(&fxHeader, sizeof(FXHeader), 1, fxfile);
 			fwrite(&prgName, sizeof(prgName), 1, fxfile);

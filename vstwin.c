@@ -1,9 +1,17 @@
 #include <libgen.h>
+#include <windows.h>
+#include <winnt.h>
+#include <wine/exception.h>
 #include <signal.h>
 
 #include "fst.h"
 
+#include <X11/X.h>
+#include <X11/Xlib.h>
+
 static FST* fst_first = NULL;
+
+#define DELAYED_WINDOW 1
 
 static LRESULT WINAPI 
 my_window_proc (HWND w, UINT msg, WPARAM wp, LPARAM lp)
@@ -34,6 +42,7 @@ static FST*
 fst_new ()
 {
 	FST* fst = (FST*) calloc (1, sizeof (FST));
+	unsigned short i;
 
 	pthread_mutex_init (&fst->lock, NULL);
 	pthread_mutex_init (&fst->event_call_lock, NULL);
@@ -41,12 +50,14 @@ fst_new ()
 	fst->want_program = -1;
 	//fst->current_program = 0; - calloc done this
 	fst->event_call = RESET;
+	for (i=0; i<128; i++ )
+		fst->midi_map[i] = -1;
 
 	return fst;
 }
 
 /* Plugin "canDo" helper function to neaten up plugin feature detection calls */
-static bool
+static int
 fst_canDo(FST* fst, char* feature)
 {
 	bool can;
@@ -55,29 +66,17 @@ fst_canDo(FST* fst, char* feature)
 	return can;
 }
 
-static inline void
-fst_update_current_program(FST* fst) {
-	short newProg;
-	char progName[24];
-
-	newProg = fst->plugin->dispatcher( fst->plugin, effGetProgram, 0, 0, NULL, 0.0f );
-	if (newProg != fst->current_program || fst->program_changed) {
-		fst->program_changed = FALSE;
-		fst->current_program = newProg;
-		fst_get_program_name(fst, fst->current_program, progName, sizeof(progName));
-		printf("Program: %d : %s\n", newProg, progName);
-	}
-}
-
-static inline void
+static bool
 fst_event_handler(FST* fst) {
 	pthread_mutex_lock (&fst->lock);
+	bool ret = TRUE;
 	struct AEffect* plugin = fst->plugin;
 
 	switch (fst->event_call) {
 	case EDITOR_OPEN:		
-		if (fst->window == NULL && ! fst_create_editor (fst))
+		if (fst->window == NULL && ! fst_create_editor (fst)) {
 			fst_error ("cannot create editor for plugin %s", fst->handle->name);
+		}
 		break;
 	case EDITOR_SHOW:
 		if (fst->window != NULL) {
@@ -97,13 +96,28 @@ fst_event_handler(FST* fst) {
 		}
 		break;
 	case PROGRAM_CHANGE:
-		plugin->dispatcher (plugin, effBeginSetProgram, 0, 0, NULL, 0);
-		plugin->dispatcher (plugin, effSetProgram, 0,(int32_t) fst->want_program, NULL, 0);
-		plugin->dispatcher (plugin, effEndSetProgram, 0, 0, NULL, 0);
-		fst->current_program = fst->want_program;
-		fst->program_changed = TRUE;
-		fst->want_program = -1;
-		
+		if (fst->want_program != -1) {
+			plugin->dispatcher (plugin, effBeginSetProgram, 0, 0, NULL, 0);
+			plugin->dispatcher (plugin, effSetProgram, 0, fst->want_program, NULL, 0);
+			plugin->dispatcher (plugin, effEndSetProgram, 0, 0, NULL, 0);
+			fst->want_program = -1; 
+		}
+		break;
+	case CLOSE:
+		plugin->dispatcher(plugin, effClose, 0, 0, NULL, 0.0f);
+		ret = FALSE;
+		break;
+	case OPEN:
+		plugin->dispatcher (plugin, effOpen, 0, 0, NULL, 0.0f);
+		fst->vst_version = plugin->dispatcher (plugin, effGetVstVersion, 0, 0, NULL, 0.0f);
+
+		if (fst->vst_version >= 2) {
+			fst->isSynth = (plugin->flags & effFlagsIsSynth) > 0;
+			fst->canReceiveVstEvents = fst_canDo(fst, "receiveVstEvents");
+			fst->canReceiveVstMidiEvent = fst_canDo(fst, "receiveVstMidiEvent");
+			fst->canSendVstEvents = fst_canDo(fst, "sendVstEvents");
+			fst->canSendVstMidiEvent = fst_canDo(fst, "sendVstMidiEvent");
+		}
 		break;
 	case DISPATCHER:
 		fst->dispatcher_retval = fst->plugin->dispatcher( plugin, 
@@ -122,6 +136,7 @@ fst_event_loop (HMODULE hInst)
 {
 	MSG msg;
 	FST* fst;
+	int newProg;
 	HWND dummy_window;
 	DWORD gui_thread_id;
 	HANDLE* h_thread;
@@ -137,35 +152,52 @@ fst_event_loop (HMODULE hInst)
 	printf ("W32 GUI EVENT Thread Class: %d\n", GetPriorityClass (h_thread));
 	printf ("W32 GUI EVENT Thread Priority: %d\n", GetThreadPriority(h_thread));
 
+	/* create a dummy window for timer events */
+	if ((hInst = GetModuleHandleA (NULL)) == NULL) {
+		fst_error ("can't get module handle");
+		return 1;
+	}
+	
 	if ((dummy_window = CreateWindowA ("FST", "dummy", WS_OVERLAPPEDWINDOW | WS_DISABLED,
 		0, 0, 0, 0, NULL, NULL, hInst, NULL )) == NULL) {
 		fst_error ("cannot create dummy timer window");
 	}
 
-	if (!SetTimer (dummy_window, 1000, 100, NULL)) {
+	if (!SetTimer (dummy_window, 1000, 20, NULL)) {
 		fst_error ("cannot set timer on dummy window");
 		return 1;
 	}
 
 	while (GetMessageA (&msg, NULL, 0,0) != 0) {
-		TranslateMessage(&msg);
-		DispatchMessageA(&msg);
+		TranslateMessage( &msg );
+		DispatchMessageA (&msg);
 
+		/* handle window creation requests, destroy requests, and run idle callbacks */
 		if ( msg.message != WM_TIMER || msg.hwnd != dummy_window )
 			continue;
 
 		for (fst = fst_first; fst; fst = fst->next) {
+			if (fst->event_call != RESET) {
+				if (! fst_event_handler(fst))
+					continue;
+			}
+
 			if (fst->wantIdle)
 				fst->plugin->dispatcher (fst->plugin, effIdle, 0, 0, NULL, 0);  
 
-			if (fst->window)
+			if (fst->window) {
 				fst->plugin->dispatcher (fst->plugin, effEditIdle, 0, 0, NULL, 0);
-
-			fst_update_current_program(fst);
-
-			if (fst->event_call != RESET)
-				fst_event_handler(fst);
+			}
+		
+			newProg = fst->plugin->dispatcher( fst->plugin, effGetProgram, 0, 0, NULL, 0.0f );
+			if (fst->current_program != newProg) {
+				fst->current_program = newProg;
+				char progName[24];
+				fst->plugin->dispatcher (fst->plugin, effGetProgramName, 0, 0, &progName, 0.0f);
+				printf("Program: %d : %s\n", newProg, progName);
+			}
 		}
+		WaitMessage();
 	}
 
 	printf( "GUI EVENT LOOP: THE END\n" );
@@ -176,7 +208,12 @@ register_window_class (HMODULE hInst)
 {
 	WNDCLASSEX wclass;
 	HANDLE t_thread; 
+	//HMODULE hInst;
 
+	//if ((hInst = GetModuleHandleA (NULL)) == NULL) {
+	//	fst_error ("can't get module handle");
+	//	return -1;
+	//}
 	wclass.cbSize = sizeof(WNDCLASSEX);
 	wclass.style = 0;
 //	wclass.style = (CS_HREDRAW | CS_VREDRAW);
@@ -238,53 +275,27 @@ fst_show_editor (FST *fst) {
 	return 0;
 }
 
-bool
-fst_get_program_name (FST *fst, short program, char* name, size_t size)
-{
-	char *m = NULL, *c;
-	struct AEffect* plugin = fst->plugin;
-
-	if (program == fst->current_program) {
-		plugin->dispatcher(plugin, effGetProgramName, 0, 0, name, 0.0f);
-	} else {
-		plugin->dispatcher(plugin, effGetProgramNameIndexed, program, 0, name, 0.0 );
-	}
-
-	// remove all non ascii signs
-	for (c = name; (*c != 0) && (c - name) < size; c++) {
-		if ( isprint(*c)) {
-			if (m != NULL) {
-				*m = *c;
-				m = c;
-			}
-		} else if (m == NULL) m = c;
-	}
-	// make sure of string terminator
-	if (m != NULL) *m = 0; else *c = 0;
-
-	return TRUE; 
-}
-
 void
 fst_program_change (FST *fst, short want_program)
 {
-	pthread_mutex_lock (&fst->event_call_lock);
+        pthread_mutex_lock (&fst->event_call_lock);
 	pthread_mutex_lock (&fst->lock);
 
-	if (fst->current_program != want_program) {
+	if (fst->want_program != want_program) {
 		fst->want_program = want_program;
 		fst->event_call = PROGRAM_CHANGE;
 
 		pthread_cond_wait (&fst->event_called, &fst->lock);
 	}
 
-	pthread_mutex_unlock (&fst->lock);
-	pthread_mutex_unlock (&fst->event_call_lock);
+        pthread_mutex_unlock (&fst->lock);
+        pthread_mutex_unlock (&fst->event_call_lock);
 }
 
 int 
 fst_call_dispatcher(FST *fst, int opcode, int index, int val, void *ptr, float opt )
 {
+
 	pthread_mutex_lock (&fst->event_call_lock);
 	pthread_mutex_lock (&fst->lock);
 
@@ -311,6 +322,9 @@ fst_create_editor (FST* fst)
 	struct ERect* er;
 
 	/* "guard point" to trap errors that occur during plugin loading */
+
+	/* Note: fst->lock is held while this function is called */
+
 	if (!(fst->plugin->flags & effFlagsHasEditor)) {
 		fst_error ("Plugin \"%s\" has no editor", fst->handle->name);
 		return 0;
@@ -342,7 +356,6 @@ fst_create_editor (FST* fst)
 		SWP_NOACTIVATE | SWP_NOMOVE | SWP_DEFERERASE | SWP_NOCOPYBITS | SWP_NOSENDCHANGING);
 
 	ShowWindow (fst->window, SW_SHOWMINNOACTIVE);
-//	ShowWindow (fst->window, SW_SHOWNA);
 
 	fst->xid = (int) GetPropA (window, "__wine_x11_whole_window");
 	printf( "And xid = %x\n", fst->xid );
@@ -369,16 +382,16 @@ fst_destroy_editor (FST* fst)
 
 void
 fst_suspend (FST *fst) {
-	fst_error("Suspend plugin");
-	fst->plugin->dispatcher (fst->plugin, effStopProcess, 0, 0, NULL, 0.0f);
-	fst->plugin->dispatcher (fst->plugin, effMainsChanged, 0, 0, NULL, 0.0f);
+	printf("Suspend plugin\n");
+	fst_call_dispatcher (fst, effStopProcess, 0, 0, NULL, 0.0f);
+	fst_call_dispatcher (fst, effMainsChanged, 0, 0, NULL, 0.0f);
 } 
 
 void
 fst_resume (FST *fst) {
-	fst_error("Resume plugin");
-	fst->plugin->dispatcher (fst->plugin, effMainsChanged, 0, 1, NULL, 0.0f);
-	fst->plugin->dispatcher (fst->plugin, effStartProcess, 0, 0, NULL, 0.0f);
+	printf("Resume plugin\n");
+	fst_call_dispatcher (fst, effMainsChanged, 0, 1, NULL, 0.0f);
+	fst_call_dispatcher (fst, effStartProcess, 0, 0, NULL, 0.0f);
 } 
 
 void
@@ -463,7 +476,7 @@ fst_load (const char * path) {
 	if ((main_entry = (main_entry_t) GetProcAddress (dll, "main")) == NULL) {
 		free(name);
 		FreeLibrary (dll);
-		fst_error("Wrong main_entry\n");
+		fst_error("Wrong main_entry in\n");
 		return NULL;
 	}
 	
@@ -496,10 +509,26 @@ fst_unload (FSTHandle* fhandle)
 	return 0;
 }
 
+static int
+fst_open (FST *fst) {
+	fst_event_loop_add_plugin(fst);
+
+	pthread_mutex_lock (&fst->event_call_lock);
+	pthread_mutex_lock (&fst->lock);
+	fst->event_call = OPEN;
+	pthread_cond_wait (&fst->event_called, &fst->lock);
+	pthread_mutex_unlock (&fst->lock);
+	pthread_mutex_unlock (&fst->event_call_lock);
+
+	fst->handle->plugincnt++;
+}
+
 FST*
-fst_open (FSTHandle* fhandle, audioMasterCallback amc, void* userptr)
+fst_instantiate (FSTHandle* fhandle, audioMasterCallback amc, void* userptr)
 {
 	FST* fst = fst_new ();
+	short i;
+	char ParamName[32];
 
 	if( fhandle == NULL ) {
 	    fst_error( "the handle was NULL\n" );
@@ -513,7 +542,7 @@ fst_open (FSTHandle* fhandle, audioMasterCallback amc, void* userptr)
 	}
 
 	fst->handle = fhandle;
-	fst->plugin->resvd1 = userptr;
+	fst->plugin->user = userptr;
 
 	if (fst->plugin->magic != kEffectMagic) {
 		fst_error ("%s is not a VST plugin\n", fhandle->name);
@@ -521,20 +550,7 @@ fst_open (FSTHandle* fhandle, audioMasterCallback amc, void* userptr)
 		return NULL;
 	}
 
-	// Open Plugin
-	fst->plugin->dispatcher (fst->plugin, effOpen, 0, 0, NULL, 0.0f);
-	fst->vst_version = fst->plugin->dispatcher (fst->plugin, effGetVstVersion, 0, 0, NULL, 0.0f);
-
-	if (fst->vst_version >= 2) {
-		fst->isSynth = (fst->plugin->flags & effFlagsIsSynth) > 0;
-		fst->canReceiveVstEvents = fst_canDo(fst, "receiveVstEvents");
-		fst->canReceiveVstMidiEvent = fst_canDo(fst, "receiveVstMidiEvent");
-		fst->canSendVstEvents = fst_canDo(fst, "sendVstEvents");
-		fst->canSendVstMidiEvent = fst_canDo(fst, "sendVstMidiEvent");
-	}
-
-	fst->handle->plugincnt++;
-	fst_event_loop_add_plugin(fst);
+	fst_open(fst);
 
 	return fst;
 }
@@ -557,7 +573,12 @@ fst_close (FST* fst)
 
 	fst_destroy_editor (fst);
 
-	fst->plugin->dispatcher(fst->plugin, effClose, 0, 0, NULL, 0.0f);
+	pthread_mutex_lock (&fst->event_call_lock);
+	pthread_mutex_lock (&fst->lock);
+	fst->event_call = CLOSE;
+	pthread_cond_wait (&fst->event_called, &fst->lock);
+	pthread_mutex_unlock (&fst->lock);
+	pthread_mutex_unlock (&fst->event_call_lock);
 
 	fst_event_loop_remove_plugin (fst);
 
@@ -565,4 +586,46 @@ fst_close (FST* fst)
 		--fst->handle->plugincnt;
 
 	free(fst);
+}
+
+int
+fst_load_state (FST * fst, const char * filename)
+{
+	char * file_ext = strrchr(filename, '.');
+
+	if ( (strcmp(file_ext, ".fxp") == 0) || 
+	     (strcmp(file_ext, ".FXP") == 0) ||
+	     (strcmp(file_ext, ".fxb") == 0) ||
+	     (strcmp(file_ext, ".FXB") == 0)
+	) {    
+		fst_load_fxfile(fst, filename);
+	} else if (strcmp(file_ext, ".fps") == 0) {
+		fst_load_fps(fst, filename);
+	} else {
+		printf("Unkown file type\n");
+		return 0;
+	}
+
+	printf("File %s loaded\n", filename);
+
+	return 1;
+}
+
+int
+fst_save_state (FST * fst, const char * filename)
+{
+	char * file_ext = strrchr(filename, '.');
+
+	if ( (strcmp(file_ext, ".fxp") == 0) || (strcmp(file_ext, ".FXP") == 0) ) {
+		fst_save_fxfile(fst, filename, 0);
+	} else if ( (strcmp(file_ext, ".fxb") == 0) || (strcmp(file_ext, ".FXB") == 0)) {
+		fst_save_fxfile(fst, filename, 1);
+	} else if (strcmp(file_ext, ".fps") == 0) {
+		fst_save_fps(fst, filename);
+	} else {
+		printf("Unkown file type\n");
+		return 0;
+	}
+	
+	return 1;
 }

@@ -16,7 +16,7 @@ ifeq ($(LASH_EXISTS),yes)
 PKG_CONFIG_MODULES    += lash-1.0
 endif
 
-CEXTRA                := $(shell pkg-config --cflags $(PKG_CONFIG_MODULES)) -fPIC -m32 -g -Wno-multichar -O2
+CEXTRA                := $(shell pkg-config --cflags $(PKG_CONFIG_MODULES)) -fPIC -m32 -g -O2 -Wno-multichar
 ifneq (,$(findstring lash-1.0,$(PKG_CONFIG_MODULES)))
 CEXTRA                += -DHAVE_LASH
 endif
@@ -26,13 +26,10 @@ INCLUDE_PATH          = -I. -I/usr/include -I/usr/include -I/usr/include/wine -I
 DLL_PATH              =
 LIBRARY_PATH          = -L/usr/lib/i386-linux-gnu/wine
 LIBRARIES             := $(shell pkg-config --libs $(PKG_CONFIG_MODULES)) -L/usr/X11R6/lib -lpthread -lrt -lX11 -m32
-PREFIX                = /usr
-LIB_INST_PATH         = $(PREFIX)/lib/i386-linux-gnu/wine
-BIN_INST_PATH         = $(PREFIX)/bin
 
 ### fst.exe sources and settings
 fsthost_exe_MODULE       = fsthost
-fsthost_exe_C_SRCS       = audiomaster.c fst.c gtk.c jfst.c fxb.c fpsparser.c vstwin.c sysex.c cpuusage.c
+fsthost_exe_C_SRCS       = audiomaster.c fst.c gtk.c jfst.c fxb.c fpsparser.c vstwin.c
 fsthost_exe_CXX_SRCS     =
 fsthost_exe_RC_SRCS      =
 fsthost_exe_LDFLAGS      = -mwindows
@@ -66,7 +63,7 @@ all: $(SUBDIRS) $(DLLS:%=%.so) $(EXES:%=%)
 
 ### Build rules
 
-.PHONY: all clean dummy install
+.PHONY: all clean dummy
 
 $(SUBDIRS): dummy
 	@cd $@ && $(MAKE)
@@ -98,10 +95,6 @@ clean:: $(SUBDIRS:%=%/__clean__) $(EXTRASUBDIRS:%=%/__clean__)
 	$(RM) $(EXES:%=%.dbg.o) $(EXES:%=%.so) $(EXES:%.exe=%)
 	$(RM) -rf ./vst
 
-install: $(fsthost_exe_MODULE)
-	install -m 0644 fsthost.exe.so $(LIB_INST_PATH)
-	install -m 0755 fsthost $(BIN_INST_PATH)
-
 $(SUBDIRS:%=%/__clean__): dummy
 	cd `dirname $@` && $(MAKE) clean
 
@@ -114,9 +107,5 @@ DEFLIB = $(LIBRARY_PATH) $(LIBRARIES) $(DLL_PATH)
 $(fsthost_exe_MODULE): $(fsthost_exe_OBJS)
 	$(LINK) $(fsthost_exe_LDFLAGS) -o $@ $(fsthost_exe_OBJS) $(fsthost_exe_LIBRARY_PATH) $(DEFLIB) $(fsthost_exe_DLLS:%=-l%) $(fsthost_exe_LIBRARIES:%=-l%)
 # Add support for WINE_RT
-	sed -i -e '/^# determine the application directory/,/^esac/d' \
-		-e 's/-n "$$appdir"/! -r "$$appname"/' \
-		-e '3i \appdir="$(LIB_INST_PATH)"' \
-		-e '3i \export WINE_RT=$${WINE_RT:-10}' \
-		-e '3i \export WINE_SRV_RT=$${WINE_SRV_RT:-15}' $(fsthost_exe_MODULE).exe
-	mv $(fsthost_exe_MODULE).exe $(fsthost_exe_MODULE)
+	sed -i -e '3i \export WINE_RT=$${WINE_RT:-10}' $(fsthost_exe_MODULE).exe
+	sed -i -e '3i \export WINE_SRV_RT=$${WINE_SRV_RT:-15}' $(fsthost_exe_MODULE).exe
