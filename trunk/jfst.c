@@ -647,7 +647,7 @@ usage(char* appname) {
 	fprintf(stderr, format, "-o num_out", "Jack number Out ports");
 	fprintf(stderr, format, "-t tempo", "Set fixed Tempo rather than using JackTransport");
 	fprintf(stderr, format, "-u uuid", "JackSession UUID");
-	fprintf(stderr, format, "-u sysex_uuid", "SysEx UUID");
+	fprintf(stderr, format, "-U sysex_uuid", "SysEx UUID");
 	fprintf(stderr, format, "-V", "Disable Volume control (and filter CC7 messages)");
 }
 

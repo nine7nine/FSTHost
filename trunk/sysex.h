@@ -33,7 +33,7 @@ typedef struct _SysExIdentReply {
 	uint8_t ir;
 	uint8_t id;
 	uint8_t family[2];
-	uint8_t model[2];
+	uint8_t model[2]; // Here we set sysex_uuid as [1]
 	uint8_t version[4];
 	uint8_t end;
 } SysExIdentReply;
