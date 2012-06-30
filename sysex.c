@@ -33,6 +33,11 @@ sysex_dump_v1(
 	char* program_name,
 	char* plugin_name
 ) {
+	if ( program < 0 || program > 127 ) {
+		printf("SysEx - allow program 0 - 127 only\n");
+		return NULL;
+	}
+
 	SysExDumpV1* sysex = calloc(1, sizeof(SysExDumpV1));
 
 	sysex->begin   = SYSEX_BEGIN;
@@ -44,12 +49,6 @@ sysex_dump_v1(
 	sysex->volume  = volume;
 	sysex->state   = state;
 	sysex->end     = SYSEX_END;
-
-	if ( (sysex->program & 0x80) ) {
-		printf("SysEx - program - first byte can be set, this is not supported now :-(\n");
-		free(sysex);
-		return NULL;
-	}
 
 	makeASCII(plugin_name, sysex->plugin_name, sizeof(sysex->plugin_name));
 	makeASCII(program_name, sysex->program_name, sizeof(sysex->program_name));
