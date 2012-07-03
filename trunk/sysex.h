@@ -15,15 +15,17 @@
 #define SYSEX_IDENTITY_REPLY 0x02
 #define SYSEX_MYID 0x5B
 #define SYSEX_VERSION 1
+#define SYSEX_TYPE_DUMP 0
+#define SYSEX_TYPE_RQST 1
 
-const static uint8_t SYSEX_IDENT_RQST[6] = { 
-	SYSEX_BEGIN,
-	SYSEX_NON_REALTIME,
-	0,
-	SYSEX_GENERAL_INFORMATION,
-	SYSEX_IDENTITY_REQUEST,
-	SYSEX_END
-};
+typedef struct _SysExIdentRqst {
+	uint8_t begin;
+	uint8_t type;
+       	uint8_t target_id;
+	uint8_t gi;
+	uint8_t ir;
+	uint8_t end;
+} SysExIdentRqst;
 
 typedef struct _SysExIdentReply {
 	uint8_t begin;
@@ -43,10 +45,20 @@ enum SysExState {
 	SYSEX_STATE_ACTIVE   = 1
 };
 
+typedef struct _SysExDumpRequestV1 {
+	uint8_t begin;
+	uint8_t id;
+	uint8_t version;
+	uint8_t type;
+	uint8_t uuid;
+	uint8_t end;
+} SysExDumpRequestV1;
+
 typedef struct _SysExDumpV1 {
 	uint8_t begin;
 	uint8_t id;
 	uint8_t version;
+	uint8_t type;
 	uint8_t uuid;
 	uint8_t state;
 	uint8_t program;
@@ -58,15 +70,10 @@ typedef struct _SysExDumpV1 {
 } SysExDumpV1;
 
 /* Prototypes */
-extern SysExIdentReply* sysex_ident_reply(uint8_t uuid);
-extern SysExDumpV1* sysex_dump_v1(
-	uint8_t uuid,
-	uint8_t program, 
-	uint8_t channel,
-	uint8_t volume,
-	enum SysExState state,
-	char* program_name,
-	char* plugin_name
-);
+SysExDumpV1* sysex_dump_v1_new();
+SysExDumpRequestV1* sysex_dump_request_v1_new();
+SysExIdentRqst* sysex_ident_request_new();
+SysExIdentReply* sysex_ident_reply_new();
+void sysex_makeASCII(uint8_t* ascii_midi_dest, char* name, size_t size_dest);
 
 #endif /* __sysex_h__ */

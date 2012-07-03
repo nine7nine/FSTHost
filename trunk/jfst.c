@@ -26,7 +26,6 @@
 #include <jack/midiport.h>
 
 #include "jackvst.h"
-#include "sysex.h"
 
 #ifdef HAVE_LASH
 #include <lash/lash.h>
@@ -68,8 +67,7 @@ static sem_t sema;
 GMainLoop* glib_main_loop;
 JackVST *jvst_first;
 
-JackVST* jvst_new()
-{
+JackVST* jvst_new() {
 	JackVST* jvst = calloc (1, sizeof (JackVST));
 	short i;
 
@@ -85,19 +83,40 @@ JackVST* jvst_new()
 	for(i=0; i<128;++i)
 		jvst->midi_map[i] = -1;
 
+	jvst->sysex_dump = sysex_dump_v1_new();
+	jvst->sysex_ident_reply = sysex_ident_reply_new();
+
 	return jvst;
 }
 
+void
+jvst_destroy(JackVST* jvst)
+{
+	free(jvst->sysex_dump);
+	free(jvst->sysex_ident_reply);
+	free(jvst);
+}
+
 bool
-jvst_send_sysex(JackVST* jvst, unsigned char* data, size_t size)
+jvst_send_sysex(JackVST* jvst, enum SysExWant sysex_want)
 {
 	pthread_mutex_lock (&jvst->sysex_lock);
-	jvst->sysex_data = data;
-	jvst->sysex_size = size;
-	jvst->sysex_want_send = TRUE;
+
+	if (sysex_want == SYSEX_WANT_DUMP) {
+		// Prepare data for RT thread
+		char progName[24];
+		fst_get_program_name(jvst->fst, jvst->fst->current_program, progName, sizeof(progName));
+
+		jvst->sysex_dump->program = jvst->fst->current_program;
+		jvst->sysex_dump->channel = jvst->channel + 1;
+		jvst->sysex_dump->volume = jvst_get_volume(jvst);
+		jvst->sysex_dump->state = (jvst->bypassed) ? SYSEX_STATE_NOACTIVE : SYSEX_STATE_ACTIVE;
+		sysex_makeASCII(jvst->sysex_dump->program_name, progName, 24);
+		sysex_makeASCII(jvst->sysex_dump->plugin_name, jvst->client_name, 24);
+	}
+
+	jvst->sysex_want = sysex_want;
 	pthread_cond_wait (&jvst->sysex_sent, &jvst->sysex_lock);
-	jvst->sysex_data = NULL;
-	jvst->sysex_size = 0;
 	pthread_mutex_unlock (&jvst->sysex_lock);
 }
 
@@ -120,19 +139,26 @@ jvst_sysex_handler(struct SysExEvent* sysex_event)
 			break;
 		}
 
-		SysExDumpV1* sysex_v1 = (SysExDumpV1*) data;
-
 		// Version
-		printf("version %d - ", sysex_v1->version);
-		switch(sysex_v1->version) {
+		printf("version %d - ", data[2]);
+		switch(data[2]) {
 		case 1:
-			printf("OK\n");
+			switch(data[3]) {
+			case SYSEX_TYPE_DUMP:
+				printf("OK\n");
 
-			jvst->want_state = (sysex_v1->state == SYSEX_STATE_ACTIVE) ?
+				SysExDumpV1* sysex_v1 = (SysExDumpV1*) data;
+
+				jvst->want_state = (sysex_v1->state == SYSEX_STATE_ACTIVE) ?
 					WANT_STATE_RESUME : WANT_STATE_BYPASS;
-			fst_program_change(jvst->fst, sysex_v1->program);
-			jvst->channel = sysex_v1->channel;
-			jvst_set_volume(jvst, sysex_v1->volume);
+				fst_program_change(jvst->fst, sysex_v1->program);
+				jvst->channel = sysex_v1->channel;
+				jvst_set_volume(jvst, sysex_v1->volume);
+				break;
+			case SYSEX_TYPE_RQST:
+				jvst_send_sysex(jvst, SYSEX_WANT_DUMP);
+				break;
+			}
 
 			break;
 		default:
@@ -141,15 +167,15 @@ jvst_sysex_handler(struct SysExEvent* sysex_event)
 		break;
 	case SYSEX_NON_REALTIME:
 		// Identity request
-		if (size >= sizeof(SYSEX_IDENT_RQST)) {
+		if (size >= sizeof(SysExIdentRqst)) {
 			// TODO: for now we just always answer ;-)
-			data[2] = 0;
-			if ( memcmp(data, SYSEX_IDENT_RQST, sizeof(SYSEX_IDENT_RQST) ) == 0) {
+			SysExIdentRqst* sxir = sysex_ident_request_new();
+			data[2] = 0x7F;
+			if ( memcmp(data, sxir, sizeof(SysExIdentRqst) ) == 0) {
 				printf("Got Identity request\n");
-				SysExIdentReply* sysex_reply = sysex_ident_reply(jvst->sysex_uuid);
-				jvst_send_sysex(jvst, (unsigned char*) sysex_reply, sizeof(SysExIdentReply));
-				free(sysex_reply);
+				jvst_send_sysex(jvst, SYSEX_WANT_IDENT_REPLY);
 			}
+			free(sxir);
 		}
 		break;
 	}
@@ -237,8 +263,20 @@ sigusr1_handler(int signum, siginfo_t *siginfo, void *context)
 }
 
 static bool
-jvst_want_state_check(JackVST* jvst)
+jvst_idle_cb(JackVST* jvst)
 {
+
+	// Send notify if something change
+	if (jvst->sysex_want_notify && jvst->fst->want_program == -1) {
+		SysExDumpV1* d = jvst->sysex_dump;
+		if ( d->program != jvst->fst->current_program ||
+		     d->channel != jvst->channel + 1 ||
+		     d->state   != ( (jvst->bypassed) ? SYSEX_STATE_NOACTIVE : SYSEX_STATE_ACTIVE ) ||
+		     d->volume  != jvst_get_volume(jvst)
+		) jvst_send_sysex(jvst, SYSEX_WANT_DUMP);
+	}
+
+	// Check state
 	if (jvst->want_state == WANT_STATE_BYPASS && !jvst->bypassed) {
 		jvst->want_state = WANT_STATE_NO;
 		jvst->bypassed = TRUE;
@@ -284,6 +322,8 @@ process_midi_output(JackVST* jvst, jack_nframes_t nframes)
 	/* written by Edward Tomasz Napierala <trasz@FreeBSD.org>                 */
 	void *port_buffer;
 	int t;
+	jack_midi_data_t* sysex_data;
+	size_t sysex_size;
 
 	port_buffer = jack_port_get_buffer(jvst->midi_outport, nframes);
 	if (port_buffer == NULL) {
@@ -325,7 +365,7 @@ process_midi_output(JackVST* jvst, jack_nframes_t nframes)
 
 send_sysex:
 	// Send SysEx
-	if (! jvst->sysex_want_send)
+	if (jvst->sysex_want == SYSEX_WANT_NO)
 		return;
 
 	// Are our lock is ready for us ?
@@ -333,13 +373,23 @@ send_sysex:
 	if (pthread_mutex_trylock(&jvst->sysex_lock) != 0)
 		return;
 
-	jvst->sysex_want_send = FALSE;
+	switch(jvst->sysex_want) {
+	case SYSEX_WANT_IDENT_REPLY:
+		sysex_data = (jack_midi_data_t*) jvst->sysex_ident_reply;
+		sysex_size = sizeof(SysExIdentReply);
+		break;
+	case SYSEX_WANT_DUMP:
+		sysex_data = (jack_midi_data_t*) jvst->sysex_dump;
+		sysex_size = sizeof(SysExDumpV1);
+		break;
+	}
+
+	jvst->sysex_want = SYSEX_WANT_NO;
 
 	t = jack_frame_time(jvst->client) - jack_last_frame_time(jvst->client);
 	if (t < 0) t = 0;
 
-	if ( jack_midi_event_write(port_buffer, t,
-		(jack_midi_data_t*) jvst->sysex_data, jvst->sysex_size)
+	if ( jack_midi_event_write(port_buffer, t, sysex_data, sysex_size)
 	) fst_error("SysEx error: jack_midi_event_write failed.");
 	
 	pthread_cond_signal(&jvst->sysex_sent);
@@ -573,7 +623,7 @@ session_callback( JackVST* jvst )
         snprintf( filename, sizeof(filename), "%sstate.fps", event->session_dir );
         jvst_save_state( jvst, filename );
         snprintf( retval, sizeof(retval), "%s -u %s -U %d -s \"${SESSION_DIR}state.fps\" \"%s\"",
-		my_motherfuckin_name, event->client_uuid, jvst->sysex_uuid, jvst->handle->path );
+		my_motherfuckin_name, event->client_uuid, jvst->uuid, jvst->handle->path );
         event->command_line = strdup( retval );
 
         jack_session_reply( jvst->client, event );
@@ -636,6 +686,7 @@ usage(char* appname) {
 	fprintf(stderr, "Options:\n");
 	fprintf(stderr, format, "-b", "Bypass");
 	fprintf(stderr, format, "-n", "Disable Editor and GTK GUI");
+	fprintf(stderr, format, "-N", "Notify changes by SysEx");
 	fprintf(stderr, format, "-e", "Hide Editor");
 	fprintf(stderr, format, "-s state_file", "Load state_file");
 	fprintf(stderr, format, "-c client_name", "Jack Client name");
@@ -690,16 +741,13 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	strcpy(argv[0], my_motherfuckin_name); // Force APP name
 
         // Parse command line options
-	while ( (i = getopt (argc, argv, "bnes:c:k:i:j:lm:o:t:u:U:V")) != -1) {
+	while ( (i = getopt (argc, argv, "bes:c:k:i:j:lnNm:o:t:u:U:V")) != -1) {
 		switch (i) {
 			case 'b':
 				jvst->bypassed = TRUE;
 				break;
 			case 'e':
 				jvst->with_editor = WITH_EDITOR_HIDE;
-				break;
-			case 'n':
-				jvst->with_editor = WITH_EDITOR_NO;
 				break;
 			case 's':
 				load_state = 1;
@@ -725,6 +773,12 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 			case 'o':
 				opt_numOuts = strtol(optarg, NULL, 10);
 				break;
+			case 'n':
+				jvst->with_editor = WITH_EDITOR_NO;
+				break;
+			case 'N':
+				jvst->sysex_want_notify = true;
+				break;
 			case 'm':
 				jvst->want_state_cc = strtol(optarg, NULL, 10);
 				break;
@@ -732,10 +786,12 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 				jvst->tempo = strtod(optarg, NULL);
 				break;
 			case 'u':
-				jvst->uuid = optarg;
+				jvst->uuid = strtol(optarg, NULL, 10);
 				break;
 			case 'U':
-				jvst->sysex_uuid = strtol(optarg, NULL, 10);
+				jvst->sysex_dump->uuid = 
+				jvst->sysex_ident_reply->model[1] = 
+					strtol(optarg, NULL, 10);
 				break;
 			case 'V':
 				jvst->volume = -1;
@@ -934,7 +990,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	// Init Glib main event loop
 	glib_main_loop = g_main_loop_new(NULL, FALSE);
 	g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 500, 
-		(GSourceFunc) jvst_want_state_check, jvst, NULL);
+		(GSourceFunc) jvst_idle_cb, jvst, NULL);
 
 	// Auto connect on start
 	if (connect_to)
@@ -959,7 +1015,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	printf("Unload plugin\n");
 	fst_unload(jvst->handle);
 
-	free(jvst);
+	jvst_destroy(jvst);
 
 	return 0;
 }
