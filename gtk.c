@@ -1,5 +1,4 @@
 #include "jackvst.h"
-#include "sysex.h"
 #include <gtk/gtk.h>
 #include <gdk/gdkx.h>
 #include <gdk/gdkevents.h>
@@ -83,23 +82,7 @@ static void
 sysex_handler (GtkToggleButton *but, gboolean ptr)
 {
 	JackVST* jvst = (JackVST*) ptr;
-	char progName[24];
-	fst_get_program_name(jvst->fst, jvst->fst->current_program, progName, sizeof(progName));
-
-	// Prepare data for RT thread
-	SysExDumpV1* sysex = sysex_dump_v1(
-		(uint8_t) jvst->sysex_uuid,
-		(uint8_t) jvst->fst->current_program,
-		(uint8_t) jvst->channel,
-		(uint8_t) jvst_get_volume(jvst),
-		(jvst->bypassed) ? SYSEX_STATE_NOACTIVE : SYSEX_STATE_ACTIVE,
-		progName,
-		jvst->client_name
-	);
-
-	jvst_send_sysex(jvst, (unsigned char*) sysex, sizeof(SysExDumpV1));
-
-	free(sysex);
+	jvst_send_sysex(jvst, SYSEX_WANT_DUMP);
 }
 
 static void

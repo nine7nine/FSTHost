@@ -96,11 +96,10 @@ clean:: $(SUBDIRS:%=%/__clean__) $(EXTRASUBDIRS:%=%/__clean__)
 	$(RM) $(CLEAN_FILES) $(RC_SRCS:.rc=.res) $(C_SRCS:.c=.o) $(CXX_SRCS:.cpp=.o)
 	$(RM) $(DLLS:%=%.dbg.o) $(DLLS:%=%.so)
 	$(RM) $(EXES:%=%.dbg.o) $(EXES:%=%.so) $(EXES:%.exe=%)
-	$(RM) -rf ./vst
 
 install: $(fsthost_exe_MODULE)
-	install -m 0644 fsthost.exe.so $(PREFIX)/$(LIB_INST_PATH)
-	install -m 0755 fsthost $(PREFIX)/$(BIN_INST_PATH)
+	install -Dm 0644 fsthost.exe.so $(PREFIX)/$(LIB_INST_PATH)/fsthost.exe.so
+	install -Dm 0755 fsthost $(PREFIX)/$(BIN_INST_PATH)/fsthost
 
 $(SUBDIRS:%=%/__clean__): dummy
 	cd `dirname $@` && $(MAKE) clean

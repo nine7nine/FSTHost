@@ -7,6 +7,7 @@
 #include <jack/session.h>
 #include <math.h>
 
+#include "sysex.h"
 #include "fst.h"
 
 typedef struct _JackVST JackVST;
@@ -21,6 +22,12 @@ enum WithEditor {
    WITH_EDITOR_NO,
    WITH_EDITOR_HIDE,
    WITH_EDITOR_SHOW
+};
+
+enum SysExWant {
+	SYSEX_WANT_NO          = 0,
+	SYSEX_WANT_IDENT_REPLY = 1,
+	SYSEX_WANT_DUMP        = 2
 };
 
 struct _JackVST {
@@ -51,20 +58,19 @@ struct _JackVST {
     int             midi_learn_PARAM;
 
     /* SysEx support */
-    pthread_mutex_t sysex_lock;
-    pthread_cond_t  sysex_sent;
-    bool            sysex_want_send;
-    unsigned char*  sysex_data;
-    size_t          sysex_size;
-    bool            sysex_want_ident;
-    unsigned char   sysex_uuid;
+    pthread_mutex_t  sysex_lock;
+    pthread_cond_t   sysex_sent;
+    enum SysExWant   sysex_want;
+    bool             sysex_want_notify;
+    SysExDumpV1*     sysex_dump;
+    SysExIdentReply* sysex_ident_reply;
 
     /* For VST/i support */
     bool                 want_midi_in;
     struct VstMidiEvent* event_array;
     struct VstEvents*    events;
 
-    char*                 uuid;
+    int uuid;
     jack_session_event_t* session_event;
 
     /* For VST midi effects & synth source (like audio to midi VSTs) support */
@@ -72,7 +78,7 @@ struct _JackVST {
     jack_ringbuffer_t* ringbuffer;
 };
 
-bool jvst_send_sysex(JackVST* jvst, unsigned char* data, size_t size);
+bool jvst_send_sysex(JackVST* jvst, enum SysExWant);
 
 static inline void
 jvst_set_volume(JackVST* jvst, short volume)
