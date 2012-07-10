@@ -716,7 +716,15 @@ gtk_gui_start (JackVST* jvst)
 	printf( "calling gtk_main now\n" );
 	gtk_main ();
 
-//	return 0;
+
+	// We exit now
+	printf("Jack Deactivate\n");
+	jack_deactivate(jvst->client);
+
+	printf("Close plugin\n");
+	fst_close(jvst->fst);
+
+	return 0;
 }
 
 
