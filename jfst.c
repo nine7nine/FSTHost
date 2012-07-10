@@ -108,7 +108,7 @@ jvst_send_sysex(JackVST* jvst, enum SysExWant sysex_want)
 		fst_get_program_name(jvst->fst, jvst->fst->current_program, progName, sizeof(progName));
 
 		jvst->sysex_dump->program = jvst->fst->current_program;
-		jvst->sysex_dump->channel = jvst->channel + 1;
+		jvst->sysex_dump->channel = jvst->channel;
 		jvst->sysex_dump->volume = jvst_get_volume(jvst);
 		jvst->sysex_dump->state = (jvst->bypassed) ? SYSEX_STATE_NOACTIVE : SYSEX_STATE_ACTIVE;
 		sysex_makeASCII(jvst->sysex_dump->program_name, progName, 24);
@@ -270,7 +270,7 @@ jvst_idle_cb(JackVST* jvst)
 	if (jvst->sysex_want_notify && jvst->fst->want_program == -1) {
 		SysExDumpV1* d = jvst->sysex_dump;
 		if ( d->program != jvst->fst->current_program ||
-		     d->channel != jvst->channel + 1 ||
+		     d->channel != jvst->channel ||
 		     d->state   != ( (jvst->bypassed) ? SYSEX_STATE_NOACTIVE : SYSEX_STATE_ACTIVE ) ||
 		     d->volume  != jvst_get_volume(jvst)
 		) jvst_send_sysex(jvst, SYSEX_WANT_DUMP);
