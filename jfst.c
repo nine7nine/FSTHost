@@ -821,8 +821,8 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	if (!jvst->client_name)
 		jvst->client_name = jvst->handle->name;
 
-	printf("FST init\n");
-	fst_init();
+//	printf("FST init\n");
+//	fst_init();
 
 	printf( "Revive plugin: %s\n", jvst->client_name);
 	if ((jvst->fst = fst_open (jvst->handle, (audioMasterCallback) jack_host_callback, jvst)) == NULL) {
@@ -1000,7 +1000,14 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	if (jvst->with_editor != WITH_EDITOR_NO) {
 		printf( "Start GUI\n" );
 		gtk_gui_init (&argc, &argv);
-		gtk_gui_start(jvst);
+
+		// Create GTK thread
+	    	if (CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) &gtk_gui_start, jvst, 0, NULL) == NULL) {
+                	fst_error ("could not create GTK Thread");
+                	return FALSE;
+        	}
+
+		fst_event_loop(hInst);
 	} else {
 		printf("GUI Disabled\n");
 		g_main_loop_run(glib_main_loop);

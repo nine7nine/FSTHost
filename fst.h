@@ -141,6 +141,8 @@ struct _FXHeader {
 extern FSTHandle* fst_load (const char * );
 extern bool fst_unload (FSTHandle*);
 
+void fst_event_loop (HMODULE hInst);
+
 extern FST* fst_open (FSTHandle*, audioMasterCallback amc, void* userptr);
 extern void fst_close (FST*);
 

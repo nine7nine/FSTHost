@@ -500,17 +500,17 @@ register_window_class (HMODULE hInst)
 	return TRUE;
 }
 
-static DWORD WINAPI
+void
 fst_event_loop (HMODULE hInst)
 {
 	MSG msg;
 	FST* fst;
 	HWND dummy_window;
-	DWORD gui_thread_id;
+	//DWORD gui_thread_id;
 	HANDLE* h_thread;
 
 	register_window_class(hInst);
-	gui_thread_id = GetCurrentThreadId ();
+	//gui_thread_id = GetCurrentThreadId ();
 	h_thread = GetCurrentThread ();
 
 	//SetPriorityClass ( h_thread, REALTIME_PRIORITY_CLASS);
@@ -527,7 +527,7 @@ fst_event_loop (HMODULE hInst)
 
 	if (!SetTimer (dummy_window, 1000, 100, NULL)) {
 		fst_error ("cannot set timer on dummy window");
-		return 1;
+		return;
 	}
 
 	while (GetMessageA (&msg, NULL, 0,0) != 0) {
@@ -552,15 +552,4 @@ fst_event_loop (HMODULE hInst)
 	}
 
 	printf( "GUI EVENT LOOP: THE END\n" );
-}
-
-bool
-fst_init ()
-{
-	if (CreateThread (NULL, 0, (LPTHREAD_START_ROUTINE) fst_event_loop, NULL, 0, NULL) == NULL) {
-		fst_error ("could not create event thread proxy");
-		return FALSE;
-	}
-
-	return TRUE;
 }

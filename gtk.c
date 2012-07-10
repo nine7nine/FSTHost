@@ -625,7 +625,8 @@ GtkListStore * create_channel_store() {
 	return retval;
 }
 
-int
+//int
+DWORD WINAPI
 gtk_gui_start (JackVST* jvst)
 {
 	printf("GTK ThID: %d\n", GetCurrentThreadId ());
@@ -715,7 +716,7 @@ gtk_gui_start (JackVST* jvst)
 	printf( "calling gtk_main now\n" );
 	gtk_main ();
 
-	return 0;
+//	return 0;
 }
 
 
@@ -748,4 +749,5 @@ gtk_gui_init (int *argc, char **argv[])
 	the_gtk_display = gdk_x11_display_get_xdisplay( gdk_display_get_default() );
 	gtk_error_handler = XSetErrorHandler( fst_xerror_handler );
 	CPUusage_init();
+
 }

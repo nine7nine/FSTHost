@@ -13,6 +13,7 @@
 #include <signal.h>
 #include <string.h>
 #include <semaphore.h>
+#include <libconfig.h>
 #include <jack/jack.h>
 #include <jack/midiport.h>
 #include "../sysex.h"
@@ -22,6 +23,7 @@ static jack_port_t* outport;
 jack_midi_data_t* sysex;
 bool send = false;
 sem_t sem_change;
+bool quit = false;
 
 enum FSTState {
 	FST_ACTIVE = 1,
@@ -36,22 +38,24 @@ struct FSTPlug {
 	uint8_t volume; /* 0 - 127 */
 	char program_name[24];
 	char plugin_name[24];
+	struct FSTPlug* next;
 };
+struct FSTPlug* fst[127] = {NULL};
 
-struct FSTPlug* fst_new(uint8_t id) {
-	struct FSTPlug* f = calloc(1, sizeof(struct FSTPlug));
+struct FSTPlug* fst_new(uint8_t uuid) {
+	struct FSTPlug* f;
 
-	f->id = id;
+	f = calloc(1, sizeof(struct FSTPlug));
+	f->id = uuid;
 
 	return f;
-};
-
-struct FSTPlug* fst[127] = {NULL};
+}
 
 void sigint_handler(int signum, siginfo_t *siginfo, void *context) {
         printf("Caught signal (SIGINT)\n");
-
 	send = true;
+	quit = true;
+	sem_post(&sem_change);
 }
 
 int process (jack_nframes_t frames, void* arg) {
@@ -88,8 +92,8 @@ int process (jack_nframes_t frames, void* arg) {
 
 			SysExIdentReply* r = (SysExIdentReply*) event.buffer;
 //			printf("Got SysEx Identity Reply from ID %X : %X\n", r->id, r->model[1]);
-			if (fst[r->id] == NULL) {
-				fst[r->id] = fst_new(r->id);
+			if (fst[r->model[1]] == NULL) {
+				fst[r->model[1]] = fst_new(r->model[1]);
 				sem_post(&sem_change);
 			}
 
@@ -103,16 +107,16 @@ int process (jack_nframes_t frames, void* arg) {
 			if (d->type != SYSEX_TYPE_DUMP)
 				goto further;
 
-//			printf("Got SysEx Dump %X : %s : %s\n", d->id, d->plugin_name, d->program_name);
-			if (fst[d->id] == NULL)
-				fst[d->id] = fst_new(d->id);
+			printf("Got SysEx Dump %X : %s : %s\n", d->uuid, d->plugin_name, d->program_name);
+			if (fst[d->uuid] == NULL)
+				fst[d->uuid] = fst_new(d->uuid);
 
-			fst[d->id]->state = d->state;
-			fst[d->id]->program = d->program;
-			fst[d->id]->channel = d->channel;
-			fst[d->id]->volume = d->volume;
-			strcpy(fst[d->id]->program_name, (char*) d->program_name);
-			strcpy(fst[d->id]->plugin_name, (char*) d->plugin_name);
+			fst[d->uuid]->state = d->state;
+			fst[d->uuid]->program = d->program;
+			fst[d->uuid]->channel = d->channel;
+			fst[d->uuid]->volume = d->volume;
+			strcpy(fst[d->uuid]->program_name, (char*) d->program_name);
+			strcpy(fst[d->uuid]->plugin_name, (char*) d->plugin_name);
 			sem_post(&sem_change);
 
 			// don't forward this message
@@ -142,22 +146,128 @@ void show() {
 	short i;
 	struct FSTPlug* f;
 
-	const char* format = "%-24s %02d %-24s\n";
+	const char* format = "%0d %-24s %02d %-24s\n";
 
 	// Header
-	printf("%-24s %-2s %-24s\n", "DEVICE", "CH", "PROGRAM");
+	printf("%-2s %-24s %-2s %-24s\n", "ID", "DEVICE", "CH", "PROGRAM");
 
 	for(i=0; i < 127; i++) {
 		if (fst[i] == NULL) continue;
 		f = fst[i];
 
-		printf(format, f->plugin_name, f->channel, f->program_name);
+		printf(format, i, f->plugin_name, f->channel, f->program_name);
 	}
+}
+
+bool dump_state(char const* config_file) {
+	short i;
+	char group_name[10];
+	config_t cfg;
+	config_setting_t* group;
+	config_setting_t* param;
+
+	config_init(&cfg);
+	for (i = 0; i < 127; i++) {
+		if (fst[i] == NULL) continue;
+
+		printf("save plug %d\n", i);
+		sprintf(group_name, "plugin%d", i);
+
+		group = config_setting_add(cfg.root, group_name, CONFIG_TYPE_GROUP);
+		if (group == NULL) {
+			printf("Error group: %s\n", config_error_text(&cfg));
+			continue;
+		}
+
+		param = config_setting_add(group, "id", CONFIG_TYPE_INT);
+		config_setting_set_int(param, fst[i]->id);
+
+		param = config_setting_add(group, "program", CONFIG_TYPE_INT);
+		config_setting_set_int(param, fst[i]->program);
+
+		param = config_setting_add(group, "channel", CONFIG_TYPE_INT);
+		config_setting_set_int(param, fst[i]->channel);
+
+		param = config_setting_add(group, "volume", CONFIG_TYPE_INT);
+		config_setting_set_int(param, fst[i]->volume);
+
+		param = config_setting_add(group, "plugin_name", CONFIG_TYPE_STRING);
+		config_setting_set_string(param, fst[i]->plugin_name);
+
+		param = config_setting_add(group, "program_name", CONFIG_TYPE_STRING);
+		config_setting_set_string(param, fst[i]->program_name);
+	}
+
+	config_write_file(&cfg, config_file);
+
+	config_destroy(&cfg);
+
+	return true;
+}
+
+bool load_state(const char* config_file) {
+	struct FSTPlug* f;
+	config_t cfg;
+	config_setting_t* group;
+	const char* sparam;
+	int iparam;
+	int id;
+	short i;
+
+	config_init(&cfg);
+	if (!config_read_file(&cfg, config_file)) {
+		fprintf(stderr, "%s:%d - %s\n",
+			config_file,
+			config_error_line(&cfg),
+			config_error_text(&cfg)
+		);
+		config_destroy(&cfg);
+		return false;
+	}
+
+	
+	for(i=0; i < config_setting_length(cfg.root); i++) {
+		group = config_setting_get_elem(cfg.root, i);
+
+		if (! config_setting_lookup_int(group, "id", (long*) &id))
+			continue;
+
+		if (fst[id] == NULL)
+			fst[id] = fst_new(id);
+		
+		f = fst[id];
+
+		config_setting_lookup_int(group, "volume", (long*) &iparam);
+		f->volume = iparam;
+
+		config_setting_lookup_int(group, "program", (long*) &iparam);
+		f->program = iparam;
+
+		config_setting_lookup_int(group, "channel", (long*) &iparam);
+		f->channel = iparam;
+
+		config_setting_lookup_string(group, "program_name", &sparam);
+		strcpy(f->program_name, sparam);
+
+		config_setting_lookup_string(group, "plugin_name", &sparam);
+		strcpy(f->plugin_name, sparam);
+	}
+
+	config_destroy(&cfg);
+
+	return true;
 }
 
 int main (int argc, char* argv[]) {
 	jack_client_t* client;
-	char const * client_name = "FST Control";
+	char const* client_name = "FST Control";
+	char const* config_file = NULL;
+
+	if (argv[1]) config_file = argv[1];
+
+	// Try read file
+	if (config_file != NULL)
+		load_state(config_file);
 
 	struct sigaction sa;
 	memset(&sa, 0, sizeof(sa));
@@ -186,11 +296,14 @@ int main (int argc, char* argv[]) {
 
 	sysex = (jack_midi_data_t*) sysex_ident_request_new();
 
-	while (true) {
+	while (!quit) {
 		sem_wait(&sem_change);
 
 		show();
 	}
+
+//	if (config_file != NULL)
+//		dump_state(config_file);
 
 	return 0;
 }
