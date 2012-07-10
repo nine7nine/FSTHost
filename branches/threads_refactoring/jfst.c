@@ -821,9 +821,6 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	if (!jvst->client_name)
 		jvst->client_name = jvst->handle->name;
 
-//	printf("FST init\n");
-//	fst_init();
-
 	printf( "Revive plugin: %s\n", jvst->client_name);
 	if ((jvst->fst = fst_open (jvst->handle, (audioMasterCallback) jack_host_callback, jvst)) == NULL) {
 		fst_error ("can't instantiate plugin %s", plug_path);
@@ -996,22 +993,25 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	if (connect_to)
 		jvst_connect(jvst, jvst->client_name, connect_to);
 
-	// Main loop
+	// Create GTK or GlibMain thread
 	if (jvst->with_editor != WITH_EDITOR_NO) {
 		printf( "Start GUI\n" );
 		gtk_gui_init (&argc, &argv);
 
-		// Create GTK thread
-	    	if (CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) &gtk_gui_start, jvst, 0, NULL) == NULL) {
-                	fst_error ("could not create GTK Thread");
-                	return FALSE;
-        	}
-
-		fst_event_loop(hInst);
+		if (CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) &gtk_gui_start, jvst, 0, NULL) == NULL) {
+			fst_error ("could not create GTK Thread");
+			return FALSE;
+		}
 	} else {
-		printf("GUI Disabled\n");
-		g_main_loop_run(glib_main_loop);
+		printf("GUI Disabled - start GlibMainLoop\n");
+		if (CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) &g_main_loop_run, glib_main_loop, 0, NULL) == NULL) {
+			fst_error ("could not create GlibMainLoop thread");
+			return FALSE;
+		}
 	}
+
+	printf("Start FST GUI/event loop\n");
+	fst_event_loop(hInst);
 
 	printf("Jack Deactivate\n");
         jack_deactivate(jvst->client);

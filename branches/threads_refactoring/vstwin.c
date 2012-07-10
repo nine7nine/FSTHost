@@ -420,7 +420,7 @@ void
 fst_close (FST* fst)
 {
 	fst_suspend(fst);
-	fst_destroy_editor (fst);
+//	fst_destroy_editor (fst);
 	fst->plugin->dispatcher(fst->plugin, effClose, 0, 0, NULL, 0.0f);
 	fst_event_loop_remove_plugin (fst);
 	--fst->handle->plugincnt;
