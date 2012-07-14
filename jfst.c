@@ -24,6 +24,7 @@
 #include <semaphore.h>
 #include <signal.h>
 #include <jack/midiport.h>
+#include <sys/syscall.h>
 
 #include "jackvst.h"
 
@@ -234,6 +235,12 @@ static void
 jvst_quit(JackVST* jvst) {
 	if (jvst->with_editor == WITH_EDITOR_NO) {
 		g_main_loop_quit(glib_main_loop);
+
+		printf("Jack Deactivate\n");
+		jack_deactivate(jvst->client);
+
+		printf("Close plugin\n");
+		fst_close(jvst->fst);
 	} else {
 		gtk_main_quit();
 	}
@@ -248,6 +255,10 @@ sigint_handler(int signum, siginfo_t *siginfo, void *context)
 
 	printf("Caught signal to terminate (SIGINT)\n");
 	jvst_quit(jvst);
+
+
+	printf("Czekam 5s\n");
+	sleep(5);
 }
 
 static void
@@ -265,7 +276,6 @@ sigusr1_handler(int signum, siginfo_t *siginfo, void *context)
 static bool
 jvst_idle_cb(JackVST* jvst)
 {
-
 	// Send notify if something change
 	if (jvst->sysex_want_notify && jvst->fst->want_program == -1) {
 		SysExDumpV1* d = jvst->sysex_dump;
@@ -293,7 +303,7 @@ jvst_idle_cb(JackVST* jvst)
 static DWORD WINAPI
 wine_thread_aux( LPVOID arg )
 {
-	printf("Audio ThID: %d\n", GetCurrentThreadId ());
+        printf("Audio Thread WineID: %d | LWP: %d\n", GetCurrentThreadId (), (int) syscall (SYS_gettid));
 
 	the_thread_id = pthread_self();
 	sem_post( &sema );
@@ -827,6 +837,8 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 		return 1;
 	}
 
+        printf("Main Thread WineID: %d | LWP: %d\n", GetCurrentThreadId (), (int) syscall (SYS_gettid));
+
 	fst = jvst->fst;
 	plugin = fst->plugin;
 
@@ -1013,11 +1025,8 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	printf("Start FST GUI/event loop\n");
 	fst_event_loop(hInst);
 
-	printf("Jack Deactivate\n");
-        jack_deactivate(jvst->client);
-
-	printf("Close plugin\n");
-        fst_close(jvst->fst);
+	printf("Czekam 4s\n");
+	sleep(4);
 
 	printf("Unload plugin\n");
 	fst_unload(jvst->handle);

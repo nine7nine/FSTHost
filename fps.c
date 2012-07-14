@@ -41,11 +41,11 @@ fps_check_this(FST *fst, char *field, char *value) {
 
    printf("Check %s : %s == ", field, value);
    if ( strcmp(  field, "productString" ) == 0 ) {
-      success = fst->plugin->dispatcher( fst->plugin, effGetProductString, 0, 0, testString, 0 );
+      success = fst_call_dispatcher( fst, effGetProductString, 0, 0, testString, 0 );
    } else if( strcmp( field, "effectName" ) == 0 ) {
-      success = fst->plugin->dispatcher( fst->plugin, effGetEffectName, 0, 0, testString, 0 );
+      success = fst_call_dispatcher( fst, effGetEffectName, 0, 0, testString, 0 );
    } else if( strcmp( field, "vendorString" ) == 0 ) {
-      success = fst->plugin->dispatcher( fst->plugin, effGetVendorString, 0, 0, testString, 0 );
+      success = fst_call_dispatcher( fst, effGetVendorString, 0, 0, testString, 0 );
    }
 
    if (success) {
@@ -148,7 +148,7 @@ fps_process_node(JackVST* jvst, xmlNode *a_node)
              printf ("Problem while decode base64. DecodedChunkSize: %d\n", (int) out_len);
              return FALSE;
           }
-          fst->plugin->dispatcher( fst->plugin, effSetChunk, 0, chunk_size, chunk_data, 0 );
+          fst_call_dispatcher( fst, effSetChunk, 0, chunk_size, chunk_data, 0 );
           printf("Load chunk [DONE]\n");
 
           g_free(chunk_data);
@@ -190,7 +190,7 @@ fps_add_check (FST *fst, xmlNode *node, int opcode, const char *field) {
    char tString[64];
    xmlNode *myNode;
 
-   if (fst->plugin->dispatcher( fst->plugin, opcode, 0, 0, tString, 0 )) {
+   if (fst_call_dispatcher( fst, opcode, 0, 0, tString, 0 )) {
       myNode = xmlNewChild(node, NULL, "check", NULL);
       xmlNewProp(myNode, "field", field);
       xmlNewProp(myNode, "value", tString);
@@ -265,7 +265,7 @@ fps_save (JackVST* jvst, const char * filename) {
       int chunk_size;
       void * chunk_data;
       printf( "getting chunk ... " );
-      chunk_size = fst->plugin->dispatcher( fst->plugin, effGetChunk, 0, 0, &chunk_data, 0 );
+      chunk_size = fst_call_dispatcher( fst, effGetChunk, 0, 0, &chunk_data, 0 );
       printf( "%d B [DONE]\n", chunk_size );
 
       if ( chunk_size <= 0 ) {
