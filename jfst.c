@@ -231,6 +231,8 @@ jvst_save_state (JackVST* jvst, const char * filename)
 	return TRUE;
 }
 
+
+
 static void
 jvst_quit(JackVST* jvst) {
 	if (jvst->with_editor == WITH_EDITOR_NO) {
@@ -254,11 +256,8 @@ sigint_handler(int signum, siginfo_t *siginfo, void *context)
 	jvst = jvst_first;
 
 	printf("Caught signal to terminate (SIGINT)\n");
-	jvst_quit(jvst);
 
-
-	printf("Czekam 5s\n");
-	sleep(5);
+	g_idle_add( (GSourceFunc) jvst_quit, jvst);
 }
 
 static void
@@ -1025,13 +1024,12 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	printf("Start FST GUI/event loop\n");
 	fst_event_loop(hInst);
 
-	printf("Czekam 4s\n");
-	sleep(4);
-
 	printf("Unload plugin\n");
 	fst_unload(jvst->handle);
 
 	jvst_destroy(jvst);
+
+	printf("Game Over\n");
 
 	return 0;
 }
