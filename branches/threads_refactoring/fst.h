@@ -7,7 +7,7 @@
 #include <stdbool.h>
 
 #include <windows.h>
-#include <vestige/aeffectx.h>
+#include "vestige/aeffectx.h"
 
 /**
  * Display FST error message.
@@ -85,6 +85,7 @@ struct FSTDispatcher {
 
 enum EventCall {
 	RESET,
+	CLOSE,
 	DISPATCHER,
 	EDITOR_OPEN,
 	EDITOR_SHOW,
@@ -145,6 +146,7 @@ void fst_event_loop (HMODULE hInst);
 
 extern FST* fst_open (FSTHandle*, audioMasterCallback amc, void* userptr);
 extern void fst_close (FST*);
+extern void fst_loop_quit();
 
 extern void fst_program_change (FST *fst, short want_program);
 extern bool fst_get_program_name (FST *fst, short program, char* name, size_t size);

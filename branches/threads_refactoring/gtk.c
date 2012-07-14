@@ -3,6 +3,7 @@
 #include <gdk/gdkx.h>
 #include <gdk/gdkevents.h>
 #include <X11/Xlib.h>
+#include <sys/syscall.h>
 
 #ifdef HAVE_LASH
 #include <lash/lash.h>
@@ -401,7 +402,7 @@ save_data( JackVST *jvst )
 	    //bytelen = jvst->fst->plugin->dispatcher( jvst->fst->plugin, 23, 0, 0, &chunk, 0 );
 	    //pthread_mutex_unlock( &(fst->lock) );
 
-	    bytelen = jvst->fst->plugin->dispatcher( jvst->fst->plugin, effGetChunk, 0, 0, &chunk, 0 );
+	    bytelen = fst_call_dispatcher( jvst->fst, effGetChunk, 0, 0, &chunk, 0 );
 	    printf( "got tha chunk..\n" );
 	    if( bytelen ) {
 		if( bytelen < 0 ) {
@@ -439,7 +440,7 @@ restore_data(lash_config_t * config, JackVST *jvst )
 
 	if ( jvst->fst->plugin->flags & effFlagsProgramChunks) {
 	    if (strcmp(key, "bin_chunk") == 0) {
-		jvst->fst->plugin->dispatcher( jvst->fst->plugin, effSetChunk, 0, lash_config_get_value_size( config ), (void *) lash_config_get_value( config ), 0 );
+		fst_call_dispatcher( jvst->fst, effSetChunk, 0, lash_config_get_value_size( config ), (void *) lash_config_get_value( config ), 0 );
 		return;
 	    } 
 	} else {
@@ -629,7 +630,7 @@ GtkListStore * create_channel_store() {
 DWORD WINAPI
 gtk_gui_start (JackVST* jvst)
 {
-	printf("GTK ThID: %d\n", GetCurrentThreadId ());
+	printf("GTK Thread WineID: %d | LWP: %d\n", GetCurrentThreadId (), (int) syscall (SYS_gettid));
 
 	// create a GtkWindow containing a GtkSocket...
 	//
