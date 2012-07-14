@@ -253,15 +253,15 @@ fst_destroy_editor (FST* fst)
 void
 fst_suspend (FST *fst) {
 	fst_error("Suspend plugin");
-	fst->plugin->dispatcher (fst->plugin, effStopProcess, 0, 0, NULL, 0.0f);
-	fst->plugin->dispatcher (fst->plugin, effMainsChanged, 0, 0, NULL, 0.0f);
+	fst_call_dispatcher (fst, effStopProcess, 0, 0, NULL, 0.0f);
+	fst_call_dispatcher (fst, effMainsChanged, 0, 0, NULL, 0.0f);
 } 
 
 void
 fst_resume (FST *fst) {
 	fst_error("Resume plugin");
-	fst->plugin->dispatcher (fst->plugin, effMainsChanged, 0, 1, NULL, 0.0f);
-	fst->plugin->dispatcher (fst->plugin, effStartProcess, 0, 0, NULL, 0.0f);
+	fst_call_dispatcher (fst, effMainsChanged, 0, 1, NULL, 0.0f);
+	fst_call_dispatcher (fst, effStartProcess, 0, 0, NULL, 0.0f);
 } 
 
 static void
@@ -436,6 +436,7 @@ fst_close (FST* fst)
 	// It's matter from which thread we calling it
 	if (GetCurrentThreadId() == MainThreadId) {
 		fst->plugin->dispatcher(fst->plugin, effClose, 0, 0, NULL, 0.0f);
+		--fst->handle->plugincnt;
 	} else {
 		// Try call from even_loop thread
 		pthread_mutex_lock (&fst->event_call_lock);
@@ -445,7 +446,6 @@ fst_close (FST* fst)
 		pthread_mutex_unlock (&fst->lock);
 		pthread_mutex_unlock (&fst->event_call_lock);
 	}
-	--fst->handle->plugincnt;
 	free(fst);
 	
 	printf("Plugin closed\n");
@@ -461,6 +461,7 @@ fst_event_handler(FST* fst) {
 	case CLOSE:
 		fst->plugin->dispatcher(fst->plugin, effClose, 0, 0, NULL, 0.0f);
 		fst_event_loop_remove_plugin (fst);
+		--fst->handle->plugincnt;
 		break;
 	case EDITOR_OPEN:		
 		if (fst->window == NULL)
