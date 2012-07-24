@@ -38,9 +38,9 @@ static void fx_load_chunk ( FST *fst, FILE *fxfile, enum FxFileType chunkType )
 	chunkInfo.pluginVersion = fst->plugin->version;
 	chunkInfo.numElements = 1;
 	if ( chunkType == FXBANK) {
-		fst->plugin->dispatcher(fst->plugin, effBeginLoadBank, 0, 0, &chunkInfo, 0);
+		fst_call_dispatcher(fst, effBeginLoadBank, 0, 0, &chunkInfo, 0);
 	} else if (chunkType == FXPROGRAM) {
-		fst->plugin->dispatcher(fst->plugin, effBeginLoadProgram, 0, 0, &chunkInfo, 0);
+		fst_call_dispatcher(fst, effBeginLoadProgram, 0, 0, &chunkInfo, 0);
 	}
 
 	chunk = malloc ( chunkSize );
@@ -49,7 +49,7 @@ static void fx_load_chunk ( FST *fst, FILE *fxfile, enum FxFileType chunkType )
 	printf("SetChunk type : %d\n", chunkType);
 
 
-	fst->plugin->dispatcher(fst->plugin, effSetChunk, chunkType, chunkSize, chunk, 0);
+	fst_call_dispatcher(fst, effSetChunk, chunkType, chunkSize, chunk, 0);
 	free(chunk);
 }
 
@@ -97,7 +97,7 @@ static void fx_load_program ( FST *fst, FILE *fxfile, short programNumber )
 
 	br = fread ( &prgName, sizeof(prgName), 1, fxfile);
 //	prgName = endian_swap(prgName);
-	fst->plugin->dispatcher(fst->plugin, effSetProgramName, 0, 0, prgName, 0);
+	fst_call_dispatcher(fst, effSetProgramName, 0, 0, prgName, 0);
 
 	if (isChunk) {
 		fx_load_chunk(fst, fxfile, FXPROGRAM);
@@ -254,7 +254,7 @@ int fst_save_fxfile ( FST *fst, const char *filename, enum FxFileType fileType )
 
 	if (isChunk) {
 		printf("Getting chunk ...");
-		chunkSize = fst->plugin->dispatcher( fst->plugin, effGetChunk, chunkType, 0, &chunk, 0 );
+		chunkSize = fst_call_dispatcher( fst, effGetChunk, chunkType, 0, &chunk, 0 );
 		printf("%d B -  DONE\n", chunkSize);
 		fxHeader.byteSize += chunkSize + sizeof(int);
 	} else {
