@@ -4,6 +4,7 @@
 #include "fst.h"
 
 static FST* fst_first = NULL;
+int MainThreadId;
 
 static LRESULT WINAPI 
 my_window_proc (HWND w, UINT msg, WPARAM wp, LPARAM lp)
@@ -155,26 +156,34 @@ fst_program_change (FST *fst, short want_program)
 int 
 fst_call_dispatcher(FST *fst, int opcode, int index, int val, void *ptr, float opt )
 {
-	struct FSTDispatcher dp;
+	int retval;
 
-	pthread_mutex_lock (&fst->event_call_lock);
-	pthread_mutex_lock (&fst->lock);
+	// if we in main thread then call directly
+	if (GetCurrentThreadId() == MainThreadId) {
+		retval = fst->plugin->dispatcher( fst->plugin, opcode, index, val, ptr, opt );
+	} else {
+		struct FSTDispatcher dp;
 
-	dp.opcode = opcode;
-	dp.index = index;
-	dp.val = val;
-	dp.ptr = ptr;
-	dp.opt = opt;
-	fst->dispatcher = &dp;
-	fst->event_call = DISPATCHER;
+		pthread_mutex_lock (&fst->event_call_lock);
+		pthread_mutex_lock (&fst->lock);
 
-	pthread_cond_wait (&fst->event_called, &fst->lock);
+		dp.opcode = opcode;
+		dp.index = index;
+		dp.val = val;
+		dp.ptr = ptr;
+		dp.opt = opt;
+		fst->dispatcher = &dp;
+		fst->event_call = DISPATCHER;
 
-	pthread_mutex_unlock (&fst->lock);
-	pthread_mutex_unlock (&fst->event_call_lock);
-	fst->dispatcher = NULL;
+		pthread_cond_wait (&fst->event_called, &fst->lock);
 
-	return dp.retval;
+		pthread_mutex_unlock (&fst->lock);
+		pthread_mutex_unlock (&fst->event_call_lock);
+		retval = dp.retval;
+		fst->dispatcher = NULL;
+	}
+
+	return retval;
 }
 
 static bool
@@ -244,15 +253,15 @@ fst_destroy_editor (FST* fst)
 void
 fst_suspend (FST *fst) {
 	fst_error("Suspend plugin");
-	fst->plugin->dispatcher (fst->plugin, effStopProcess, 0, 0, NULL, 0.0f);
-	fst->plugin->dispatcher (fst->plugin, effMainsChanged, 0, 0, NULL, 0.0f);
+	fst_call_dispatcher (fst, effStopProcess, 0, 0, NULL, 0.0f);
+	fst_call_dispatcher (fst, effMainsChanged, 0, 0, NULL, 0.0f);
 } 
 
 void
 fst_resume (FST *fst) {
 	fst_error("Resume plugin");
-	fst->plugin->dispatcher (fst->plugin, effMainsChanged, 0, 1, NULL, 0.0f);
-	fst->plugin->dispatcher (fst->plugin, effStartProcess, 0, 0, NULL, 0.0f);
+	fst_call_dispatcher (fst, effMainsChanged, 0, 1, NULL, 0.0f);
+	fst_call_dispatcher (fst, effStartProcess, 0, 0, NULL, 0.0f);
 } 
 
 static void
@@ -413,6 +422,8 @@ fst_open (FSTHandle* fhandle, audioMasterCallback amc, void* userptr)
 	++fst->handle->plugincnt;
 	fst_event_loop_add_plugin(fst);
 
+	MainThreadId = GetCurrentThreadId();
+
 	return fst;
 }
 
@@ -421,10 +432,23 @@ fst_close (FST* fst)
 {
 	fst_suspend(fst);
 	fst_destroy_editor (fst);
-	fst->plugin->dispatcher(fst->plugin, effClose, 0, 0, NULL, 0.0f);
-	fst_event_loop_remove_plugin (fst);
-	--fst->handle->plugincnt;
+
+	// It's matter from which thread we calling it
+	if (GetCurrentThreadId() == MainThreadId) {
+		fst->plugin->dispatcher(fst->plugin, effClose, 0, 0, NULL, 0.0f);
+		--fst->handle->plugincnt;
+	} else {
+		// Try call from even_loop thread
+		pthread_mutex_lock (&fst->event_call_lock);
+		pthread_mutex_lock (&fst->lock);
+		fst->event_call = CLOSE;
+		pthread_cond_wait (&fst->event_called, &fst->lock);
+		pthread_mutex_unlock (&fst->lock);
+		pthread_mutex_unlock (&fst->event_call_lock);
+	}
 	free(fst);
+	
+	printf("Plugin closed\n");
 }
 
 static inline void
@@ -434,6 +458,11 @@ fst_event_handler(FST* fst) {
 	struct FSTDispatcher* dp = fst->dispatcher;
 
 	switch (fst->event_call) {
+	case CLOSE:
+		fst->plugin->dispatcher(fst->plugin, effClose, 0, 0, NULL, 0.0f);
+		fst_event_loop_remove_plugin (fst);
+		--fst->handle->plugincnt;
+		break;
 	case EDITOR_OPEN:		
 		if (fst->window == NULL)
 			fst_create_editor(fst);
@@ -500,17 +529,17 @@ register_window_class (HMODULE hInst)
 	return TRUE;
 }
 
-static DWORD WINAPI
+void
 fst_event_loop (HMODULE hInst)
 {
 	MSG msg;
 	FST* fst;
 	HWND dummy_window;
-	DWORD gui_thread_id;
+	//DWORD gui_thread_id;
 	HANDLE* h_thread;
 
 	register_window_class(hInst);
-	gui_thread_id = GetCurrentThreadId ();
+	//gui_thread_id = GetCurrentThreadId ();
 	h_thread = GetCurrentThread ();
 
 	//SetPriorityClass ( h_thread, REALTIME_PRIORITY_CLASS);
@@ -525,18 +554,16 @@ fst_event_loop (HMODULE hInst)
 		fst_error ("cannot create dummy timer window");
 	}
 
-	if (!SetTimer (dummy_window, 1000, 100, NULL)) {
+	if (!SetTimer (dummy_window, 1000, 50, NULL)) {
 		fst_error ("cannot set timer on dummy window");
-		return 1;
+		return;
 	}
 
 	while (GetMessageA (&msg, NULL, 0,0) != 0) {
 		TranslateMessage(&msg);
 		DispatchMessageA(&msg);
-
 		if ( msg.message != WM_TIMER || msg.hwnd != dummy_window )
 			continue;
-
 		for (fst = fst_first; fst; fst = fst->next) {
 			if (fst->wantIdle)
 				fst->plugin->dispatcher (fst->plugin, effIdle, 0, 0, NULL, 0);  
@@ -552,15 +579,4 @@ fst_event_loop (HMODULE hInst)
 	}
 
 	printf( "GUI EVENT LOOP: THE END\n" );
-}
-
-bool
-fst_init ()
-{
-	if (CreateThread (NULL, 0, (LPTHREAD_START_ROUTINE) fst_event_loop, NULL, 0, NULL) == NULL) {
-		fst_error ("could not create event thread proxy");
-		return FALSE;
-	}
-
-	return TRUE;
 }
