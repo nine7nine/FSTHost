@@ -139,6 +139,22 @@ fst_get_program_name (FST *fst, short program, char* name, size_t size)
 void
 fst_program_change (FST *fst, short want_program)
 {
+	// if we in main thread then call directly
+	if (GetCurrentThreadId() == MainThreadId) {
+		char progName[24];
+
+		fst->plugin->dispatcher (fst->plugin, effBeginSetProgram, 0, 0, NULL, 0);
+		fst->plugin->dispatcher (fst->plugin, effSetProgram, 0,(int32_t) want_program, NULL, 0);
+		fst->plugin->dispatcher (fst->plugin, effEndSetProgram, 0, 0, NULL, 0);
+		fst->current_program = want_program;
+		fst->want_program = -1;
+
+		fst_get_program_name(fst, fst->current_program, progName, sizeof(progName));
+		printf("Program: %d : %s\n", fst->current_program, progName);
+
+		return;
+	}
+
 	pthread_mutex_lock (&fst->event_call_lock);
 	pthread_mutex_lock (&fst->lock);
 
