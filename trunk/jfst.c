@@ -658,11 +658,11 @@ session_callback_aux( jack_session_event_t *event, void* arg )
 }
 
 int
-jvst_connect(JackVST *jvst, const char *myname, const char *connect_to)
+jvst_connect(JackVST *jvst, const char *connect_to)
 {
 	unsigned short i,j;
-	char pname[strlen(myname) + 16];
 	const char *ptype;
+	const char *pname;
 
 	const char **jports = jack_get_ports(jvst->client, connect_to, NULL, JackPortIsInput);
 	if (jports == NULL) {
@@ -670,15 +670,15 @@ jvst_connect(JackVST *jvst, const char *myname, const char *connect_to)
 		return 0;
 	}
 
-	for (i=0, j=0; jports[i] != NULL && j < jvst->fst->plugin->numOutputs; i++) {
-		ptype = jack_port_type(jack_port_by_name(jvst->client, jports[i]));
+	for (i=0, j=0; jports[i] != NULL && j < jvst->numOuts; i++) {
+		ptype = jack_port_type( jack_port_by_name(jvst->client, jports[i]) );
 
 		if (strcmp(ptype, JACK_DEFAULT_AUDIO_TYPE) != 0) {
 			printf("Skip incompatibile port: %s\n", ptype);
 			continue;
 		}
 
-		sprintf(pname, "%s:out%d", myname, ++j);
+		pname = jack_port_name(jvst->outports[j++]);
 		jack_connect(jvst->client, pname, jports[i]);
 		printf("Connect: %s -> %s\n", pname, jports[i]);
 	}
@@ -1002,7 +1002,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 
 	// Auto connect on start
 	if (connect_to)
-		jvst_connect(jvst, jvst->client_name, connect_to);
+		jvst_connect(jvst, connect_to);
 
 	// Create GTK or GlibMain thread
 	if (jvst->with_editor != WITH_EDITOR_NO) {
