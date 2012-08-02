@@ -2,8 +2,8 @@ CFLAGS = -O2 -Wall -g
 
 .PHONY: clean
 
-fhctrl: ../sysex.c fhctrl.c
-	gcc $(CFLAGS) -g -o $@ $^ -ljack -lconfig
+fhctrl: ../../trunk/sysex.c nfhc.c fhctrl.c
+	$(CC) $(CFLAGS) -g -o $@ $^ -ljack -lconfig -lcdk -lcurses
 
 clean:
-	rm -f fhctrl
+	rm -f fhctrl nfhc
