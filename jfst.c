@@ -33,6 +33,7 @@
 #endif
 
 const char* my_motherfuckin_name = "fsthost";
+const char* ControlAppName = "FHControl";
 
 /* audiomaster.c */
 extern long jack_host_callback (struct AEffect*, int32_t, int32_t, intptr_t, void *, float );
@@ -270,33 +271,6 @@ sigusr1_handler(int signum, siginfo_t *siginfo, void *context)
 	printf("Caught signal to save state (SIGUSR1)\n");
 
 	jvst_save_state(jvst, jvst->default_state_file);
-}
-
-static bool
-jvst_idle_cb(JackVST* jvst)
-{
-	// Send notify if something change
-	if (jvst->sysex_want_notify && jvst->fst->want_program == -1) {
-		SysExDumpV1* d = jvst->sysex_dump;
-		if ( d->program != jvst->fst->current_program ||
-		     d->channel != jvst->channel ||
-		     d->state   != ( (jvst->bypassed) ? SYSEX_STATE_NOACTIVE : SYSEX_STATE_ACTIVE ) ||
-		     d->volume  != jvst_get_volume(jvst)
-		) jvst_send_sysex(jvst, SYSEX_WANT_DUMP);
-	}
-
-	// Check state
-	if (jvst->want_state == WANT_STATE_BYPASS && !jvst->bypassed) {
-		jvst->want_state = WANT_STATE_NO;
-		jvst->bypassed = TRUE;
-		fst_suspend(jvst->fst);
-	} else if (jvst->want_state == WANT_STATE_RESUME && jvst->bypassed) {
-		jvst->want_state = WANT_STATE_NO;
-		fst_resume(jvst->fst);
-		jvst->bypassed = FALSE;
-	}
-
-	return TRUE;
 }
 
 static DWORD WINAPI
@@ -658,33 +632,85 @@ session_callback_aux( jack_session_event_t *event, void* arg )
 }
 
 int
-jvst_connect(JackVST *jvst, const char *connect_to)
+jvst_connect(JackVST *jvst, const char *audio_to)
 {
 	unsigned short i,j;
-	const char *ptype;
 	const char *pname;
+	const char **jports;
+	jack_port_t* port;
 
-	const char **jports = jack_get_ports(jvst->client, connect_to, NULL, JackPortIsInput);
+	// Connect audio port
+	jports = jack_get_ports(jvst->client, audio_to, JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput);
 	if (jports == NULL) {
-		printf("Can't find any ports for %s\n", connect_to);
+		printf("Can't find any ports for %s\n", audio_to);
 		return 0;
 	}
 
 	for (i=0, j=0; jports[i] != NULL && j < jvst->numOuts; i++) {
-		ptype = jack_port_type( jack_port_by_name(jvst->client, jports[i]) );
-
-		if (strcmp(ptype, JACK_DEFAULT_AUDIO_TYPE) != 0) {
-			printf("Skip incompatibile port: %s\n", ptype);
-			continue;
-		}
-
 		pname = jack_port_name(jvst->outports[j++]);
 		jack_connect(jvst->client, pname, jports[i]);
 		printf("Connect: %s -> %s\n", pname, jports[i]);
 	}
 	jack_free(jports);
+}
 
-	return 1;
+static bool
+jvst_idle_cb(JackVST* jvst)
+{
+	const char **jports;
+	jack_port_t* port;
+	unsigned short i;
+
+	// Send notify if something change
+	if (jvst->sysex_want_notify && jvst->fst->want_program == -1) {
+		SysExDumpV1* d = jvst->sysex_dump;
+		if ( d->program != jvst->fst->current_program ||
+		     d->channel != jvst->channel ||
+		     d->state   != ( (jvst->bypassed) ? SYSEX_STATE_NOACTIVE : SYSEX_STATE_ACTIVE ) ||
+		     d->volume  != jvst_get_volume(jvst)
+		) jvst_send_sysex(jvst, SYSEX_WANT_DUMP);
+	}
+
+	// Check state
+	if (jvst->want_state == WANT_STATE_BYPASS && !jvst->bypassed) {
+		jvst->want_state = WANT_STATE_NO;
+		jvst->bypassed = TRUE;
+		fst_suspend(jvst->fst);
+	} else if (jvst->want_state == WANT_STATE_RESUME && jvst->bypassed) {
+		jvst->want_state = WANT_STATE_NO;
+		fst_resume(jvst->fst);
+		jvst->bypassed = FALSE;
+	}
+
+	// Connect MIDI ports to control app
+	jports = jack_get_ports(jvst->client, ControlAppName, JACK_DEFAULT_MIDI_TYPE, 0);
+	if (jports == NULL) return TRUE;
+
+	for (i=0; jports[i] != NULL; i++) {
+		port = jack_port_by_name(jvst->client, jports[i]);
+
+		// Skip mine
+		if ( jack_port_is_mine(jvst->client, port) )
+			continue;
+
+		if (jack_port_flags(port) & JackPortIsInput) {
+			if ( jack_port_connected_to(jvst->midi_outport, jports[i]) )
+				continue;
+
+			printf("Connect to: %s\n", jports[i]);
+			jack_connect(jvst->client, jack_port_name(jvst->midi_outport), jports[i]);
+		} else if (jack_port_flags(port) & JackPortIsOutput) {
+			if ( jack_port_connected_to(jvst->midi_inport, jports[i]) )
+				continue;
+
+			jack_connect(jvst->client, jports[i], jack_port_name(jvst->midi_inport));
+			printf("Connect to: %s\n", jports[i]);
+		}
+
+	}
+        jack_free(jports);
+
+	return TRUE;
 }
 
 static void
@@ -866,7 +892,6 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 		jack_port_register(jvst->client, "midi-out", JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
 
 	if (fst->vst_version >= 2) {
-
 		/* should we send the plugin VST events (i.e. MIDI) */
 		if (fst->isSynth || fst->canReceiveVstEvents || fst->canReceiveVstMidiEvent) {
 			jvst->want_midi_in = TRUE;
@@ -997,7 +1022,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 
 	// Init Glib main event loop
 	glib_main_loop = g_main_loop_new(NULL, FALSE);
-	g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 500, 
+	g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 750,
 		(GSourceFunc) jvst_idle_cb, jvst, NULL);
 
 	// Auto connect on start
