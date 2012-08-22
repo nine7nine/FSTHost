@@ -136,18 +136,14 @@ jvst_sysex_handler(struct SysExEvent* sysex_event)
 		// Our sysex
 		printf("Got Our SysEx - ");
 
-		if (size < sizeof(SysExDumpV1)) {
-			printf("wrong size !\n");
-			break;
-		}
-
 		// Version
 		printf("version %d - ", data[2]);
 		switch(data[2]) {
 		case 1:
+			// Type
 			switch(data[3]) {
 			case SYSEX_TYPE_DUMP:
-				printf("OK\n");
+				printf(" DUMP - OK\n");
 
 				SysExDumpV1* sysex_v1 = (SysExDumpV1*) data;
 
@@ -158,7 +154,11 @@ jvst_sysex_handler(struct SysExEvent* sysex_event)
 				jvst_set_volume(jvst, sysex_v1->volume);
 				break;
 			case SYSEX_TYPE_RQST:
-				jvst_send_sysex(jvst, SYSEX_WANT_DUMP);
+				SysExDumpRequestV1* sysex_request_v1 = (SysExDumpRequestV1*) data;
+				printf(" REQUEST - ID %d - OK\n", sysex_request_v1->uuid);
+				if (sysex_request_v1->uuid == jvst->sysex_dump->uuid)
+					jvst_send_sysex(jvst, SYSEX_WANT_DUMP);
+
 				break;
 			}
 
