@@ -360,10 +360,13 @@ fst_load (const char * path)
 		return NULL;
 	}
 
-	if ((main_entry = (main_entry_t) GetProcAddress (dll, "main")) == NULL) {
+	if ( 
+	  (main_entry = (main_entry_t) GetProcAddress (dll, "VSTPluginMain")) == NULL &&
+	  (main_entry = (main_entry_t) GetProcAddress (dll, "main")) == NULL
+	) {
 		free(name);
 		FreeLibrary (dll);
-		fst_error("Wrong main_entry\n");
+		fst_error("Can't found either main and VSTPluginMain entry\n");
 		return NULL;
 	}
 	
