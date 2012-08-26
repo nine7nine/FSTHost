@@ -153,7 +153,7 @@ jvst_sysex_handler(struct SysExEvent* sysex_event)
 				jvst->channel = sysex_v1->channel;
 				jvst_set_volume(jvst, sysex_v1->volume);
 				break;
-			case SYSEX_TYPE_RQST:
+			case SYSEX_TYPE_RQST: ;
 				SysExDumpRequestV1* sysex_request_v1 = (SysExDumpRequestV1*) data;
 				printf(" REQUEST - ID %d - OK\n", sysex_request_v1->uuid);
 				if (sysex_request_v1->uuid == jvst->sysex_dump->uuid)
