@@ -26,9 +26,10 @@ INCLUDE_PATH          = -I. -I/usr/include -I/usr/include -I/usr/include/wine -I
 DLL_PATH              =
 LIBRARY_PATH          = -L/usr/lib/i386-linux-gnu/wine
 LIBRARIES             := $(shell pkg-config --libs $(PKG_CONFIG_MODULES)) -L/usr/X11R6/lib -lpthread -lrt -lX11 -m32
+DESTDIR               =
 PREFIX                = /usr
-LIB_INST_PATH         = lib/i386-linux-gnu/wine
-BIN_INST_PATH         = bin
+LIB_INST_PATH         = $(PREFIX)/lib/i386-linux-gnu/wine
+BIN_INST_PATH         = $(PREFIX)/bin
 
 ### fst.exe sources and settings
 fsthost_exe_MODULE       = fsthost
@@ -98,8 +99,8 @@ clean:: $(SUBDIRS:%=%/__clean__) $(EXTRASUBDIRS:%=%/__clean__)
 	$(RM) $(EXES:%=%.dbg.o) $(EXES:%=%.so) $(EXES:%.exe=%)
 
 install: $(fsthost_exe_MODULE)
-	install -Dm 0644 fsthost.exe.so $(PREFIX)/$(LIB_INST_PATH)/fsthost.exe.so
-	install -Dm 0755 fsthost $(PREFIX)/$(BIN_INST_PATH)/fsthost
+	install -Dm 0644 fsthost.exe.so $(DESTDIR)$(LIB_INST_PATH)/fsthost.exe.so
+	install -Dm 0755 fsthost $(DESTDIR)$(BIN_INST_PATH)/fsthost
 
 $(SUBDIRS:%=%/__clean__): dummy
 	cd `dirname $@` && $(MAKE) clean
@@ -115,7 +116,8 @@ $(fsthost_exe_MODULE): $(fsthost_exe_OBJS)
 # Add support for WINE_RT
 	sed -i -e '/^# determine the application directory/,/^esac/d' \
 		-e 's/-n "$$appdir"/! -r "$$appname"/' \
-		-e '3i \appdir="$(PREFIX)/$(LIB_INST_PATH)"' \
+		-e '3i \appdir="$(LIB_INST_PATH)"' \
 		-e '3i \export WINE_RT=$${WINE_RT:-10}' \
 		-e '3i \export WINE_SRV_RT=$${WINE_SRV_RT:-15}' $(fsthost_exe_MODULE).exe
+# Cut extension from binary name
 	mv $(fsthost_exe_MODULE).exe $(fsthost_exe_MODULE)

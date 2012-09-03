@@ -9,7 +9,6 @@ int MainThreadId;
 static LRESULT WINAPI 
 my_window_proc (HWND w, UINT msg, WPARAM wp, LPARAM lp)
 {
-	FST* fst=NULL;
 	LRESULT result;
 
 	switch (msg) {
