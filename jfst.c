@@ -35,12 +35,10 @@
 const char* my_motherfuckin_name = "fsthost";
 const char* ControlAppName = "FHControl";
 
+extern bool fst_create_editor (FST* fst);
+
 /* audiomaster.c */
 extern long jack_host_callback (struct AEffect*, int32_t, int32_t, intptr_t, void *, float );
-
-/* gtk.c */
-extern void gtk_gui_init (int* argc, char** argv[]);
-extern int gtk_gui_start (JackVST * jvst);
 
 /* Structures & Prototypes for midi output and associated queue */
 struct MidiMessage {
@@ -236,17 +234,15 @@ jvst_save_state (JackVST* jvst, const char * filename)
 
 static void
 jvst_quit(JackVST* jvst) {
-	if (jvst->with_editor == WITH_EDITOR_NO) {
+//	if (jvst->with_editor == WITH_EDITOR_NO) {
 		g_main_loop_quit(glib_main_loop);
 
-		printf("Jack Deactivate\n");
-		jack_deactivate(jvst->client);
+//		printf("Jack Deactivate\n");
+//		jack_deactivate(jvst->client);
 
-		printf("Close plugin\n");
-		fst_close(jvst->fst);
-	} else {
-		gtk_main_quit();
-	}
+//		printf("Close plugin\n");
+//		fst_close(jvst->fst);
+//	}
 }
 
 static void
@@ -409,7 +405,7 @@ process_midi_input(JackVST* jvst, jack_nframes_t nframes)
 			sysex_event->jvst = jvst;
 			sysex_event->size = jackevent.size;
 			memcpy(sysex_event->data, jackevent.buffer, jackevent.size);
-			g_idle_add( (GSourceFunc) jvst_sysex_handler, sysex_event);
+			//g_idle_add( (GSourceFunc) jvst_sysex_handler, sysex_event);
 
 			/* TODO:
 			For now we simply drop all SysEx messages because VST standard
@@ -661,6 +657,9 @@ jvst_idle_cb(JackVST* jvst)
 	jack_port_t* port;
 	unsigned short i;
 
+	if (jvst->fst->quit)
+		jvst_quit(jvst);
+
 	// Send notify if something change
 	if (jvst->sysex_want_notify && jvst->fst->want_program == -1) {
 		SysExDumpV1* d = jvst->sysex_dump;
@@ -848,6 +847,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	jvst_set_volume(jvst, 63);
 
 	printf( "yo... lets see...\n" );
+	fst_init(hInst);
 	if ((jvst->handle = fst_load (plug_path)) == NULL) {
 		fst_error ("can't load plugin %s", plug_path);
 		return 1;
@@ -857,16 +857,14 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 		jvst->client_name = jvst->handle->name;
 
 	printf( "Revive plugin: %s\n", jvst->client_name);
-	if ((jvst->fst = fst_open (jvst->handle, (audioMasterCallback) jack_host_callback, jvst)) == NULL) {
+	if ((fst = fst_open (jvst->handle, (audioMasterCallback) jack_host_callback, jvst)) == NULL) {
 		fst_error ("can't instantiate plugin %s", plug_path);
 		return 1;
 	}
+	plugin = fst->plugin;
+	jvst->fst = fst;
 
         printf("Main Thread WineID: %d | LWP: %d\n", GetCurrentThreadId (), (int) syscall (SYS_gettid));
-
-	fst = jvst->fst;
-	plugin = fst->plugin;
-
 	printf("Start Jack thread ...\n");
 	if ((jvst->client = jack_client_open (jvst->client_name, JackSessionID, NULL, jvst->uuid )) == 0) {
 		fst_error ("can't connect to JACK");
@@ -1030,6 +1028,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 		jvst_connect(jvst, connect_to);
 
 	// Create GTK or GlibMain thread
+/*
 	if (jvst->with_editor != WITH_EDITOR_NO) {
 		printf( "Start GUI\n" );
 		gtk_gui_init (&argc, &argv);
@@ -1045,9 +1044,22 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 			return FALSE;
 		}
 	}
+*/
+
+	if (jvst->with_editor != WITH_EDITOR_NO)
+		fst_gui_open_main(fst, true);
 
 	printf("Start FST GUI/event loop\n");
-	fst_event_loop(hInst);
+
+	g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 20,
+		(GSourceFunc) fst_event_loop, NULL, NULL);
+
+	g_main_loop_run(glib_main_loop);
+
+        printf("Jack Deactivate\n");
+        jack_deactivate(jvst->client);
+
+	fst_close(fst);
 
 	printf("Unload plugin\n");
 	fst_unload(jvst->handle);

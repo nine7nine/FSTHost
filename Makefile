@@ -9,7 +9,6 @@ LASH_EXISTS := $(shell if pkg-config --exists lash-1.0; then echo yes; else echo
 ### Common settings
 
 PKG_CONFIG_MODULES    := glib-2.0
-PKG_CONFIG_MODULES    += gtk+-2.0
 PKG_CONFIG_MODULES    += jack
 PKG_CONFIG_MODULES    += libxml-2.0
 ifeq ($(LASH_EXISTS),yes)
@@ -33,7 +32,7 @@ BIN_INST_PATH         = $(PREFIX)/bin
 
 ### fst.exe sources and settings
 fsthost_exe_MODULE       = fsthost
-fsthost_exe_C_SRCS       = audiomaster.c fst.c gtk.c jfst.c fxb.c fps.c vstwin.c sysex.c cpuusage.c
+fsthost_exe_C_SRCS       = audiomaster.c fst.c jfst.c fxb.c fps.c vstwin.c sysex.c cpuusage.c
 fsthost_exe_CXX_SRCS     =
 fsthost_exe_RC_SRCS      =
 fsthost_exe_LDFLAGS      = -mwindows
