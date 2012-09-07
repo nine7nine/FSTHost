@@ -28,6 +28,7 @@ extern void (*fst_error_callback)(const char *msg);
 void fst_set_error_function (void (*func)(const char *));
 
 typedef struct _FST FST;
+typedef struct _FST_GUI FST_GUI;
 typedef struct _FSTHandle FSTHandle;
 //typedef struct _FSTInfo FSTInfo;
 typedef struct _FXHeader FXHeader;
@@ -57,8 +58,7 @@ struct _FSTInfo
 
 typedef struct AEffect * (*main_entry_t)(audioMasterCallback);
 
-struct _FSTHandle
-{
+struct _FSTHandle {
     void*		dll;
     char*		name;
     char*		path;
@@ -84,33 +84,43 @@ struct FSTDispatcher {
 };
 
 enum EventCall {
-	RESET,
-	CLOSE,
-	DISPATCHER,
-	EDITOR_OPEN,
-	EDITOR_SHOW,
-	EDITOR_CLOSE,
-	PROGRAM_CHANGE
+	FST_RESET,
+	FST_CLOSE,
+	FST_DISPATCHER,
+	FST_GUI_OPEN,
+	FST_GUI_CLOSE,
+	FST_PROGRAM_CHANGE
 };
 
-struct _FST 
-{
+struct _FST_GUI {
+	/* GUI stuff */
+	HWND	window;	/* win32 HWND */
+	HWND	editor_window;	/* win32 HWND */
+	int	width;		/* Editor width */
+	int	height;		/* Editor height */
+	short	tb_height;	/* ToolBar Height */
+	short	tb_width;	/* ToolBar Width */
+	int	xid;		/* X11 XWindow */
+};
+
+struct _FST {
 	struct AEffect*		plugin;
 	FSTHandle*		handle;
 	struct _FST*		next;
+	struct _FST_GUI*	gui;
 
 	enum EventCall		event_call;
 	struct FSTDispatcher*	dispatcher;
 
-	void*			window; /* win32 HWND */
-	int			xid;    /* X11 XWindow */
-	int			width;
-	int			height;
 	bool			wantIdle;
+	bool			quit;
 
 	bool			program_changed;
 	short			want_program;
 	short			current_program;
+
+	/* Channel Filter */
+	short			channel;
 
 	unsigned short		vst_version;
 	bool			isSynth;
@@ -142,7 +152,7 @@ struct _FXHeader {
 extern FSTHandle* fst_load (const char * );
 extern bool fst_unload (FSTHandle*);
 
-void fst_event_loop (HMODULE hInst);
+bool fst_event_loop ();
 
 extern FST* fst_open (FSTHandle*, audioMasterCallback amc, void* userptr);
 extern void fst_close (FST*);
@@ -151,8 +161,8 @@ extern void fst_loop_quit();
 extern void fst_program_change (FST *fst, short want_program);
 extern bool fst_get_program_name (FST *fst, short program, char* name, size_t size);
 
-extern bool fst_run_editor (FST*);
-extern void fst_destroy_editor (FST*);
+extern bool fst_gui_open_main (FST*, bool WithEditor);
+extern void fst_gui_close (FST*);
 
 //extern FSTInfo *fst_get_info (char *dllpathname);
 //extern void fst_free_info (FSTInfo *info);
