@@ -8,19 +8,28 @@
 //      
 
 #include <stdio.h>
+#include <pthread.h>
 #include <unistd.h>
 #include <cdk/cdk.h>
 #include "fhctrl.h"
 
-#define LEFT_MARGIN     2   /* Where the plugin boxes start */
+#define LEFT_MARGIN     0   /* Where the plugin boxes start */
 #define RIGHT_MARGIN    80  /* Where the infoboxes start */
 #define TOP_MARGIN      7   /* How much space is reserved for the logo */
+#define LOGWIN_WIDTH    40
+#define CHUJ 37
 
 struct labelbox {
     CDKLABEL    *label;
     char	*text[2];
+    uint8_t fstid;
 };
 
+CDKSWINDOW *logwin;
+CDKSCROLL *song_list;
+bool quit = false;
+extern void send_ident_request();
+int state_color[3] = { 58, 59, 57 };
 
 static int get_selector_1(CDKSCREEN *cdkscreen) {
     char    *title  = "<C>Set a new value:";
@@ -71,19 +80,63 @@ static int get_selector_1(CDKSCREEN *cdkscreen) {
     return (choice + 1);
 }
 
-void nfhc(struct Song *song_first, struct Song *song_current, struct FSTPlug **fst) {
+void update_selector(struct labelbox* selector, struct FSTPlug* fp) {
+  selector->fstid = fp->id;
+
+  sprintf(selector->text[0], "</U/%d>%03d %-23s | %02d | %02d<!05>",
+       state_color[fp->state->state], 
+       fp->id,
+       fp->name,
+       fp->state->channel,
+       fp->state->volume
+  );
+  sprintf(selector->text[1], "#%02d - %-24s", fp->state->program, fp->state->program_name);
+  
+  setCDKLabelMessage(selector->label, selector->text, 2);
+}
+
+void nLOG(char *fmt, ...) {
+   char info[LOGWIN_WIDTH];
+   va_list args;
+
+   va_start(args, fmt);
+   vsnprintf(info, sizeof(info), fmt, args);
+   addCDKSwindow(logwin, info, 0);
+}
+
+void* key_loop(void* _arg) {
+
+   while(!quit) {
+      activateCDKScroll(song_list, NULL);
+   }
+
+   return NULL;
+}
+
+static int kurwa_jebana(EObjectType cdktype, void *object, void *clientdata, chtype key) {
+   quit = true;
+   nLOG("QUIT\n");
+
+  return FALSE;
+}
+
+void nfhc(struct Song *song_first, struct FSTPlug **fst) {
     short i, f;
     CDKSCREEN       *cdkscreen;
-    CDKLABEL        *app_info, *top_logo, *song_list;
+    CDKLABEL        *top_logo;
     WINDOW          *screen;
     char            *mesg[9];
+    pthread_t       key_thread;
     struct labelbox selector[16];
     struct FSTPlug *fp;
-    struct FSTState *fs;
+    struct Song *song;
 
     /* Initialize the Cdk screen.  */
     screen = initscr();
     cdkscreen = initCDKScreen (screen);
+
+    /* Disable cursor */
+    curs_set(0);
 
     /* Start CDK Colors */
     initCDKColor();
@@ -95,79 +148,69 @@ void nfhc(struct Song *song_first, struct Song *song_current, struct FSTPlug **f
     mesg[3] = "</56> \\ \\_\\   \\/\\_____\\  \\ \\_\\ \\ \\_\\ \\_\\\\ \\_____\\\\/\\_____\\  \\ \\_\\ ";
     mesg[4] = "</56>  \\/_/    \\/_____/   \\/_/  \\/_/\\/_/ \\/_____/ \\/_____/   \\/_/      proudly done by xj, 2012";
     top_logo = newCDKLabel (cdkscreen, LEFT_MARGIN+10, TOP, mesg, 5, FALSE, FALSE);
-    drawCDKLabel (top_logo, TRUE);
+    drawCDKLabel(top_logo, TRUE);
 
-    /* app_info label setup */
-    mesg[0] = "</U/63>This is the killer VST app by xj(tm).<!05>";
-    mesg[1] = "Currently it allows you to:";
-    mesg[2] = "<B=+>Change selector no. 1";
-    mesg[3] = "<B=+>Do absolutely nothing";
-    mesg[4] = "<B=+>Do nothing, but absolutely";
-    mesg[5] = "<B=+>Do some other crazy shit, like exit";
+    logwin = newCDKSwindow (cdkscreen, RIGHT_MARGIN, TOP_MARGIN, 8, LOGWIN_WIDTH, "</U/63>LOG", 10, TRUE, FALSE);
+    drawCDKSwindow(logwin, TRUE);
 
-    app_info = newCDKLabel (cdkscreen, RIGHT_MARGIN, TOP_MARGIN, mesg, 6, TRUE, TRUE);
-    drawCDKLabel (app_info, TRUE);
+    /* Create Song List */
+    song_list = newCDKScroll ( cdkscreen, RIGHT_MARGIN, TOP_MARGIN+10, RIGHT, 8, 
+          LOGWIN_WIDTH, "</U/63>Select song preset:<!05>", 0, 0, FALSE, A_REVERSE, TRUE, FALSE);
 
-    /* song_list label setup */
-    mesg[0] = "</U/63>Select song preset:<!05>";
-    mesg[1] = "<B=+>Song 1 title           (Ctrl+1)    ";
-    mesg[2] = "<B=+>Song 2 title           (Ctrl+2)    ";
-    mesg[3] = "<B=+>Song 3 title           (Ctrl+3)    ";
-    mesg[4] = "<B=+>Song 4 title           (Ctrl+4)    ";
-    mesg[5] = "<B=+>Song 5 title           (Ctrl+5)    ";
-    mesg[6] = "<B=+>Song 6 title           (Ctrl+6)    ";
-    mesg[7] = "<B=+>Song 7 title           (Ctrl+7)    ";
-    mesg[8] = "<B=+>Song 8 title           (Ctrl+8)    ";    
-
-    song_list = newCDKLabel (cdkscreen, RIGHT_MARGIN, TOP_MARGIN+10, mesg, 9, TRUE, TRUE);
-    drawCDKLabel (song_list, TRUE);
+    song = song_first;
+    while(song) {
+       addCDKScrollItem(song_list, song->name);
+       song = song->next;
+    }
+    bindCDKObject(vSCROLL,song_list,'q', kurwa_jebana, 0);
+    drawCDKScroll(song_list, TRUE);
 
     /* SELECTOR init - same shit for all boxes */
-
     int lm = 0, tm = 0;
-    for (i  = 0; i < 16; i++, tm = tm + 4) {
+    for (i  = 0; i < 16; i++, tm += 4) {
         if (i == 8) {
-           lm = 35;
+           lm = CHUJ+2;
            tm = 0;
 	}
 
 	short j;
         for(j=0; j < 2; j++) {
-	   selector[i].text[j] = calloc(1, sizeof(char) * 30);
-           memset(selector[i].text[j], '-', 30);
+	   selector[i].text[j] = calloc(1, sizeof(char) * CHUJ+1);
+           memset(selector[i].text[j], '-', CHUJ);
         }
 
         selector[i].label = newCDKLabel (cdkscreen, LEFT_MARGIN+lm, TOP_MARGIN+(tm), selector[i].text, 2, TRUE, FALSE);
         drawCDKLabel (selector[i].label, TRUE);
     }
+    pthread_create(&key_thread, NULL, key_loop, NULL);
 
-    while(true) {
+    while(! quit) {
+       // For our boxes
        for (i = f = 0; i < 16; i++) {
-          while(f < 128) {
+          // Get next FST
+          while (f < 128) {
              fp = fst[f++];
              if (!fp) continue;
+             if (selector[i].fstid == fp->id && !fp->change) break;
+             fp->change = false;
 
-             fs = song_current->fst_state[fp->id];
-             sprintf(selector[i].text[0], "</U/%d>%d %s | CH:%02d | VOL:%02d<!05>", (fs->state ? 59 : 58), 
-                fp->id, fp->name, fs->channel, fs->volume);
-             sprintf(selector[i].text[1], "#%02d - %-24s", fs->program, fs->program_name);
+             update_selector(&selector[i], fp);
 	     break;
           }
-
-          setCDKLabelMessage(selector[i].label, selector[i].text, 2);
        }
-       usleep(300000); // 300ms
+       usleep(300000);
     }
-
-//    waitCDKLabel (app_info, ' ');
+//    pthread_exit(&key_thread);
 
 //    get_selector_1 (cdkscreen);
     
     /* Clean up */
-    destroyCDKLabel (app_info);
-    for (i = 0; i < 8; i++) {
-        destroyCDKLabel (selector[i].label);
+    destroyCDKLabel(top_logo);
+    destroyCDKSwindow(logwin);
+    destroyCDKScroll(song_list);
+    for (i = 0; i < 16; i++) {
+        destroyCDKLabel(selector[i].label);
     }
-    destroyCDKScreen (cdkscreen);
+    destroyCDKScreen(cdkscreen);
     endCDK();
 }

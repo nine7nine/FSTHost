@@ -18,39 +18,52 @@
 #include "../../trunk/sysex.h"
 #include "fhctrl.h"
 
-extern void nfhc(struct Song *song_first, struct Song *song_current, struct FSTPlug **fst);
+extern void nfhc(struct Song *song_first, struct FSTPlug **fst);
 
 char const* client_name = "FHControl";
 static jack_port_t* inport;
 static jack_port_t* outport;
-jack_midi_data_t* sysex;
-bool send = false;
-bool quit = false;
-short CtrlCh = 15; /* Our MIDI control channel */
-short CurrentSongNumber = 0;
+static jack_nframes_t jack_buffer_size;
+static jack_nframes_t jack_sample_rate;
+short CtrlCh = 15; /* Our default MIDI control channel */
 short SongCount = 0;
+bool ident_request = false;
 
 struct FSTPlug* fst[128] = {NULL};
 struct Song* song_first = NULL;
-struct Song* song_current = NULL;
+SysExIdentRqst* sysex_ident_request;
+SysExDumpRequestV1* sysex_dump_request;
+SysExDumpV1* sysex_dump;
 
 struct FSTState* state_new() {
 	struct FSTState* fs = calloc(1,sizeof(struct FSTState));
+	fs->state = FST_NA; // Initial state is Inactive
 	return fs;
 }
 
-struct FSTPlug* fst_new(uint8_t uuid) {
+void fst_new(uint8_t uuid) {
 	struct Song* s;
 	struct FSTPlug* f = malloc(sizeof(struct FSTPlug));
 	sprintf(f->name, "Device%d", uuid);
 	f->id = uuid;
+	f->state = state_new();
+	f->change = true;
 
 	// Add to states to songs
 	for(s = song_first; s; s = s->next) {
 		s->fst_state[uuid] = state_new();
 	}
 
-	return f;
+	// Fill our global array
+	fst[uuid] = f;
+}
+
+
+struct FSTPlug* fst_get(uint8_t uuid) {
+	if (fst[uuid] == NULL)
+		fst_new(uuid);
+
+	return fst[uuid];	
 }
 
 struct Song* song_new() {
@@ -59,28 +72,52 @@ struct Song* song_new() {
 	struct Song* s = calloc(1, sizeof(struct Song));
 
 	//printf("Creating new song\n");
-
 	// Add state for already known plugins
-	for(i=0; i < 127; i++) {
+	for(i=0; i < 128; i++) {
 		if (fst[i] == NULL) continue;
 
 		s->fst_state[i] = state_new();
 	}
 
 	// Bind to song list
-	snptr = &song_first;
-	while(*snptr) { snptr = &(*snptr)->next; }
-	*snptr = s;
+	if (song_first) {
+		snptr = &song_first;
+		while(*snptr) { snptr = &(*snptr)->next; }
+		*snptr = s;
+	} else {
+		song_first = s;
+	}
 
+	sprintf(s->name, "Song %d", SongCount);
 	SongCount++;
 
 	return s;
 }
 
-void sigint_handler(int signum, siginfo_t *siginfo, void *context) {
-        //printf("Caught signal (SIGINT)\n");
-	send = true;
-	quit = true;
+struct Song* song_get(int SongNumber) {
+	if (SongNumber >= SongCount)
+		return NULL;
+
+	struct Song* song;
+	int s = 0;
+	for(song=song_first; s < SongNumber; s++) {
+		song = song->next;
+		if (song == NULL) return NULL;
+	}
+
+	return song;
+}
+
+void send_ident_request() {
+	short i;
+
+	// Reset states to non-active
+	for(i=0; i < 128; i++) {
+		if (fst[i] == NULL) continue;
+		fst[i]->state->state = FST_NA;
+	}
+
+	ident_request = true;
 }
 
 int process (jack_nframes_t frames, void* arg) {
@@ -90,8 +127,8 @@ int process (jack_nframes_t frames, void* arg) {
 	jack_nframes_t i;
 	unsigned short s;
 	jack_midi_event_t event;
-	struct FSTState* fs;
-	struct Song* song;
+	struct FSTPlug* fp;
+	struct Song* song = NULL;
 
 	inbuf = jack_port_get_buffer (inport, frames);
 	assert (inbuf);
@@ -109,24 +146,7 @@ int process (jack_nframes_t frames, void* arg) {
 		if ( (event.buffer[0] & 0xF0) == 0xC0 &&
 		     (event.buffer[0] & 0x0F) == CtrlCh
 		) {
-			if (CurrentSongNumber == event.buffer[1])
-				continue;
-
-			//printf("Changing song to %d\n", event.buffer[1]);
-			if (event.buffer[1] >= SongCount) {
-				//printf("No such song\n");
-				continue;
-			}
-
-			song = song_first;
-			s=0;
-			while (s++ < event.buffer[1])
-				song = song->next;
-			CurrentSongNumber = event.buffer[1];
-			song_current = song;
-
-			/* TODO: send SysExDumpV1 to all plugin */
-			
+			song = song_get(event.buffer[1]);
 			continue;
 		}
 
@@ -142,11 +162,13 @@ int process (jack_nframes_t frames, void* arg) {
 			) goto further;
 
 			SysExIdentReply* r = (SysExIdentReply*) event.buffer;
-//			printf("Got SysEx Identity Reply from ID %X : %X\n", r->id, r->model[1]);
-			if (fst[r->model[1]] == NULL) {
-				fst[r->model[1]] = fst_new(r->model[1]);
-			}
+			nLOG("Got SysEx Identity Reply from ID %X : %X", r->id, r->model[1]);
+			fp = fst_get(r->model[1]);
+			fp->change = true;
 
+			// If this is FSTPlug then dump it state
+			if (r->id == SYSEX_MYID)
+				fp->dump_request = true;
 			// don't forward this message
 			continue;
 		case SYSEX_MYID:
@@ -157,37 +179,59 @@ int process (jack_nframes_t frames, void* arg) {
 			if (d->type != SYSEX_TYPE_DUMP)
 				goto further;
 
-			//printf("Got SysEx Dump %X : %s : %s\n", d->uuid, d->plugin_name, d->program_name);
-			if (fst[d->uuid] == NULL)
-				fst[d->uuid] = fst_new(d->uuid);
-
-			fs = song_current->fst_state[d->uuid];
-			fs->state = d->state;
-			fs->program = d->program;
-			fs->channel = d->channel;
-			fs->volume = d->volume;
-			strcpy(fs->program_name, (char*) d->program_name);
-			strcpy(fst[d->uuid]->name, (char*) d->plugin_name);
+			nLOG("Got SysEx Dump %X : %s : %s", d->uuid, d->plugin_name, d->program_name);
+			fp = fst_get(d->uuid);
+			fp->state->state = d->state;
+			fp->state->program = d->program;
+			fp->state->channel = d->channel;
+			fp->state->volume = d->volume;
+			strcpy(fp->state->program_name, (char*) d->program_name);
+			strcpy(fp->name, (char*) d->plugin_name);
+			fp->change = true;
 
 			// don't forward this message
 			continue;
 		}
 
-further:	/*printf ("%d:", event.time);
-		for (j = 0; j < event.size; ++j)
-			printf (" %X", event.buffer[j]);
-
-		printf ("\n");
-		*/
-	
+further:
+		// Forward messages
 		jack_midi_event_write(outbuf, event.time, event.buffer, event.size);
 	}
 
-	if (send) {
-		send = false;
+	// Send Identity Request
+	if (ident_request) {
+		ident_request = false;
+		jack_midi_event_write(outbuf, jack_buffer_size - 1, (jack_midi_data_t*) sysex_ident_request, sizeof(SysExIdentRqst));
+	}
 
-		jack_midi_event_write(outbuf, 0, (jack_midi_data_t*) sysex, sizeof(SysExIdentRqst));
-		//printf("Request Identity was send\n");
+	// Send Dump Request
+	for (s=0; s < 128; s++) {
+		fp = fst[s];
+		if (!fp) continue;
+		if (!fp->dump_request) continue;
+		fp->dump_request = false;
+
+		sysex_dump_request->uuid = fp->id;
+		jack_midi_event_write(outbuf, jack_buffer_size - 1, (jack_midi_data_t*) sysex_dump_request, sizeof(SysExDumpRequestV1));
+	}
+
+	if (song != NULL) {
+		nLOG("Send Song \"%s\" SysEx", song->name);
+		// Dump states via SysEx
+		for (s=0; s < 128; s++) {
+			fp = fst[s];
+			if (!fp) continue;
+
+			*fp->state = *song->fst_state[s];
+			sysex_dump->program = fp->state->program;
+			sysex_dump->channel = fp->state->channel;
+			sysex_dump->volume = fp->state->volume;
+			sysex_dump->state = fp->state->state;
+			strcpy((char*) sysex_dump->program_name, fp->state->program_name);
+			strcpy((char*) sysex_dump->plugin_name, fp->name);
+		
+			jack_midi_event_write(outbuf, jack_buffer_size - 1, (jack_midi_data_t*) sysex_dump, sizeof(SysExDumpV1));
+		}
 	}
 
 	return 0;
@@ -202,13 +246,14 @@ bool dump_state(char const* config_file) {
 	config_setting_t* group;
 	config_setting_t* list;
 
-	//printf("Dump state to %s\n", config_file);
+	nLOG("Dump state to %s", config_file);
 
 	config_init(&cfg);
 
 	// Save plugs
 	group = config_setting_add(cfg.root, "global", CONFIG_TYPE_GROUP);
-	for (i = j = 0; i < 127; i++) {
+	config_setting_set_int(group, CtrlCh); // Control MIDI channel
+	for (i = j = 0; i < 128; i++) {
 		if (fst[i] == NULL) continue;
 
 		sprintf(name, "plugin%d", j++);
@@ -221,7 +266,7 @@ bool dump_state(char const* config_file) {
 	for(s = song_first; s; s = s->next) {
 		sprintf(name, "song%d", sn++);
 		group = config_setting_add(cfg.root, name, CONFIG_TYPE_GROUP);
-		for (i = j = 0; i < 127; i++) {
+		for (i = j = 0; i < 128; i++) {
 			if (fst[i] == NULL) continue;
 
 			fs = s->fst_state[i];
@@ -257,7 +302,7 @@ bool load_state(const char* config_file) {
 
 	config_init(&cfg);
 	if (!config_read_file(&cfg, config_file)) {
-		fprintf(stderr, "%s:%d - %s\n",
+		nLOG("%s:%d - %s",
 			config_file,
 			config_error_line(&cfg),
 			config_error_text(&cfg)
@@ -273,11 +318,9 @@ bool load_state(const char* config_file) {
 		plugName = config_setting_name(list);
 
 		id = config_setting_get_int_elem(list, 0);
-		if (fst[id] == NULL)
-			fst[id] = fst_new(id);
+		f = fst_get(id);
 
 		sparam = config_setting_get_string_elem(list, 1);
-		f = fst[id];
 		strcpy(f->name, sparam);
 
 		// Songs iteration
@@ -319,24 +362,9 @@ int main (int argc, char* argv[]) {
 
 	if (argv[1]) config_file = argv[1];
 
-	song_current = song_new();
-
-	/* TODO: for now we have only 4 song */
-	song_new();
-	song_new();
-	song_new();
-
 	// Try read file
 	if (config_file != NULL)
 		load_state(config_file);
-
-/*
-	struct sigaction sa;
-	memset(&sa, 0, sizeof(sa));
-	sa.sa_sigaction = &sigint_handler;
-	sa.sa_flags = SA_SIGINFO;
-	sigaction(SIGINT, &sa, NULL);
-*/
 
 	client = jack_client_open (client_name, JackNullOption, NULL);
 	if (client == NULL) {
@@ -348,20 +376,25 @@ int main (int argc, char* argv[]) {
 
 	inport = jack_port_register (client, "input", JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
 	outport = jack_port_register (client, "output", JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
+	jack_buffer_size = jack_get_buffer_size(client);
+	jack_sample_rate = jack_get_sample_rate(client);
+
 
 	if ( jack_activate (client) != 0 ) {
 		fprintf (stderr, "Could not activate client.\n");
 		exit (EXIT_FAILURE);
 	}
 
-	sysex = (jack_midi_data_t*) sysex_ident_request_new();
+	// Init sysex comunicates
+	sysex_ident_request = sysex_ident_request_new();
+	sysex_dump_request = sysex_dump_request_v1_new();
+	sysex_dump = sysex_dump_v1_new();
 
 	// ncurses loop
-	nfhc(song_first, song_current, fst);
+	nfhc(song_first, fst);
 
 	if (config_file != NULL)
 		dump_state(config_file);
 
 	return 0;
 }
-
