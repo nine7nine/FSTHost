@@ -221,7 +221,7 @@ fst_create_editor (FST* fst)
 	
 	if ((window = CreateWindowA ("FST", fst->handle->name,
 //		       (WS_OVERLAPPEDWINDOW & ~WS_THICKFRAME & ~WS_MAXIMIZEBOX & ~WS_CAPTION),
-			WS_POPUPWINDOW | WS_DISABLED | WS_MINIMIZE & ~WS_BORDER & ~WS_SYSMENU,
+			WS_POPUPWINDOW  & ~WS_BORDER & ~WS_SYSMENU & ~WS_TABSTOP,
 			CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
 			NULL, NULL, hInst, NULL)) == NULL)
 	{
@@ -230,24 +230,20 @@ fst_create_editor (FST* fst)
 	}
 	fst->window = window;
 
-	fst->plugin->dispatcher (fst->plugin, effEditOpen, 0, 0, fst->window, 0);
+	fst->plugin->dispatcher (fst->plugin, effEditOpen, 0, 0, window, 0);
 	fst->plugin->dispatcher (fst->plugin, effEditGetRect, 0, 0, &er, 0 );
 
 	fst->width  = er->right - er->left;
 	fst->height = er->bottom - er->top;
 
-	SetWindowPos (fst->window, HWND_BOTTOM, 0, 0, fst->width, fst->height, 
-		SWP_NOACTIVATE | SWP_NOMOVE | SWP_DEFERERASE | SWP_NOCOPYBITS | SWP_NOSENDCHANGING);
+//	SetWindowPos (fst->window, 0, 0, 0, 0, 0, 
+	SetWindowPos (window, 0, 0, 0, fst->width, fst->height, 0);
 
-	ShowWindow (fst->window, SW_SHOWMINNOACTIVE);
-//	ShowWindow (fst->window, SW_SHOWNA);
+	ShowWindow (window, SW_SHOWNORMAL);
+	UpdateWindow(window);
 
 	fst->xid = (int) GetPropA (window, "__wine_x11_whole_window");
 	printf( "And xid = %x\n", fst->xid );
-	
-	EnableWindow(fst->window, TRUE);
-	UpdateWindow(fst->window);
-	ShowWindow (fst->window, SW_RESTORE);
 
 	return TRUE;
 }
@@ -487,9 +483,10 @@ fst_event_handler(FST* fst) {
 		break;
 	case EDITOR_SHOW:
 		if (fst->window != NULL) {
-			ShowWindow(fst->window, SW_RESTORE);
-			EnableWindow(fst->window, TRUE);
+			SetWindowPos (fst->window, HWND_BOTTOM, 0, 0, fst->width, fst->height,
+				SWP_NOACTIVATE | SWP_NOMOVE | SWP_DEFERERASE | SWP_NOCOPYBITS);
 			UpdateWindow(fst->window);
+			ShowWindow(fst->window, SW_SHOWNORMAL);
 		}
 		break;
 	case EDITOR_CLOSE:
