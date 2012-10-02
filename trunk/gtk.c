@@ -282,17 +282,19 @@ editor_handler (GtkToggleButton *but, gboolean ptr)
 			fst_error ("cannot create editor");
 			return;
 		}
-
+/*
 		gtk_socket_add_id (GTK_SOCKET (gtk_socket), jvst->fst->xid);
+		fst_show_editor(jvst->fst);
+
+//		gtk_widget_grab_focus( gtk_socket );
+		gtk_socket_signal = g_signal_connect (G_OBJECT(window), "configure-event",
+			G_CALLBACK(configure_handler), gtk_socket);
 
 		gtk_widget_set_size_request(gtk_socket, jvst->fst->width, jvst->fst->height);
 		printf("Plugin - Width: %d | Height: %d\n", jvst->fst->width, jvst->fst->height);
-		fst_show_editor(jvst->fst);
-	
-		gtk_widget_show_now (gtk_socket);
-		gtk_widget_grab_focus( gtk_socket );
-		gtk_socket_signal = g_signal_connect (G_OBJECT(window), "configure-event",
-			G_CALLBACK(configure_handler), gtk_socket);
+
+		gtk_widget_show(gtk_socket);
+*/
 	} else {
 		g_signal_handler_disconnect(G_OBJECT(window), gtk_socket_signal);
 		gtk_widget_hide(gtk_socket);

@@ -16,7 +16,8 @@ ifeq ($(LASH_EXISTS),yes)
 PKG_CONFIG_MODULES    += lash-1.0
 endif
 
-CEXTRA                := $(shell pkg-config --cflags $(PKG_CONFIG_MODULES)) -fPIC -m32 -g -Wno-multichar -O2
+CEXTRA                := $(shell pkg-config --cflags $(PKG_CONFIG_MODULES)) 
+CEXTRA                += -fPIC -m32 -g -Wno-multichar -O2 -frounding-math -fsignaling-nans -mfpmath=sse -msse2
 ifneq (,$(findstring lash-1.0,$(PKG_CONFIG_MODULES)))
 CEXTRA                += -DHAVE_LASH
 endif
