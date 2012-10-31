@@ -23,7 +23,6 @@
 #include <glib.h>
 #include <semaphore.h>
 #include <signal.h>
-#include <jack/midiport.h>
 #include <sys/syscall.h>
 
 #include "jackvst.h"
@@ -47,12 +46,6 @@ struct MidiMessage {
         jack_nframes_t time;
         int            len; /* Length of MIDI message, in bytes. */
         unsigned char  data[3];
-};
-
-struct SysExEvent {
-	JackVST* jvst;
-	jack_midi_data_t* data;
-	size_t size;	
 };
 
 #define RINGBUFFER_SIZE 1024*sizeof(struct MidiMessage)
@@ -85,8 +78,12 @@ JackVST* jvst_new() {
 	for(i=0; i<128;++i)
 		jvst->midi_map[i] = -1;
 
-	jvst->sysex_dump = sysex_dump_v1_new();
-	jvst->sysex_ident_reply = sysex_ident_reply_new();
+	// Little trick
+	SysExIdentReply sxir = SYSEX_IDENT_REPLY;
+	memcpy(&jvst->sysex_ident_reply, &sxir, sizeof(SysExIdentReply));
+
+	SysExDumpV1 sxd = SYSEX_DUMP;
+	memcpy(&jvst->sysex_dump, &sxd, sizeof(SysExDumpV1));
 
 	return jvst;
 }
@@ -94,27 +91,32 @@ JackVST* jvst_new() {
 void
 jvst_destroy(JackVST* jvst)
 {
-	free(jvst->sysex_dump);
-	free(jvst->sysex_ident_reply);
 	free(jvst);
 }
 
+// Prepare data for RT thread and wait for send
 bool
 jvst_send_sysex(JackVST* jvst, enum SysExWant sysex_want)
 {
 	pthread_mutex_lock (&jvst->sysex_lock);
 
-	if (sysex_want == SYSEX_WANT_DUMP) {
-		// Prepare data for RT thread
+	switch(sysex_want) {
+	case SYSEX_WANT_DUMP: ;
 		char progName[24];
+		SysExDumpV1* sxd = &jvst->sysex_dump;
 		fst_get_program_name(jvst->fst, jvst->fst->current_program, progName, sizeof(progName));
 
-		jvst->sysex_dump->program = jvst->fst->current_program;
-		jvst->sysex_dump->channel = jvst->channel;
-		jvst->sysex_dump->volume = jvst_get_volume(jvst);
-		jvst->sysex_dump->state = (jvst->bypassed) ? SYSEX_STATE_NOACTIVE : SYSEX_STATE_ACTIVE;
-		sysex_makeASCII(jvst->sysex_dump->program_name, progName, 24);
-		sysex_makeASCII(jvst->sysex_dump->plugin_name, jvst->client_name, 24);
+		sxd->uuid = jvst->uuid;
+		sxd->program = jvst->fst->current_program;
+		sxd->channel = jvst->channel;
+		sxd->volume = jvst_get_volume(jvst);
+		sxd->state = (jvst->bypassed) ? SYSEX_STATE_NOACTIVE : SYSEX_STATE_ACTIVE;
+		sysex_makeASCII(sxd->program_name, progName, 24);
+		sysex_makeASCII(sxd->plugin_name, jvst->client_name, 24);
+		break;
+	case SYSEX_WANT_IDENT_REPLY:
+		jvst->sysex_ident_reply.model[1] = jvst->uuid;
+		break;
 	}
 
 	jvst->sysex_want = sysex_want;
@@ -123,13 +125,9 @@ jvst_send_sysex(JackVST* jvst, enum SysExWant sysex_want)
 }
 
 static bool
-jvst_sysex_handler(struct SysExEvent* sysex_event)
+jvst_sysex_handler(JackVST* jvst)
 {
-
-	JackVST* jvst = sysex_event->jvst;
-	jack_midi_data_t* data = sysex_event->data;
-	size_t size = sysex_event->size;
-	free(sysex_event);
+	jack_midi_data_t* data = jvst->sysex_event_data;
 
 	switch(data[1]) {
 	case SYSEX_MYID:
@@ -156,7 +154,7 @@ jvst_sysex_handler(struct SysExEvent* sysex_event)
 			case SYSEX_TYPE_RQST: ;
 				SysExDumpRequestV1* sysex_request_v1 = (SysExDumpRequestV1*) data;
 				printf(" REQUEST - ID %d - OK\n", sysex_request_v1->uuid);
-				if (sysex_request_v1->uuid == jvst->sysex_dump->uuid)
+				if (sysex_request_v1->uuid == jvst->uuid)
 					jvst_send_sysex(jvst, SYSEX_WANT_DUMP);
 
 				break;
@@ -169,20 +167,19 @@ jvst_sysex_handler(struct SysExEvent* sysex_event)
 		break;
 	case SYSEX_NON_REALTIME:
 		// Identity request
-		if (size >= sizeof(SysExIdentRqst)) {
+		if (jvst->sysex_event_size >= sizeof(SysExIdentRqst)) {
 			// TODO: for now we just always answer ;-)
-			SysExIdentRqst* sxir = sysex_ident_request_new();
-			data[2] = 0x7F;
-			if ( memcmp(data, sxir, sizeof(SysExIdentRqst) ) == 0) {
+			SysExIdentRqst sxir = SYSEX_IDENT_REQUEST;
+			data[2] = 0x7F; // veil
+			if ( memcmp(data, &sxir, sizeof(SysExIdentRqst) ) == 0) {
 				printf("Got Identity request\n");
 				jvst_send_sysex(jvst, SYSEX_WANT_IDENT_REPLY);
 			}
-			free(sxir);
 		}
 		break;
 	}
-
 	free(data);
+	jvst->sysex_event_data = NULL;
 
 	return FALSE;
 }
@@ -305,8 +302,6 @@ process_midi_output(JackVST* jvst, jack_nframes_t nframes)
 	/* written by Edward Tomasz Napierala <trasz@FreeBSD.org>                 */
 	void *port_buffer;
 	int t;
-	jack_midi_data_t* sysex_data;
-	size_t sysex_size;
 
 	port_buffer = jack_port_get_buffer(jvst->midi_outport, nframes);
 	if (port_buffer == NULL) {
@@ -356,24 +351,25 @@ send_sysex:
 	if (pthread_mutex_trylock(&jvst->sysex_lock) != 0)
 		return;
 
-	switch(jvst->sysex_want) {
-	case SYSEX_WANT_IDENT_REPLY:
-		sysex_data = (jack_midi_data_t*) jvst->sysex_ident_reply;
-		sysex_size = sizeof(SysExIdentReply);
-		break;
-	case SYSEX_WANT_DUMP:
-		sysex_data = (jack_midi_data_t*) jvst->sysex_dump;
-		sysex_size = sizeof(SysExDumpV1);
-		break;
-	}
-
-	jvst->sysex_want = SYSEX_WANT_NO;
-
+	// Set frame point
 	t = jack_frame_time(jvst->client) - jack_last_frame_time(jvst->client);
 	if (t < 0) t = 0;
 
-	if ( jack_midi_event_write(port_buffer, t, sysex_data, sysex_size)
-	) fst_error("SysEx error: jack_midi_event_write failed.");
+	size_t sysex_size;
+	jack_midi_data_t* sysex_data;
+	switch(jvst->sysex_want) {
+	case SYSEX_WANT_IDENT_REPLY:
+		sysex_data = (jack_midi_data_t*) &jvst->sysex_ident_reply;
+		sysex_size = sizeof(SysExIdentReply);
+		break;
+	case SYSEX_WANT_DUMP:
+		sysex_data = (jack_midi_data_t*) &jvst->sysex_dump;
+		sysex_size = sizeof(SysExDumpV1);
+		break;
+	}
+	if ( jack_midi_event_write(port_buffer, t, sysex_data, sysex_size) )
+		fst_error("SysEx error: jack_midi_event_write failed.");
+	jvst->sysex_want = SYSEX_WANT_NO;
 	
 	pthread_cond_signal(&jvst->sysex_sent);
 	pthread_mutex_unlock(&jvst->sysex_lock);
@@ -403,13 +399,10 @@ process_midi_input(JackVST* jvst, jack_nframes_t nframes)
 			but I have no better idea :-(
 			this memory will be free in sysex handler function
 			*/
-
-			struct SysExEvent* sysex_event = malloc(sizeof(struct SysExEvent));
-			sysex_event->data = malloc(jackevent.size);
-			sysex_event->jvst = jvst;
-			sysex_event->size = jackevent.size;
-			memcpy(sysex_event->data, jackevent.buffer, jackevent.size);
-			g_idle_add( (GSourceFunc) jvst_sysex_handler, sysex_event);
+			jvst->sysex_event_size = jackevent.size;
+			jvst->sysex_event_data = malloc(jackevent.size);
+			memcpy(jvst->sysex_event_data, jackevent.buffer, jackevent.size);
+			g_idle_add( (GSourceFunc) jvst_sysex_handler, jvst);
 
 			/* TODO:
 			For now we simply drop all SysEx messages because VST standard
@@ -663,7 +656,7 @@ jvst_idle_cb(JackVST* jvst)
 
 	// Send notify if something change
 	if (jvst->sysex_want_notify && jvst->fst->want_program == -1) {
-		SysExDumpV1* d = jvst->sysex_dump;
+		SysExDumpV1* d = &jvst->sysex_dump;
 		if ( d->program != jvst->fst->current_program ||
 		     d->channel != jvst->channel ||
 		     d->state   != ( (jvst->bypassed) ? SYSEX_STATE_NOACTIVE : SYSEX_STATE_ACTIVE ) ||
@@ -733,7 +726,6 @@ usage(char* appname) {
 	fprintf(stderr, format, "-o num_out", "Jack number Out ports");
 	fprintf(stderr, format, "-t tempo", "Set fixed Tempo rather than using JackTransport");
 	fprintf(stderr, format, "-u uuid", "JackSession UUID");
-	fprintf(stderr, format, "-U sysex_uuid", "SysEx UUID");
 	fprintf(stderr, format, "-V", "Disable Volume control (and filter CC7 messages)");
 }
 
@@ -822,11 +814,6 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 				break;
 			case 'u':
 				jvst->uuid = strtol(optarg, NULL, 10);
-				break;
-			case 'U':
-				jvst->sysex_dump->uuid = 
-				jvst->sysex_ident_reply->model[1] = 
-					strtol(optarg, NULL, 10);
 				break;
 			case 'V':
 				jvst->volume = -1;

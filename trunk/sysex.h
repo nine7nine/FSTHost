@@ -6,6 +6,9 @@
 */
 
 #include <stdint.h>
+#include <stdlib.h>
+#include <ctype.h>
+#include <string.h>
 
 #define SYSEX_BEGIN 0xF0
 #define SYSEX_END 0xF7
@@ -18,47 +21,52 @@
 #define SYSEX_TYPE_DUMP 0
 #define SYSEX_TYPE_RQST 1
 
+#define SYSEX_IDENT_REQUEST {SYSEX_BEGIN,SYSEX_NON_REALTIME,0x7F,SYSEX_GENERAL_INFORMATION,SYSEX_IDENTITY_REQUEST,SYSEX_END}
 typedef struct _SysExIdentRqst {
-	uint8_t begin;
-	uint8_t type;
-       	uint8_t target_id;
-	uint8_t gi;
-	uint8_t ir;
-	uint8_t end;
+	const uint8_t begin;
+	const uint8_t type;
+       	const uint8_t target_id;
+	const uint8_t gi;
+	const uint8_t ir;
+	const uint8_t end;
 } SysExIdentRqst;
 
+#define SYSEX_IDENT_REPLY {SYSEX_BEGIN,SYSEX_NON_REALTIME,0x7F,SYSEX_GENERAL_INFORMATION,SYSEX_IDENTITY_REPLY,\
+   SYSEX_MYID,{0},{0},SYSEX_VERSION,SYSEX_END}
 typedef struct _SysExIdentReply {
-	uint8_t begin;
-	uint8_t type;
-       	uint8_t target_id;
-	uint8_t gi;
-	uint8_t ir;
-	uint8_t id;
-	uint8_t family[2];
+	const uint8_t begin;
+	const uint8_t type;
+       	const uint8_t target_id;
+	const uint8_t gi;
+	const uint8_t ir;
+	const uint8_t id;
+	const uint8_t family[2];
 	uint8_t model[2]; // Here we set sysex_uuid as [1]
-	uint8_t version[4];
-	uint8_t end;
+	const uint8_t version[4];
+	const uint8_t end;
 } SysExIdentReply;
+
+#define SYSEX_DUMP_REQUEST {SYSEX_BEGIN,SYSEX_MYID,SYSEX_VERSION,SYSEX_TYPE_RQST,0,SYSEX_END}
+typedef struct _SysExDumpRequestV1 {
+	const uint8_t begin;
+	const uint8_t id;
+	const uint8_t version;
+	const uint8_t type;
+	uint8_t uuid;
+	const uint8_t end;
+} SysExDumpRequestV1;
 
 enum SysExState {
 	SYSEX_STATE_NOACTIVE = 0,
 	SYSEX_STATE_ACTIVE   = 1
 };
 
-typedef struct _SysExDumpRequestV1 {
-	uint8_t begin;
-	uint8_t id;
-	uint8_t version;
-	uint8_t type;
-	uint8_t uuid;
-	uint8_t end;
-} SysExDumpRequestV1;
-
+#define SYSEX_DUMP {SYSEX_BEGIN,SYSEX_MYID,SYSEX_VERSION,SYSEX_TYPE_DUMP,0,0,0,0,0,{0},{0},SYSEX_END}
 typedef struct _SysExDumpV1 {
-	uint8_t begin;
-	uint8_t id;
-	uint8_t version;
-	uint8_t type;
+	const uint8_t begin;
+	const uint8_t id;
+	const uint8_t version;
+	const uint8_t type;
 	uint8_t uuid;
 	uint8_t state;
 	uint8_t program;
@@ -66,14 +74,21 @@ typedef struct _SysExDumpV1 {
 	uint8_t volume;
 	uint8_t program_name[24]; /* Last is always 0 */
 	uint8_t plugin_name[24]; /* Last is always 0 */
-	uint8_t end;
+	const uint8_t end;
 } SysExDumpV1;
 
-/* Prototypes */
-SysExDumpV1* sysex_dump_v1_new();
-SysExDumpRequestV1* sysex_dump_request_v1_new();
-SysExIdentRqst* sysex_ident_request_new();
-SysExIdentReply* sysex_ident_reply_new();
-void sysex_makeASCII(uint8_t* ascii_midi_dest, char* name, size_t size_dest);
+static void
+sysex_makeASCII(uint8_t* ascii_midi_dest, char* name, size_t size_dest) {
+	size_t i;
+	for (i=0; i < strlen(name) && i < size_dest - 1; i++) {
+		if ( ! isprint( toascii( name[i]) ) )
+			continue;
+
+		ascii_midi_dest[i] = name[i];
+	}
+
+	/* Set rest to 0 */
+	memset(ascii_midi_dest + i, 0, size_dest - i - 1);
+}
 
 #endif /* __sysex_h__ */
