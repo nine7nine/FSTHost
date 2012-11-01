@@ -24,6 +24,7 @@
 #include <semaphore.h>
 #include <signal.h>
 #include <sys/syscall.h>
+#include <jack/midiport.h>
 
 #include "jackvst.h"
 
@@ -46,6 +47,12 @@ struct MidiMessage {
         jack_nframes_t time;
         int            len; /* Length of MIDI message, in bytes. */
         unsigned char  data[3];
+};
+
+struct SysExEvent {
+        JackVST* jvst;
+        jack_midi_data_t* data;
+        size_t size;
 };
 
 #define RINGBUFFER_SIZE 1024*sizeof(struct MidiMessage)
@@ -122,12 +129,17 @@ jvst_send_sysex(JackVST* jvst, enum SysExWant sysex_want)
 	jvst->sysex_want = sysex_want;
 	pthread_cond_wait (&jvst->sysex_sent, &jvst->sysex_lock);
 	pthread_mutex_unlock (&jvst->sysex_lock);
+	printf("SysEx Dumped\n");
 }
 
 static bool
-jvst_sysex_handler(JackVST* jvst)
+jvst_sysex_handler(struct SysExEvent* sysex_event)
 {
-	jack_midi_data_t* data = jvst->sysex_event_data;
+
+        JackVST* jvst = sysex_event->jvst;
+        jack_midi_data_t* data = sysex_event->data;
+        size_t size = sysex_event->size;
+        free(sysex_event);
 
 	switch(data[1]) {
 	case SYSEX_MYID:
@@ -150,6 +162,10 @@ jvst_sysex_handler(JackVST* jvst)
 				fst_program_change(jvst->fst, sysex_v1->program);
 				jvst->channel = sysex_v1->channel;
 				jvst_set_volume(jvst, sysex_v1->volume);
+
+				// Copy sysex state for preserve resending SysEx Dump
+				memcpy(&jvst->sysex_dump,sysex_v1,sizeof(SysExDumpV1));
+
 				break;
 			case SYSEX_TYPE_RQST: ;
 				SysExDumpRequestV1* sysex_request_v1 = (SysExDumpRequestV1*) data;
@@ -157,6 +173,8 @@ jvst_sysex_handler(JackVST* jvst)
 				if (sysex_request_v1->uuid == jvst->uuid)
 					jvst_send_sysex(jvst, SYSEX_WANT_DUMP);
 
+				// If we got DumpRequest then it mean that there is FHControl, so we wanna notify
+				jvst->sysex_want_notify = true;
 				break;
 			}
 
@@ -167,7 +185,7 @@ jvst_sysex_handler(JackVST* jvst)
 		break;
 	case SYSEX_NON_REALTIME:
 		// Identity request
-		if (jvst->sysex_event_size >= sizeof(SysExIdentRqst)) {
+		if (size >= sizeof(SysExIdentRqst)) {
 			// TODO: for now we just always answer ;-)
 			SysExIdentRqst sxir = SYSEX_IDENT_REQUEST;
 			data[2] = 0x7F; // veil
@@ -179,7 +197,6 @@ jvst_sysex_handler(JackVST* jvst)
 		break;
 	}
 	free(data);
-	jvst->sysex_event_data = NULL;
 
 	return FALSE;
 }
@@ -399,11 +416,13 @@ process_midi_input(JackVST* jvst, jack_nframes_t nframes)
 			but I have no better idea :-(
 			this memory will be free in sysex handler function
 			*/
-			jvst->sysex_event_size = jackevent.size;
-			jvst->sysex_event_data = malloc(jackevent.size);
-			memcpy(jvst->sysex_event_data, jackevent.buffer, jackevent.size);
-			g_idle_add( (GSourceFunc) jvst_sysex_handler, jvst);
-
+			struct SysExEvent* sysex_event = malloc(sizeof(struct SysExEvent));
+                        sysex_event->data = malloc(jackevent.size);
+                        sysex_event->jvst = jvst;
+                        sysex_event->size = jackevent.size;
+                        memcpy(sysex_event->data, jackevent.buffer, jackevent.size);
+                        g_idle_add( (GSourceFunc) jvst_sysex_handler, sysex_event);
+	
 			/* TODO:
 			For now we simply drop all SysEx messages because VST standard
 			require special Event type for this (kVstSysExType)
@@ -654,16 +673,6 @@ jvst_idle_cb(JackVST* jvst)
 	jack_port_t* port;
 	unsigned short i;
 
-	// Send notify if something change
-	if (jvst->sysex_want_notify && jvst->fst->want_program == -1) {
-		SysExDumpV1* d = &jvst->sysex_dump;
-		if ( d->program != jvst->fst->current_program ||
-		     d->channel != jvst->channel ||
-		     d->state   != ( (jvst->bypassed) ? SYSEX_STATE_NOACTIVE : SYSEX_STATE_ACTIVE ) ||
-		     d->volume  != jvst_get_volume(jvst)
-		) jvst_send_sysex(jvst, SYSEX_WANT_DUMP);
-	}
-
 	// Check state
 	if (jvst->want_state == WANT_STATE_BYPASS && !jvst->bypassed) {
 		jvst->want_state = WANT_STATE_NO;
@@ -673,6 +682,16 @@ jvst_idle_cb(JackVST* jvst)
 		jvst->want_state = WANT_STATE_NO;
 		fst_resume(jvst->fst);
 		jvst->bypassed = FALSE;
+	}
+
+	// Send notify if something change
+	if (jvst->sysex_want_notify && jvst->fst->want_program == -1) {
+		SysExDumpV1* d = &jvst->sysex_dump;
+		if ( d->program != jvst->fst->current_program ||
+		     d->channel != jvst->channel ||
+		     d->state   != ( (jvst->bypassed) ? SYSEX_STATE_NOACTIVE : SYSEX_STATE_ACTIVE ) ||
+		     d->volume  != jvst_get_volume(jvst)
+		) jvst_send_sysex(jvst, SYSEX_WANT_DUMP);
 	}
 
 	// Connect MIDI ports to control app
