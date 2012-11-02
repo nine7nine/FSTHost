@@ -210,7 +210,7 @@ fps_save (JackVST* jvst, const char * filename) {
 
    FILE * f = fopen (filename, "wb");
    if (! f) {
-      printf ("Could not open state file\n");
+      printf ("Could not open state file: %s\n", filename);
       return FALSE;
    }
 

@@ -617,11 +617,11 @@ session_callback( JackVST* jvst )
 
         snprintf( filename, sizeof(filename), "%sstate.fps", event->session_dir );
         jvst_save_state( jvst, filename );
-        snprintf( retval, sizeof(retval), "%s -u %s -U %d -s \"${SESSION_DIR}state.fps\" \"%s\"",
-		my_motherfuckin_name, event->client_uuid, jvst->uuid, jvst->handle->path );
+        snprintf( retval, sizeof(retval), "%s -u %s -s \"${SESSION_DIR}state.fps\" \"%s\"",
+		my_motherfuckin_name, event->client_uuid, jvst->handle->path );
         event->command_line = strdup( retval );
 
-        jack_session_reply( jvst->client, event );
+        jack_session_reply(jvst->client, event);
 
 	if (event->type == JackSessionSaveAndQuit) {
 		printf("JackSession manager ask for quit\n");
@@ -744,8 +744,8 @@ usage(char* appname) {
 	fprintf(stderr, format, "-m mode_midi_cc", "Bypass/Resume MIDI CC (default: 122)");
 	fprintf(stderr, format, "-o num_out", "Jack number Out ports");
 	fprintf(stderr, format, "-t tempo", "Set fixed Tempo rather than using JackTransport");
-	fprintf(stderr, format, "-u uuid", "JackSession UUID");
-	fprintf(stderr, format, "-V", "Disable Volume control (and filter CC7 messages)");
+	fprintf(stderr, format, "-u uuid", "JackSession UUID / SysEx ID");
+	fprintf(stderr, format, "-V", "Disable Volume control / filtering CC7 messages");
 }
 
 int WINAPI
@@ -874,7 +874,9 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	plugin = fst->plugin;
 
 	printf("Start Jack thread ...\n");
-	if ((jvst->client = jack_client_open (jvst->client_name, JackSessionID, NULL, jvst->uuid )) == 0) {
+	char struuid[3];
+	snprintf(struuid, 3, "%d", jvst->uuid);
+	if ((jvst->client = jack_client_open(jvst->client_name,JackSessionID,NULL,struuid)) == 0) {
 		fst_error ("can't connect to JACK");
 		return 1;
 	}
