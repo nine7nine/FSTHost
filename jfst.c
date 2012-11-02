@@ -616,7 +616,7 @@ session_callback( JackVST* jvst )
 
 	snprintf( filename, sizeof(filename), "%sstate.fps", event->session_dir );
 	if ( ! jvst_save_state( jvst, filename ) )
-		event->flags != JackSessionSaveError;
+		event->flags |= JackSessionSaveError;
 
 	snprintf( retval, sizeof(retval), "%s -u %s -s \"${SESSION_DIR}state.fps\" \"%s\"",
 		my_motherfuckin_name, event->client_uuid, jvst->handle->path );
