@@ -228,22 +228,21 @@ jvst_load_state (JackVST* jvst, const char * filename)
 }
 
 bool
-jvst_save_state (JackVST* jvst, const char * filename)
-{
+jvst_save_state (JackVST* jvst, const char * filename) {
+	bool ret = FALSE;
 	char* file_ext = strrchr(filename, '.');
 
 	if (strcasecmp(file_ext, ".fxp") == 0) {
-		fst_save_fxfile(jvst->fst, filename, FXPROGRAM);
+		ret = fst_save_fxfile(jvst->fst, filename, FXPROGRAM);
 	} else if (strcasecmp(file_ext, ".fxb") == 0) {
-		fst_save_fxfile(jvst->fst, filename, FXBANK);
+		ret = fst_save_fxfile(jvst->fst, filename, FXBANK);
 	} else if (strcasecmp(file_ext, ".fps") == 0) {
-		fps_save(jvst, filename);
+		ret = fps_save(jvst, filename);
 	} else {
 		printf("Unkown file type\n");
-		return FALSE;
 	}
 
-	return TRUE;
+	return ret;
 }
 
 
@@ -610,27 +609,29 @@ session_callback( JackVST* jvst )
 {
 	printf("session callback\n");
 
-        jack_session_event_t *event = jvst->session_event;
+	jack_session_event_t *event = jvst->session_event;
 
-        char retval[256];
-        char filename[MAX_PATH];
+	char retval[256];
+	char filename[MAX_PATH];
 
-        snprintf( filename, sizeof(filename), "%sstate.fps", event->session_dir );
-        jvst_save_state( jvst, filename );
-        snprintf( retval, sizeof(retval), "%s -u %s -s \"${SESSION_DIR}state.fps\" \"%s\"",
+	snprintf( filename, sizeof(filename), "%sstate.fps", event->session_dir );
+	if ( ! jvst_save_state( jvst, filename ) )
+		event->flags != JackSessionSaveError;
+
+	snprintf( retval, sizeof(retval), "%s -u %s -s \"${SESSION_DIR}state.fps\" \"%s\"",
 		my_motherfuckin_name, event->client_uuid, jvst->handle->path );
-        event->command_line = strdup( retval );
+	event->command_line = strdup( retval );
 
-        jack_session_reply(jvst->client, event);
+	jack_session_reply(jvst->client, event);
 
 	if (event->type == JackSessionSaveAndQuit) {
 		printf("JackSession manager ask for quit\n");
 		jvst_quit(jvst);
 	}
 
-        jack_session_event_free(event);
+	jack_session_event_free(event);
 
-        return FALSE;
+	return FALSE;
 }
 
 static void
