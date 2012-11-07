@@ -245,8 +245,6 @@ jvst_save_state (JackVST* jvst, const char * filename) {
 	return ret;
 }
 
-
-
 static void
 jvst_quit(JackVST* jvst) {
 	if (jvst->with_editor == WITH_EDITOR_NO) {

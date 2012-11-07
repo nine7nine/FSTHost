@@ -312,8 +312,7 @@ FSTHandle*
 fst_load (const char * path)
 {
 	char mypath[MAX_PATH];
-	char *base, *envdup, *vst_path, *last, *name;
-	size_t len;
+	char *base, *envdup, *vst_path, *last;
 	HMODULE dll = NULL;
 	main_entry_t main_entry;
 	FSTHandle* fhandle;
@@ -322,10 +321,10 @@ fst_load (const char * path)
 	if (strstr (path, ".dll") == NULL)
 		strcat (mypath, ".dll");
 
-	/* Get name */
-	base = strdup(basename (mypath));
-	len =  strrchr(base, '.') - base;
-	name = strndup(base, len);
+	/* Get basename */
+	last = basename (mypath);
+	base = alloca(strlen(last));
+	strcpy(base, last);
 
 	// If we got full path
 	dll = LoadLibraryA(mypath);
@@ -346,11 +345,9 @@ fst_load (const char * path)
 			vst_path = strtok (NULL, ":");
 		}
 		free(envdup);
-		free(base);
 	}
 
 	if (dll == NULL) {
-		free(name);
 		fst_error("Can't load plugin\n");
 		return NULL;
 	}
@@ -359,7 +356,6 @@ fst_load (const char * path)
 	  (main_entry = (main_entry_t) GetProcAddress (dll, "VSTPluginMain")) == NULL &&
 	  (main_entry = (main_entry_t) GetProcAddress (dll, "main")) == NULL
 	) {
-		free(name);
 		FreeLibrary (dll);
 		fst_error("Can't found either main and VSTPluginMain entry\n");
 		return NULL;
@@ -369,7 +365,7 @@ fst_load (const char * path)
 	fhandle->dll = dll;
 	fhandle->main_entry = main_entry;
 	fhandle->path = strdup(mypath);
-	fhandle->name = name;
+	fhandle->name = strndup(base, strrchr(base, '.') - base);
 	fhandle->plugincnt = 0;
 	
 	return fhandle;
