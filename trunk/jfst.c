@@ -32,6 +32,8 @@
 #include <lash/lash.h>
 #endif
 
+#define VERSION "1.3.2"
+
 const char* my_motherfuckin_name = "fsthost";
 const char* ControlAppName = "FHControl";
 
@@ -766,6 +768,8 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	int		sample_rate = 0;
 	long		block_size = 0;
 
+	printf("FSTHost Version: %s\n", VERSION);
+
 	JackVST*	jvst = jvst_new();
 
 	// Parse command line
@@ -873,9 +877,10 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	plugin = fst->plugin;
 
 	printf("Start Jack thread ...\n");
-	char struuid[3];
-	snprintf(struuid, 3, "%d", jvst->uuid);
-	if ((jvst->client = jack_client_open(jvst->client_name,JackSessionID,NULL,struuid)) == 0) {
+	char struuid[6];
+	snprintf(struuid, 6, "%d", jvst->uuid);
+	jvst->client = jack_client_open(jvst->client_name,JackSessionID,NULL,struuid);
+	if (! jvst->client) {
 		fst_error ("can't connect to JACK");
 		return 1;
 	}
