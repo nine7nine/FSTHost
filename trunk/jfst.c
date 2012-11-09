@@ -115,7 +115,7 @@ jvst_send_sysex(JackVST* jvst, enum SysExWant sysex_want)
 		SysExDumpV1* sxd = &jvst->sysex_dump;
 		fst_get_program_name(jvst->fst, jvst->fst->current_program, progName, sizeof(progName));
 
-		sxd->uuid = jvst->uuid;
+//		sxd->uuid = jvst->uuid; /* Set once on start */
 		sxd->program = jvst->fst->current_program;
 		sxd->channel = jvst->channel;
 		sxd->volume = jvst_get_volume(jvst);
@@ -123,9 +123,10 @@ jvst_send_sysex(JackVST* jvst, enum SysExWant sysex_want)
 		sysex_makeASCII(sxd->program_name, progName, 24);
 		sysex_makeASCII(sxd->plugin_name, jvst->client_name, 24);
 		break;
-	case SYSEX_WANT_IDENT_REPLY:
-		jvst->sysex_ident_reply.model[1] = jvst->uuid;
-		break;
+	/* Set once on start */
+//	case SYSEX_WANT_IDENT_REPLY:
+//		jvst->sysex_ident_reply.model[1] = jvst->uuid;
+//		break;
 	}
 
 	jvst->sysex_want = sysex_want;
@@ -172,7 +173,7 @@ jvst_sysex_handler(struct SysExEvent* sysex_event)
 			case SYSEX_TYPE_RQST: ;
 				SysExDumpRequestV1* sysex_request_v1 = (SysExDumpRequestV1*) data;
 				printf(" REQUEST - ID %d - OK\n", sysex_request_v1->uuid);
-				if (sysex_request_v1->uuid == jvst->uuid)
+				if (sysex_request_v1->uuid == jvst->sysex_dump.uuid)
 					jvst_send_sysex(jvst, SYSEX_WANT_DUMP);
 
 				// If we got DumpRequest then it mean that there is FHControl, so we wanna notify
@@ -618,8 +619,8 @@ session_callback( JackVST* jvst )
 	if ( ! jvst_save_state( jvst, filename ) )
 		event->flags |= JackSessionSaveError;
 
-	snprintf( retval, sizeof(retval), "%s -u %s -s \"${SESSION_DIR}state.fps\" \"%s\"",
-		my_motherfuckin_name, event->client_uuid, jvst->handle->path );
+	snprintf( retval, sizeof(retval), "%s -U %d -u %s -s \"${SESSION_DIR}state.fps\" \"%s\"",
+		my_motherfuckin_name, jvst->sysex_dump.uuid, event->client_uuid, jvst->handle->path );
 	event->command_line = strdup( retval );
 
 	jack_session_reply(jvst->client, event);
@@ -745,7 +746,8 @@ usage(char* appname) {
 	fprintf(stderr, format, "-m mode_midi_cc", "Bypass/Resume MIDI CC (default: 122)");
 	fprintf(stderr, format, "-o num_out", "Jack number Out ports");
 	fprintf(stderr, format, "-t tempo", "Set fixed Tempo rather than using JackTransport");
-	fprintf(stderr, format, "-u uuid", "JackSession UUID / SysEx ID");
+	fprintf(stderr, format, "-u uuid", "JackSession UUID");
+	fprintf(stderr, format, "-U uuid", "SysEx ID");
 	fprintf(stderr, format, "-V", "Disable Volume control / filtering CC7 messages");
 }
 
@@ -836,6 +838,10 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 				break;
 			case 'u':
 				jvst->uuid = strtol(optarg, NULL, 10);
+				break;
+			case 'U':
+				jvst->sysex_ident_reply.model[1] =
+				jvst->sysex_dump.uuid = strtol(optarg, NULL, 10);
 				break;
 			case 'V':
 				jvst->volume = -1;
