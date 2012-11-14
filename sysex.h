@@ -18,11 +18,12 @@
 #define SYSEX_IDENTITY_REPLY 0x02
 #define SYSEX_MYID 0x5B
 #define SYSEX_VERSION 1
-#define SYSEX_TYPE_DUMP 0
-#define SYSEX_TYPE_RQST 1
+#define SYSEX_TYPE_DUMP  0
+#define SYSEX_TYPE_RQST  1
+#define SYSEX_TYPE_OFFER 2
 
 #define SYSEX_IDENT_REQUEST {SYSEX_BEGIN,SYSEX_NON_REALTIME,0x7F,SYSEX_GENERAL_INFORMATION,SYSEX_IDENTITY_REQUEST,SYSEX_END}
-typedef struct _SysExIdentRqst {
+typedef struct {
 	const uint8_t begin;
 	const uint8_t type;
        	const uint8_t target_id;
@@ -33,7 +34,7 @@ typedef struct _SysExIdentRqst {
 
 #define SYSEX_IDENT_REPLY {SYSEX_BEGIN,SYSEX_NON_REALTIME,0x7F,SYSEX_GENERAL_INFORMATION,SYSEX_IDENTITY_REPLY,\
    SYSEX_MYID,{0},{0},SYSEX_VERSION,SYSEX_END}
-typedef struct _SysExIdentReply {
+typedef struct {
 	const uint8_t begin;
 	const uint8_t type;
        	const uint8_t target_id;
@@ -42,12 +43,23 @@ typedef struct _SysExIdentReply {
 	const uint8_t id;
 	const uint8_t family[2];
 	uint8_t model[2]; // Here we set sysex_uuid as [1]
-	const uint8_t version[4];
+	uint8_t version[4]; // Here we set sysex_random_id for all elements
 	const uint8_t end;
 } SysExIdentReply;
 
+#define SYSEX_OFFER {SYSEX_BEGIN,SYSEX_MYID,SYSEX_VERSION,SYSEX_TYPE_OFFER,{0},0,SYSEX_END}
+typedef struct {
+	const uint8_t begin;
+	const uint8_t id;
+	const uint8_t version;
+	const uint8_t type;
+	uint8_t rnid[4]; // Copy of SysExIdentReply.version
+	uint8_t uuid; // Offered ID
+	const uint8_t end;
+} SysExIdOffer;
+
 #define SYSEX_DUMP_REQUEST {SYSEX_BEGIN,SYSEX_MYID,SYSEX_VERSION,SYSEX_TYPE_RQST,0,SYSEX_END}
-typedef struct _SysExDumpRequestV1 {
+typedef struct {
 	const uint8_t begin;
 	const uint8_t id;
 	const uint8_t version;
@@ -62,7 +74,7 @@ enum SysExState {
 };
 
 #define SYSEX_DUMP {SYSEX_BEGIN,SYSEX_MYID,SYSEX_VERSION,SYSEX_TYPE_DUMP,0,0,0,0,0,{0},{0},SYSEX_END}
-typedef struct _SysExDumpV1 {
+typedef struct {
 	const uint8_t begin;
 	const uint8_t id;
 	const uint8_t version;
