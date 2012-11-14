@@ -57,7 +57,7 @@ struct SysExEvent {
         size_t size;
 };
 
-#define RINGBUFFER_SIZE 1024*sizeof(struct MidiMessage)
+#define RINGBUFFER_SIZE 128*sizeof(struct MidiMessage)
 #define MIDI_EVENT_MAX 1024
 
 #ifdef HAVE_LASH
@@ -108,6 +108,7 @@ bool
 jvst_send_sysex(JackVST* jvst, enum SysExWant sysex_want)
 {
 	pthread_mutex_lock (&jvst->sysex_lock);
+	short g = 0;
 
 	switch(sysex_want) {
 	case SYSEX_WANT_DUMP: ;
@@ -124,15 +125,23 @@ jvst_send_sysex(JackVST* jvst, enum SysExWant sysex_want)
 		sysex_makeASCII(sxd->plugin_name, jvst->client_name, 24);
 		break;
 	/* Set once on start */
-//	case SYSEX_WANT_IDENT_REPLY:
+	case SYSEX_WANT_IDENT_REPLY:
 //		jvst->sysex_ident_reply.model[1] = jvst->uuid;
-//		break;
+		if (jvst->sysex_ident_reply.model[1] == 0) {
+			printf("Random ID:");
+			for(g=0; g < sizeof(jvst->sysex_ident_reply.version); g++) {
+				jvst->sysex_ident_reply.version[g] = rand() % 128;
+				printf(" %X", jvst->sysex_ident_reply.version[g]);
+			}
+			printf("\n");
+		}
+		break;
 	}
 
 	jvst->sysex_want = sysex_want;
 	pthread_cond_wait (&jvst->sysex_sent, &jvst->sysex_lock);
 	pthread_mutex_unlock (&jvst->sysex_lock);
-	printf("SysEx Dumped\n");
+	printf("SysEx Dumped (%d)\n", sysex_want);
 }
 
 static bool
@@ -156,7 +165,7 @@ jvst_sysex_handler(struct SysExEvent* sysex_event)
 			// Type
 			switch(data[3]) {
 			case SYSEX_TYPE_DUMP:
-				printf(" DUMP - OK\n");
+				printf("DUMP - OK\n");
 
 				SysExDumpV1* sysex_v1 = (SysExDumpV1*) data;
 
@@ -172,13 +181,31 @@ jvst_sysex_handler(struct SysExEvent* sysex_event)
 				break;
 			case SYSEX_TYPE_RQST: ;
 				SysExDumpRequestV1* sysex_request_v1 = (SysExDumpRequestV1*) data;
-				printf(" REQUEST - ID %d - OK\n", sysex_request_v1->uuid);
+				printf("REQUEST - ID %X - OK\n", sysex_request_v1->uuid);
 				if (sysex_request_v1->uuid == jvst->sysex_dump.uuid)
 					jvst_send_sysex(jvst, SYSEX_WANT_DUMP);
 
 				// If we got DumpRequest then it mean that there is FHControl, so we wanna notify
 				jvst->sysex_want_notify = true;
 				break;
+			case SYSEX_TYPE_OFFER: ;
+				SysExIdOffer* sysex_id_offer = (SysExIdOffer*) data;
+				printf("ID OFFER - %X - ", sysex_id_offer->uuid);
+				if (jvst->sysex_ident_reply.model[1] > 0) {
+					printf("UNEXPECTED\n");
+				} else if (memcmp(sysex_id_offer->rnid, jvst->sysex_ident_reply.version, 
+				     sizeof(jvst->sysex_ident_reply.version)*sizeof(uint8_t)) == 0)
+				{
+					printf("OK\n");
+					jvst->sysex_ident_reply.model[1] =
+					jvst->sysex_dump.uuid = sysex_id_offer->uuid;
+					jvst_send_sysex(jvst, SYSEX_WANT_IDENT_REPLY);
+				} else {
+					printf("NOT FOR US\n");
+				}
+				break;
+			default:
+				printf("BROKEN\n");
 			}
 
 			break;
@@ -1046,6 +1073,9 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	// Auto connect on start
 	if (connect_to)
 		jvst_connect(jvst, connect_to);
+
+	// Initialize random generator - usefull for SysEx ID negotiation
+	srand(GetTickCount());
 
 	// Create GTK or GlibMain thread
 	if (jvst->with_editor != WITH_EDITOR_NO) {
