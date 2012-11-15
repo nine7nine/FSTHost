@@ -44,7 +44,7 @@ struct _JackVST {
     jack_port_t*    midi_outport;
     jack_port_t**   inports;
     jack_port_t**   outports;
-    int             channel;
+    int             channel; /* 0 Omni, 17 None */
     bool            bypassed;
     enum WantState  want_state;
     short           want_state_cc;
