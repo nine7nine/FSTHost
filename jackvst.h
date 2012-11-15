@@ -70,7 +70,8 @@ struct _JackVST {
     struct VstMidiEvent* event_array;
     struct VstEvents*    events;
 
-    int uuid;
+    /* Jack Session support */
+    char* uuid;
     jack_session_event_t* session_event;
 
     /* For VST midi effects & synth source (like audio to midi VSTs) support */

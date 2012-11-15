@@ -116,7 +116,7 @@ jvst_send_sysex(JackVST* jvst, enum SysExWant sysex_want)
 		SysExDumpV1* sxd = &jvst->sysex_dump;
 		fst_get_program_name(jvst->fst, jvst->fst->current_program, progName, sizeof(progName));
 
-//		sxd->uuid = jvst->uuid; /* Set once on start */
+//		sxd->uuid = ; /* Set once on start */
 		sxd->program = jvst->fst->current_program;
 		sxd->channel = jvst->channel;
 		sxd->volume = jvst_get_volume(jvst);
@@ -126,7 +126,7 @@ jvst_send_sysex(JackVST* jvst, enum SysExWant sysex_want)
 		break;
 	/* Set once on start */
 	case SYSEX_WANT_IDENT_REPLY:
-//		jvst->sysex_ident_reply.model[1] = jvst->uuid;
+//		jvst->sysex_ident_reply.model[1] = ;
 		if (jvst->sysex_ident_reply.model[1] == 0) {
 			printf("Random ID:");
 			for(g=0; g < sizeof(jvst->sysex_ident_reply.version); g++) {
@@ -646,7 +646,7 @@ session_callback( JackVST* jvst )
 	if ( ! jvst_save_state( jvst, filename ) )
 		event->flags |= JackSessionSaveError;
 
-	snprintf( retval, sizeof(retval), "%s -U %d -u %s -s \"${SESSION_DIR}state.fps\" \"%s\"",
+	snprintf( retval, sizeof(retval), "%s -U %d -u %s -s \"${SESSION_DIR}state.fps\" \"%s\" >>/dev/null 2>&1",
 		my_motherfuckin_name, jvst->sysex_dump.uuid, event->client_uuid, jvst->handle->path );
 	event->command_line = strdup( retval );
 
@@ -865,7 +865,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 				jvst->tempo = strtod(optarg, NULL);
 				break;
 			case 'u':
-				jvst->uuid = strtol(optarg, NULL, 10);
+				jvst->uuid = optarg;
 				break;
 			case 'U':
 				jvst->sysex_ident_reply.model[1] =
@@ -915,9 +915,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	plugin = fst->plugin;
 
 	printf("Start Jack thread ...\n");
-	char struuid[6];
-	snprintf(struuid, 6, "%d", jvst->uuid);
-	jvst->client = jack_client_open(jvst->client_name,JackSessionID,NULL,struuid);
+	jvst->client = jack_client_open(jvst->client_name,JackSessionID,NULL,jvst->uuid);
 	if (! jvst->client) {
 		fst_error ("can't connect to JACK");
 		return 1;
