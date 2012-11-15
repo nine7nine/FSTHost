@@ -744,8 +744,8 @@ jvst_idle_cb(JackVST* jvst)
 			if ( jack_port_connected_to(jvst->midi_inport, jports[i]) )
 				continue;
 
-			jack_connect(jvst->client, jports[i], jack_port_name(jvst->midi_inport));
 			printf("Connect to: %s\n", jports[i]);
+			jack_connect(jvst->client, jports[i], jack_port_name(jvst->midi_inport));
 		}
 
 	}
