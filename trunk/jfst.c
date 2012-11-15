@@ -784,6 +784,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 	LPWSTR*		szArgList;
 	int		argc;
 	char**		argv;
+	char*		menv;
 	FST*		fst;
 	struct AEffect*	plugin;
 	short		i;
@@ -883,6 +884,10 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 		usage (argv[0]);
 		return 1;
 	}
+
+	menv = getenv("FSTHOST_NOGUI");
+	if (menv && strtol(menv, NULL, 2) == 1)
+		jvst->with_editor = WITH_EDITOR_NO;
 
 	plug_path = argv[optind];
 	jvst_first = jvst;
