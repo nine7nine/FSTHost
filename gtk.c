@@ -48,7 +48,6 @@ learn_handler (GtkToggleButton *but, gboolean ptr)
 		return;
 	}
 
-
 	pthread_mutex_lock( &(jvst->fst->lock) );		
 	jvst->midi_learn = TRUE;
 	jvst->midi_learn_CC = -1;
@@ -278,15 +277,12 @@ editor_handler (GtkToggleButton *but, gboolean ptr)
 		// Add Widget socket to vBox
 		gtk_box_pack_start (GTK_BOX(vpacker), gtk_socket, TRUE, FALSE, 0);
 
-		if (! fst_run_editor (jvst->fst)) {
-			fst_error ("cannot create editor");
-			return;
-		}
+		if (! fst_run_editor(jvst->fst)) return;
 
 		gtk_socket_add_id (GTK_SOCKET (gtk_socket), jvst->fst->xid);
 		fst_show_editor(jvst->fst);
 
-//		gtk_widget_grab_focus( gtk_socket );
+		gtk_widget_grab_focus( gtk_socket );
 		gtk_socket_signal = g_signal_connect (G_OBJECT(window), "configure-event",
 			G_CALLBACK(configure_handler), gtk_socket);
 
@@ -316,18 +312,6 @@ destroy_handler (GtkWidget* widget, GdkEventAny* ev, gpointer ptr)
 
 	gtk_main_quit();
 	
-	return FALSE;
-}
-
-int
-focus_handler (GtkWidget* widget, GdkEventFocus* ev, gpointer ptr)
-{
-	if (ev->in) {
-		fst_error ("Socket focus in");
-	} else {
-		fst_error ("Socket focus out");
-	}
-		       
 	return FALSE;
 }
 
@@ -414,11 +398,8 @@ save_data( JackVST *jvst )
 		    lash_send_config(lash_client, config);
 		    //lash_config_destroy( config );
 		}
-
-
 	    }
 	}
-
 }
 
 void
@@ -462,6 +443,7 @@ idle_cb(JackVST *jvst)
 		return FALSE;
 	}
 
+	// If program was changed via plugin or MIDI
 	if( fst->want_program == -1 &&
 	    gtk_combo_box_get_active( GTK_COMBO_BOX( preset_listbox ) ) != fst->current_program )
 	{
@@ -470,6 +452,7 @@ idle_cb(JackVST *jvst)
         	g_signal_handler_unblock (preset_listbox, preset_listbox_signal);
 	}
 
+	// MIDI learn support
 	if( jvst->midi_learn && jvst->midi_learn_CC != -1 && jvst->midi_learn_PARAM != -1 ) {
 		if( jvst->midi_learn_CC < 128 ) {
 			jvst->midi_map[jvst->midi_learn_CC] = jvst->midi_learn_PARAM;
@@ -508,7 +491,6 @@ idle_cb(JackVST *jvst)
 
 			if (show_tooltip)
 				gtk_widget_set_tooltip_text(midi_learn_toggle, tooltip);
-
 		}
 		jvst->midi_learn = FALSE;
 		gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON( midi_learn_toggle ), FALSE );
@@ -524,11 +506,12 @@ idle_cb(JackVST *jvst)
 	// Channel combo
 	channel_check(GTK_COMBO_BOX(channel_listbox), jvst);
 
-	// All about Bypass/Resume
+	// CPU Usage
 	gchar tmpstr[7];
 	sprintf(tmpstr, "%06.2f", CPUusage_getCurrentValue());
 	gtk_label_set_text(GTK_LABEL(cpu_usage), tmpstr);
 
+	// All about Bypass/Resume
 	if (jvst->bypassed != gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(bypass_button)) &&
 	    jvst->want_state == WANT_STATE_NO
 	) {
@@ -660,7 +643,8 @@ gtk_gui_start (JackVST* jvst)
 		gtk_widget_set_size_request(volume_slider, 100, -1);
 		gtk_scale_set_value_pos (GTK_SCALE(volume_slider), GTK_POS_LEFT);
 		gtk_range_set_value(GTK_RANGE(volume_slider), jvst_get_volume(jvst));
-		volume_signal = g_signal_connect (G_OBJECT(volume_slider), "value_changed", G_CALLBACK(volume_handler), jvst);
+		volume_signal = g_signal_connect (G_OBJECT(volume_slider), "value_changed", 
+			G_CALLBACK(volume_handler), jvst);
 	}
 
 	//----------------------------------------------------------------------------------
@@ -680,7 +664,8 @@ gtk_gui_start (JackVST* jvst)
 	gtk_cell_layout_pack_start (GTK_CELL_LAYOUT (preset_listbox), renderer, TRUE);
 	gtk_cell_layout_set_attributes (GTK_CELL_LAYOUT (preset_listbox), renderer, "text", 0, NULL);
 	gtk_combo_box_set_active( GTK_COMBO_BOX(preset_listbox), jvst->fst->current_program );
-	preset_listbox_signal = g_signal_connect( G_OBJECT(preset_listbox), "changed", G_CALLBACK( program_change ), jvst ); 
+	preset_listbox_signal = g_signal_connect( G_OBJECT(preset_listbox), "changed", 
+		G_CALLBACK( program_change ), jvst ); 
 	//----------------------------------------------------------------------------------
 
 	bypass_signal =
@@ -718,7 +703,6 @@ gtk_gui_start (JackVST* jvst)
 	printf( "calling gtk_main now\n" );
 	gtk_main ();
 
-
 	// We exit now
 	printf("Jack Deactivate\n");
 	jack_deactivate(jvst->client);
@@ -728,7 +712,6 @@ gtk_gui_start (JackVST* jvst)
 
 	return 0;
 }
-
 
 typedef int (*error_handler_t)( Display *, XErrorEvent *);
 static Display *the_gtk_display;
