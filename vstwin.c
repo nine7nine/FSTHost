@@ -330,7 +330,7 @@ fst_load (const char * path)
 	dll = LoadLibraryA(mypath);
 
 	// Try find plugin in VST_PATH
-	if ( (dll == NULL) && (envdup = getenv("VST_PATH")) != NULL ) {
+	if ( !dll && (envdup = getenv("VST_PATH"))) {
 		envdup = strdup (envdup);
 		vst_path = strtok (envdup, ":");
 		while (vst_path != NULL) {
@@ -347,7 +347,7 @@ fst_load (const char * path)
 		free(envdup);
 	}
 
-	if (dll == NULL) {
+	if (! dll) {
 		fst_error("Can't load plugin\n");
 		return NULL;
 	}
