@@ -1,0 +1,29 @@
+#!/bin/sh
+
+# FSTHost menu in dialog
+#   by Xj <xj@wp.pl>
+
+if [ -z "$VST_PATH" ]; then
+	echo 'VST_PATH environment is empty'
+	exit 1
+fi
+
+L=$(
+	T=1
+	find $(echo $VST_PATH|tr ':' ' ') -iname '*.dll' -type f |
+		while read F; do
+			G=${F##*/}
+			echo "$((T++))|'${G%.*}'|$F"
+		done
+)
+
+show_menu() {
+	G=$(echo "$L" | cut -d'|' -f1-2 | tr '|' ' ' | xargs dialog --menu 'Select VST' 0 0 0 3>&1 1>&2 2>&3)
+	[ -z "$G" ] && exit
+	
+	F=$(echo "$L" | grep "^$G|" | cut -d'|' -f3)
+	
+	fsthost "$F" 1>/dev/null 2>&1 &
+}
+
+while true; do show_menu; done
