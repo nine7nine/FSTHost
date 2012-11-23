@@ -102,6 +102,7 @@ clean:: $(SUBDIRS:%=%/__clean__) $(EXTRASUBDIRS:%=%/__clean__)
 install: $(fsthost_exe_MODULE)
 	install -Dm 0644 fsthost.exe.so $(DESTDIR)$(LIB_INST_PATH)/fsthost.exe.so
 	install -Dm 0755 fsthost $(DESTDIR)$(BIN_INST_PATH)/fsthost
+	install -Dm 0755 fsthost_menu $(DESTDIR)$(BIN_INST_PATH)/fsthost_menu
 
 $(SUBDIRS:%=%/__clean__): dummy
 	cd `dirname $@` && $(MAKE) clean
