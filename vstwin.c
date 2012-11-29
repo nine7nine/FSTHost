@@ -9,8 +9,6 @@ int MainThreadId;
 static LRESULT WINAPI 
 my_window_proc (HWND w, UINT msg, WPARAM wp, LPARAM lp)
 {
-	LRESULT result;
-
 	switch (msg) {
 	case WM_KEYUP:
 	case WM_KEYDOWN:
@@ -448,7 +446,7 @@ fst_close (FST* fst)
 		fst->plugin->dispatcher(fst->plugin, effClose, 0, 0, NULL, 0.0f);
 		--fst->handle->plugincnt;
 	} else {
-		// Try call from even_loop thread
+		// Try call from event_loop thread
 		pthread_mutex_lock (&fst->event_call_lock);
 		pthread_mutex_lock (&fst->lock);
 		fst->event_call = CLOSE;
@@ -516,7 +514,6 @@ static bool
 register_window_class (HMODULE hInst)
 {
 	WNDCLASSEX wclass;
-	HANDLE t_thread; 
 
 	wclass.cbSize = sizeof(WNDCLASSEX);
 	wclass.style = 0;
