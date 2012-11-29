@@ -1,0 +1,11 @@
+CFLAGS = -O2 -Wall -g -frounding-math -fsignaling-nans -mfpmath=sse -msse2 -m32
+INCL = -I. -I/usr/include -I/usr/include -I/usr/include/wine -I/usr/include/wine/windows -I/usr/local/include/wine -I/usr/local/include/wine/windows
+LIB = -L/usr/lib/i386-linux-gnu/wine
+
+.PHONY: clean
+
+fsthost_info: fst.c vstwin.c info.c
+	winegcc $(CFLAGS) -g $(INCL) $(LIB) -mwindows -o $@ $^
+
+clean:
+	rm -f fsthost_info.*
