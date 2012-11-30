@@ -40,19 +40,31 @@ void fst_get_info(char* path) {
 
 void scandirectory( const char *dir ) {
 	struct dirent *entry;
-	DIR *d = opendir( dir );
+	DIR *d = opendir(dir);
 
 	if ( !d ) return;
 
-	while ( entry = readdir( d ) ) {
-		if( strstr( entry->d_name, ".dll" ) ) {
-			char *fullname = alloca( strlen( dir ) + strlen( entry->d_name ) + 2 );
-			sprintf( fullname, "%s/%s", dir, entry->d_name );
-	    
-//			fst_error( "checking %s\n", fullname );
-			fst_get_info( fullname );
+	char fullname[PATH_MAX];
+	while ( (entry = readdir( d )) ) {
+		if (entry->d_type & DT_DIR) {
+			/* Check that the directory is not "d" or d's parent. */
+            
+			if (! strcmp (entry->d_name, "..") || ! strcmp (entry->d_name, "."))
+				continue;
+
+			snprintf( fullname, PATH_MAX, "%s/%s", dir, entry->d_name );
+
+			scandirectory(fullname);
+		} else if (entry->d_type & DT_REG) {
+			if (! strstr( entry->d_name, ".dll" ) && ! strstr( entry->d_name, ".DLL" ))
+				continue;
+
+			snprintf( fullname, PATH_MAX, "%s/%s", dir, entry->d_name );
+    
+			fst_get_info(fullname);
 		}
 	}
+	closedir(d);
 }
 
 int WINAPI
