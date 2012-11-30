@@ -1,6 +1,8 @@
-CFLAGS = -O2 -Wall -g -frounding-math -fsignaling-nans -mfpmath=sse -msse2 -m32
+CFLAGS := -O2 -Wall -g -frounding-math -fsignaling-nans -mfpmath=sse -msse2 -m32
+CFLAGS += $(shell pkg-config --cflags libxml-2.0)
 INCL = -I. -I/usr/include -I/usr/include -I/usr/include/wine -I/usr/include/wine/windows -I/usr/local/include/wine -I/usr/local/include/wine/windows
-LIB = -L/usr/lib/i386-linux-gnu/wine
+LIB := -L/usr/lib/i386-linux-gnu/wine
+LIB += $(shell pkg-config --libs libxml-2.0)
 
 .PHONY: clean
 
