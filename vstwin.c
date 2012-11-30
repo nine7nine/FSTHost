@@ -505,6 +505,8 @@ fst_event_handler(FST* fst) {
 	case DISPATCHER:
 		dp->retval = plugin->dispatcher( plugin, dp->opcode, dp->index, dp->val, dp->ptr, dp->opt );
 		break;
+	case RESET:
+		break;
 	}
 	fst->event_call = RESET;
 	pthread_cond_signal (&fst->event_called);
