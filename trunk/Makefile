@@ -27,35 +27,28 @@ INCLUDE_PATH          = -I. -I/usr/include -I/usr/include -I/usr/include/wine -I
 INCLUDE_PATH          += -I/usr/local/include/wine -I/usr/local/include/wine/windows
 DLL_PATH              =
 LIBRARY_PATH          = -L/usr/lib/i386-linux-gnu/wine 
-LIBRARIES             := $(shell pkg-config --libs $(PKG_CONFIG_MODULES)) -L/usr/X11R6/lib -lpthread -lrt -lX11 -m32
+LIBRARIES             := -m32
 DESTDIR               =
 PREFIX                = /usr
 LIB_INST_PATH         = $(PREFIX)/lib/i386-linux-gnu/wine
 BIN_INST_PATH         = $(PREFIX)/bin
 
-### fst.exe sources and settings
-fsthost_exe_MODULE       = fsthost
-fsthost_exe_C_SRCS       = audiomaster.c fst.c gtk.c jfst.c fxb.c fps.c vstwin.c cpuusage.c
-fsthost_exe_CXX_SRCS     =
-fsthost_exe_RC_SRCS      =
-fsthost_exe_LDFLAGS      = -mwindows
-fsthost_exe_DLL_PATH     =
-fsthost_exe_DLLS         = 
-fsthost_exe_LIBRARY_PATH =
-fsthost_exe_LIBRARIES    = uuid
-
-fsthost_exe_OBJS         = $(fsthost_exe_C_SRCS:.c=.o) \
-			$(fsthost_exe_CXX_SRCS:.cpp=.o) \
-			$(fsthost_exe_RC_SRCS:.rc=.res)
+### fsthost.exe sources and settings
+fsthost_MODULE        = fsthost
+fsthost_C_SRCS        = audiomaster.c fst.c gtk.c jfst.c fxb.c fps.c vstwin.c cpuusage.c info.c
+fsthost_LDFLAGS       = -mwindows
+fsthost_DLL_PATH      =
+fsthost_DLLS          = 
+fsthost_LIBRARY_PATH  = $(shell pkg-config --libs $(PKG_CONFIG_MODULES)) -L/usr/X11R6/lib -lpthread -lX11
+fsthost_LIBRARIES     =
+fsthost_OBJS          = $(fsthost_C_SRCS:.c=.o)
 
 ### Global source lists
-
-C_SRCS                = $(fsthost_exe_C_SRCS)
-CXX_SRCS              = $(fsthost_exe_CXX_SRCS)
-RC_SRCS               = $(fsthost_exe_RC_SRCS)
+C_SRCS                = $(fsthost_C_SRCS)
+CXX_SRCS              = $(fsthost_CXX_SRCS)
+RC_SRCS               = $(fsthost_RC_SRCS)
 
 ### Tools
-
 CC = gcc
 CXX = g++
 LINK = winegcc
@@ -63,8 +56,6 @@ RC = wrc
 WINEBUILD = winebuild
 
 ### Generic targets
-
-#all: hackheaders $(SUBDIRS) $(DLLS:%=%.so) $(EXES:%=%)
 all: $(SUBDIRS) $(DLLS:%=%.so) $(EXES:%=%)
 
 ### Build rules
@@ -100,7 +91,7 @@ clean:: $(SUBDIRS:%=%/__clean__) $(EXTRASUBDIRS:%=%/__clean__)
 	$(RM) $(DLLS:%=%.dbg.o) $(DLLS:%=%.so)
 	$(RM) $(EXES:%=%.dbg.o) $(EXES:%=%.so) $(EXES:%.exe=%)
 
-install: $(fsthost_exe_MODULE)
+install: $(fsthost_MODULE)
 	install -Dm 0644 fsthost.exe.so $(DESTDIR)$(LIB_INST_PATH)/fsthost.exe.so
 	install -Dm 0755 fsthost $(DESTDIR)$(BIN_INST_PATH)/fsthost
 	install -Dm 0755 fsthost_menu $(DESTDIR)$(BIN_INST_PATH)/fsthost_menu
@@ -114,12 +105,13 @@ $(EXTRASUBDIRS:%=%/__clean__): dummy
 ### Target specific build rules
 DEFLIB = $(LIBRARY_PATH) $(LIBRARIES) $(DLL_PATH)
 
-$(fsthost_exe_MODULE): $(fsthost_exe_OBJS)
-	$(LINK) $(fsthost_exe_LDFLAGS) -o $@ $(fsthost_exe_OBJS) $(fsthost_exe_LIBRARY_PATH) $(DEFLIB) $(fsthost_exe_DLLS:%=-l%) $(fsthost_exe_LIBRARIES:%=-l%)
+$(fsthost_MODULE): $(fsthost_OBJS)
+	$(LINK) $(fsthost_LDFLAGS) -o $@ $(fsthost_OBJS) $(fsthost_LIBRARY_PATH) $(DEFLIB) $(fsthost_DLLS:%=-l%) $(fsthost_LIBRARIES:%=-l%)
 # Add support for WINE_RT
 	sed -i -e 's|-n "$$appdir"|-r "$$appdir/$$appname"|' \
 		-e '3i \export WINEPATH="$(LIB_INST_PATH)"' \
 		-e '3i \export WINE_RT=$${WINE_RT:-10}' \
-		-e '3i \export WINE_SRV_RT=$${WINE_SRV_RT:-15}' $(fsthost_exe_MODULE).exe
+		-e '3i \export WINE_SRV_RT=$${WINE_SRV_RT:-15}' $(fsthost_MODULE).exe
 # Cut extension from binary name
-	mv $(fsthost_exe_MODULE).exe $(fsthost_exe_MODULE)
+	mv $(fsthost_MODULE).exe $(fsthost_MODULE)
+
