@@ -5,9 +5,7 @@
 
 #include "fst.h"
 
-bool need_save = FALSE;
-xmlDoc*  xml_db = NULL;
-xmlNode* xml_rn = NULL;
+static bool need_save = FALSE;
 
 static char *
 int2str(char *str, int integer) {
@@ -26,7 +24,7 @@ bool2str(char *str, bool boolean) {
 }
 
 static bool
-fst_exists(char *path) {
+fst_exists(char *path, xmlNode *xml_rn) {
 	xmlNode* fst_node;
 	xmlChar fullpath[PATH_MAX];
 
@@ -56,17 +54,13 @@ simple_master_callback( struct AEffect *fx, long opcode, long index, long value,
 	}
 }
 
-static void fst_add2db(FST* fst) {
+static void fst_add2db(FST* fst, xmlNode *xml_rn) {
 	xmlNode* fst_node;
-	xmlChar fullpath[PATH_MAX];
 	xmlChar tmpstr[32];
 
 	fst_node = xmlNewChild(xml_rn, NULL,"fst", NULL);
 
-	if (! realpath(fst->handle->path,fullpath))
-		return;
-
-	xmlNewProp(fst_node,"path",fullpath);
+	xmlNewProp(fst_node,"path",fst->handle->path);
 
 	if ( fst_call_dispatcher( fst, effGetEffectName, 0, 0, tmpstr, 0 ) ) {
 		xmlNewChild(fst_node, NULL,"name",tmpstr);
@@ -93,11 +87,11 @@ static void fst_add2db(FST* fst) {
 	*/
 }
 
-static void fst_get_info(char* path) {
+static void fst_get_info(char* path, xmlNode *xml_rn) {
 	FST*		fst;
 	FSTHandle*	handle;
 
-	if (! fst_exists(path)) {
+	if (! fst_exists(path, xml_rn)) {
 		printf("Load plugin %s\n", path);
 		handle = fst_load(path);
 		if (! handle) {
@@ -112,7 +106,7 @@ static void fst_get_info(char* path) {
 			return;
 		}
 
-		fst_add2db(fst);
+		fst_add2db(fst, xml_rn);
 
 		printf("Close plugin: %s\n", handle->name);
 		fst_close(fst);
@@ -124,7 +118,7 @@ static void fst_get_info(char* path) {
 	}
 }
 
-static void scandirectory( const char *dir ) {
+static void scandirectory( const char *dir, xmlNode *xml_rn ) {
 	struct dirent *entry;
 	DIR *d = opendir(dir);
 
@@ -143,20 +137,23 @@ static void scandirectory( const char *dir ) {
 
 			snprintf( fullname, PATH_MAX, "%s/%s", dir, entry->d_name );
 
-			scandirectory(fullname);
+			scandirectory(fullname, xml_rn);
 		} else if (entry->d_type & DT_REG) {
 			if (! strstr( entry->d_name, ".dll" ) && ! strstr( entry->d_name, ".DLL" ))
 				continue;
 
 			snprintf( fullname, PATH_MAX, "%s/%s", dir, entry->d_name );
     
-			fst_get_info(fullname);
+			fst_get_info(fullname, xml_rn);
 		}
 	}
 	closedir(d);
 }
 
 int fst_info(const char *dbpath, const char *fst_path) {
+	xmlDoc*  xml_db = NULL;
+	xmlNode* xml_rn = NULL;
+
 	xmlKeepBlanksDefault(0);
 	xml_db = xmlReadFile(dbpath, NULL, 0);
 	if (xml_db) {
@@ -168,7 +165,7 @@ int fst_info(const char *dbpath, const char *fst_path) {
 		xmlDocSetRootElement(xml_db, xml_rn);
 	}
 
-	scandirectory(fst_path);
+	scandirectory(fst_path, xml_rn);
 
 	if (need_save) {
 		FILE * f = fopen (dbpath, "wb");
