@@ -37,13 +37,15 @@ main_loop() {
 	
 	F=$(echo "$L" | grep "^$G|" | cut -d'|' -f3 | tr -d '"')
 	
-	fsthost "$F" 1>/tmp/fsthost_menu.log.$G 2>&1 &
+	fsthost -j '' "$F" 1>/tmp/fsthost_menu.log.$G 2>&1 &
 }
 
 FSTHOST_DB=$1
 if [ -n "$FSTHOST_DB" ]; then
-	echo "Update DB: $FSTHOST_DB"
-	fsthost_info "$FSTHOST_DB" && exit 3
+	if [ ! -f "$FSTHOST_DB" ]; then
+		echo "No such file: $FSTHOST_DB"
+		exit 1
+	fi
 elif [ -z "$VST_PATH" ]; then
 	echo 'VST_PATH environment is empty'
 	exit 2
