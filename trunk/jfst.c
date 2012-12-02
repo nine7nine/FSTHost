@@ -785,8 +785,11 @@ static void usage(char* appname) {
 	const char* format = "%-20s%s\n";
 
 	fprintf(stderr, "\nUsage: %s [ options ] <plugin>\n", appname);
+	fprintf(stderr, "  or\n");
+	fprintf(stderr, "\nUsage: %s -d <xml_db_info> <path_for_add_to_db>\n", appname);
 	fprintf(stderr, "Options:\n");
-	fprintf(stderr, format, "-b", "Bypass");
+	fprintf(stderr, format, "-b", "Start in bypass mode");
+	fprintf(stderr, format, "-d xml_db_path", "Create/Update XML info DB.");
 	fprintf(stderr, format, "-n", "Disable Editor and GTK GUI");
 	fprintf(stderr, format, "-N", "Notify changes by SysEx");
 	fprintf(stderr, format, "-e", "Hide Editor");
