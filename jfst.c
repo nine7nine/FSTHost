@@ -786,7 +786,7 @@ static void usage(char* appname) {
 
 	fprintf(stderr, "\nUsage: %s [ options ] <plugin>\n", appname);
 	fprintf(stderr, "  or\n");
-	fprintf(stderr, "\nUsage: %s -d <xml_db_info> <path_for_add_to_db>\n", appname);
+	fprintf(stderr, "Usage: %s -d <xml_db_info> <path_for_add_to_db>\n\n", appname);
 	fprintf(stderr, "Options:\n");
 	fprintf(stderr, format, "-b", "Start in bypass mode");
 	fprintf(stderr, format, "-d xml_db_path", "Create/Update XML info DB.");
@@ -803,7 +803,7 @@ static void usage(char* appname) {
 	fprintf(stderr, format, "-o num_out", "Jack number Out ports");
 	fprintf(stderr, format, "-t tempo", "Set fixed Tempo rather than using JackTransport");
 	fprintf(stderr, format, "-u uuid", "JackSession UUID");
-	fprintf(stderr, format, "-U uuid", "SysEx ID");
+	fprintf(stderr, format, "-U uuid", "SysEx ID (1-127). 0 is default (do not use it)");
 	fprintf(stderr, format, "-V", "Disable Volume control / filtering CC7 messages");
 }
 
