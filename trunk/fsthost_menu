@@ -3,27 +3,61 @@
 # FSTHost menu in dialog
 #   by Xj <xj@wp.pl>
 
-if [ -z "$VST_PATH" ]; then
+PATH=$PATH:.
+
+ZENITY=1
+ZENITY_WIDTH=300
+ZENITY_HEIGHT=700
+
+list_fst() {
+	if [ -n "$FSTHOST_DB" ]; then
+		xmllint --noblanks $FSTHOST_DB | sed 's/<\/fst>/&\n/g' |
+			sed -ne 's/.*<fst path="\(.*\)".*<name>\(.*\)<\/name>.*/"\2"|"\1"/p'
+	else
+		# Get from VST_PATH
+		find $(echo $VST_PATH|tr ':' ' ') -iname '*.dll' -type f | awk -F'/' '{print "\""$NF"\"|\""$0"\""}'
+	fi
+}
+
+show_menu() {
+	echo "$L" | cut -d'|' -f1-2 |
+	{
+	if [ $ZENITY -eq 1 ]; then
+		tr '|' '\n' |
+		zenity --title 'Wybierz Host' --width=$ZENITY_WIDTH --height=$ZENITY_HEIGHT --list --column 'Hostname' --column 'IP Address'
+	else
+		tr '|' ' ' | xargs dialog --menu 'Select VST' 0 0 0 3>&1 1>&2 2>&3
+	fi
+	}
+}
+
+main_loop() {
+	G=$(show_menu)
+	[ -z "$G" ] && exit
+	
+	F=$(echo "$L" | grep "^$G|" | cut -d'|' -f3 | tr -d '"')
+	
+	fsthost "$F" 1>/tmp/fsthost_menu.log.$G 2>&1 &
+}
+
+FSTHOST_DB=$1
+if [ -n "$FSTHOST_DB" ]; then
+	echo "Update DB: $FSTHOST_DB"
+	fsthost_info "$FSTHOST_DB" && exit 3
+elif [ -z "$VST_PATH" ]; then
 	echo 'VST_PATH environment is empty'
-	exit 1
+	exit 2
 fi
 
 L=$(
 	T=1
-	find $(echo $VST_PATH|tr ':' ' ') -iname '*.dll' -type f |
-		while read F; do
-			G=${F##*/}
-			echo "$((T++))|'${G%.*}'|$F"
-		done
+	list_fst | while read F; do
+		echo "$T|$F"
+		T=$((T+1))
+	done
 )
 
-show_menu() {
-	G=$(echo "$L" | cut -d'|' -f1-2 | tr '|' ' ' | xargs dialog --menu 'Select VST' 0 0 0 3>&1 1>&2 2>&3)
-	[ -z "$G" ] && exit
-	
-	F=$(echo "$L" | grep "^$G|" | cut -d'|' -f3)
-	
-	fsthost "$F" 1>/dev/null 2>&1 &
-}
+type zenity 1>/dev/null 2>&1 || ZENITY=0
 
-while true; do show_menu; done
+rm /tmp/fsthost_menu.log.*
+while true; do main_loop; done
