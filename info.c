@@ -5,9 +5,6 @@
 
 #include "fst.h"
 
-const char* my_motherfuckin_name = "fsthost_info";
-extern void fst_error (const char *fmt, ...);
-
 bool need_save = FALSE;
 xmlDoc*  xml_db = NULL;
 xmlNode* xml_rn = NULL;
@@ -33,7 +30,8 @@ fst_exists(char *path) {
 	xmlNode* fst_node;
 	xmlChar fullpath[PATH_MAX];
 
-	realpath(path,fullpath);
+	if (! realpath(path,fullpath))
+		return 10;
 
 	for (fst_node = xml_rn->children; fst_node; fst_node = fst_node->next) {
 		if (strcmp(fst_node->name, "fst"))
@@ -58,14 +56,16 @@ simple_master_callback( struct AEffect *fx, long opcode, long index, long value,
 	}
 }
 
-void fst_add2db(FST* fst) {
+static void fst_add2db(FST* fst) {
 	xmlNode* fst_node;
 	xmlChar fullpath[PATH_MAX];
 	xmlChar tmpstr[32];
 
 	fst_node = xmlNewChild(xml_rn, NULL,"fst", NULL);
 
-	realpath(fst->handle->path,fullpath);
+	if (! realpath(fst->handle->path,fullpath))
+		return;
+
 	xmlNewProp(fst_node,"path",fullpath);
 
 	if ( fst_call_dispatcher( fst, effGetEffectName, 0, 0, tmpstr, 0 ) ) {
@@ -93,7 +93,7 @@ void fst_add2db(FST* fst) {
 	*/
 }
 
-void fst_get_info(char* path) {
+static void fst_get_info(char* path) {
 	FST*		fst;
 	FSTHandle*	handle;
 
@@ -124,7 +124,7 @@ void fst_get_info(char* path) {
 	}
 }
 
-void scandirectory( const char *dir ) {
+static void scandirectory( const char *dir ) {
 	struct dirent *entry;
 	DIR *d = opendir(dir);
 
@@ -156,59 +156,24 @@ void scandirectory( const char *dir ) {
 	closedir(d);
 }
 
-static void cmdline2arg(int *argc, char ***pargv, LPSTR cmdline) {
-	LPWSTR*		szArgList;
-	short		i;
-	char**		argv;
-
-	szArgList = CommandLineToArgvW(GetCommandLineW(), argc);
-	if (szArgList == NULL) {
-		fprintf(stderr, "Unable to parse command line\n");
-		*argc = -1;
-		return;
-	}
-
-    	argv = malloc(*argc * sizeof(char*));
-	for (i=0; i < *argc; ++i) {
-		int nsize = WideCharToMultiByte(CP_UNIXCP, 0, szArgList[i], -1, NULL, 0, NULL, NULL);
-		
-		argv[i] = malloc( nsize );
-		WideCharToMultiByte(CP_UNIXCP, 0, szArgList[i], -1, (LPSTR) argv[i], nsize, NULL, NULL);
-	}
-	LocalFree(szArgList);
-	argv[0] = (char*) my_motherfuckin_name; // Force APP name
-	*pargv = argv;
-}
-
-int WINAPI
-WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
-	int		argc = -1;
-	char**		argv = NULL;
-
-	cmdline2arg(&argc, &argv, cmdline);
-	if (argc < 3) {
-		printf("Usage: %s directory database\n", argv[0]);
-		return 9;
-	}
-
+int fst_info(const char *dbpath, const char *fst_path) {
 	xmlKeepBlanksDefault(0);
-	xml_db = xmlReadFile(argv[2], NULL, 0);
+	xml_db = xmlReadFile(dbpath, NULL, 0);
 	if (xml_db) {
 		xml_rn = xmlDocGetRootElement(xml_db);
 	} else {
-		printf("Could not open/parse file %s. Create new one.\n", argv[2]);
+		printf("Could not open/parse file %s. Create new one.\n", dbpath);
 		xml_db = xmlNewDoc("1.0");
 		xml_rn = xmlNewDocRawNode(xml_db, NULL, "fst_database", NULL);
 		xmlDocSetRootElement(xml_db, xml_rn);
 	}
 
-//	fst_get_info(argv[1]);
-	scandirectory(argv[1]);
+	scandirectory(fst_path);
 
 	if (need_save) {
-		FILE * f = fopen (argv[2], "wb");
+		FILE * f = fopen (dbpath, "wb");
 		if (! f) {
-			printf ("Could not open xml database: %s\n", argv[2]);
+			printf ("Could not open xml database: %s\n", dbpath);
 			return 8;
 		}
 

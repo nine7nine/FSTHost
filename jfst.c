@@ -44,6 +44,9 @@ extern long jack_host_callback (struct AEffect*, int32_t, int32_t, intptr_t, voi
 extern void gtk_gui_init (int* argc, char** argv[]);
 extern int gtk_gui_start (JackVST * jvst);
 
+/* info.c */
+extern int fst_info(const char *dbpath, const char *fst_path);
+
 /* Structures & Prototypes for midi output and associated queue */
 struct MidiMessage {
         jack_nframes_t time;
@@ -814,6 +817,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	short		opt_numOuts = 0;
 	bool		load_state = FALSE;
 	bool		sigusr1_save_state = FALSE;
+	const char*	dbinfo_path = NULL;
 	const char*	connect_to = NULL;
 	const char*	plug_path;
 
@@ -826,10 +830,13 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 
         // Parse command line options
 	cmdline2arg(&argc, &argv, cmdline);
-	while ( (i = getopt (argc, argv, "bes:c:k:i:j:lnNm:o:t:u:U:V")) != -1) {
+	while ( (i = getopt (argc, argv, "bd:es:c:k:i:j:lnNm:o:t:u:U:V")) != -1) {
 		switch (i) {
 			case 'b':
 				jvst->bypassed = TRUE;
+				break;
+			case 'd':
+				dbinfo_path = optarg;
 				break;
 			case 'e':
 				jvst->with_editor = WITH_EDITOR_HIDE;
@@ -891,12 +898,16 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 		return 1;
 	}
 
+	plug_path = argv[optind];
+
+	if (dbinfo_path)
+		return fst_info(dbinfo_path, plug_path);
+
+	jvst_first = jvst;
+
 	menv = getenv("FSTHOST_NOGUI");
 	if (menv && strtol(menv, NULL, 2) == 1)
 		jvst->with_editor = WITH_EDITOR_NO;
-
-	plug_path = argv[optind];
-	jvst_first = jvst;
 
 	jvst_set_volume(jvst, 63);
 
