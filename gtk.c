@@ -155,7 +155,6 @@ save_handler (GtkToggleButton *but, gboolean ptr)
 		}
 
 		g_free (selected);
-		free (filename);
 	}
 	gtk_widget_destroy (dialog);
 	gtk_widget_grab_focus( gtk_socket );

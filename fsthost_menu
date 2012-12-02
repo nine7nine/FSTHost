@@ -3,7 +3,7 @@
 # FSTHost menu in dialog
 #   by Xj <xj@wp.pl>
 
-PATH=$PATH:.
+PATH=.:$PATH
 
 ZENITY=1
 ZENITY_WIDTH=300
