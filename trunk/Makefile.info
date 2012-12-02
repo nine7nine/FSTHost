@@ -8,6 +8,8 @@ LIB += $(shell pkg-config --libs libxml-2.0)
 
 fsthost_info: fst.c vstwin.c info.c
 	winegcc $(CFLAGS) -g $(INCL) $(LIB) -mwindows -o $@ $^
+# Cut extension from binary name
+	mv fsthost_info.exe fsthost_info
 
 clean:
-	rm -f fsthost_info.*
+	rm -f fsthost_info*
