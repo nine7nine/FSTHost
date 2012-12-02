@@ -123,7 +123,7 @@ save_handler (GtkToggleButton *but, gboolean ptr)
 
 		selected = gtk_file_chooser_get_filename (GTK_FILE_CHOOSER(dialog));
 
-		filename = malloc (strlen (selected) + 5);
+		filename = alloca (strlen (selected) + 5);
 		strcpy (filename, selected);
 
 		last4 = selected + strlen(selected) - 4;
