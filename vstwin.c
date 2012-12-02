@@ -1,5 +1,7 @@
 #include <libgen.h>
 #include <signal.h>
+#include <stdlib.h>
+#include <limits.h>
 
 #include "fst.h"
 
@@ -309,8 +311,8 @@ fst_event_loop_add_plugin (FST* fst)
 FSTHandle*
 fst_load (const char * path)
 {
-	char mypath[MAX_PATH];
-	char *base, *envdup, *vst_path, *last;
+	char mypath[PATH_MAX];
+	char *base, *envdup, *vst_path, *last, *fullpath;
 	HMODULE dll = NULL;
 	main_entry_t main_entry;
 	FSTHandle* fhandle;
@@ -358,11 +360,14 @@ fst_load (const char * path)
 		fst_error("Can't found either main and VSTPluginMain entry\n");
 		return NULL;
 	}
+
+	if ( ! (fullpath = realpath(mypath,NULL)) )
+		strdup(mypath);
 	
-	fhandle = calloc (1, sizeof (FSTHandle));
+	fhandle = malloc(sizeof(FSTHandle));
 	fhandle->dll = dll;
 	fhandle->main_entry = main_entry;
-	fhandle->path = strdup(mypath);
+	fhandle->path = fullpath;
 	fhandle->name = strndup(base, strrchr(base, '.') - base);
 	fhandle->plugincnt = 0;
 	
