@@ -754,8 +754,31 @@ jvst_idle_cb(JackVST* jvst)
 	return TRUE;
 }
 
-static void
-usage(char* appname) {
+static void cmdline2arg(int *argc, char ***pargv, LPSTR cmdline) {
+	LPWSTR*		szArgList;
+	short		i;
+	char**		argv;
+
+	szArgList = CommandLineToArgvW(GetCommandLineW(), argc);
+	if (szArgList == NULL) {
+		fprintf(stderr, "Unable to parse command line\n");
+		*argc = -1;
+		return;
+	}
+
+    	argv = malloc(*argc * sizeof(char*));
+	for (i=0; i < *argc; ++i) {
+		int nsize = WideCharToMultiByte(CP_UNIXCP, 0, szArgList[i], -1, NULL, 0, NULL, NULL);
+		
+		argv[i] = malloc( nsize );
+		WideCharToMultiByte(CP_UNIXCP, 0, szArgList[i], -1, (LPSTR) argv[i], nsize, NULL, NULL);
+	}
+	LocalFree(szArgList);
+	argv[0] = (char*) my_motherfuckin_name; // Force APP name
+	*pargv = argv;
+}
+
+static void usage(char* appname) {
 	const char* format = "%-20s%s\n";
 
 	fprintf(stderr, "\nUsage: %s [ options ] <plugin>\n", appname);
@@ -779,11 +802,10 @@ usage(char* appname) {
 }
 
 int WINAPI
-WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
-{
+WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	LPWSTR*		szArgList;
-	int		argc;
-	char**		argv;
+	int		argc = -1;
+	char**		argv = NULL;
 	char*		menv;
 	FST*		fst;
 	struct AEffect*	plugin;
@@ -802,24 +824,8 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow)
 
 	JackVST*	jvst = jvst_new();
 
-	// Parse command line
-	szArgList = CommandLineToArgvW(GetCommandLineW(), &argc);
-	if (szArgList == NULL) {
-		fprintf(stderr, "Unable to parse command line\n");
-		return 10;
-	}
-
-    	argv = malloc(argc * sizeof(char*));
-	for (i=0; i < argc; ++i) {
-		int nsize = WideCharToMultiByte(CP_UNIXCP, 0, szArgList[i], -1, NULL, 0, NULL, NULL);
-		
-		argv[i] = malloc( nsize );
-		WideCharToMultiByte(CP_UNIXCP, 0, szArgList[i], -1, (LPSTR) argv[i], nsize, NULL, NULL);
-	}
-	LocalFree(szArgList);
-	strcpy(argv[0], my_motherfuckin_name); // Force APP name
-
         // Parse command line options
+	cmdline2arg(&argc, &argv, cmdline);
 	while ( (i = getopt (argc, argv, "bes:c:k:i:j:lnNm:o:t:u:U:V")) != -1) {
 		switch (i) {
 			case 'b':

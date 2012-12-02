@@ -23,9 +23,10 @@ CEXTRA                += -DHAVE_LASH
 endif
 CXXEXTRA              = -mno-cygwin
 RCEXTRA               =
-INCLUDE_PATH          = -I. -I/usr/include -I/usr/include -I/usr/include/wine -I/usr/include/wine/windows -I/usr/local/include/wine -I/usr/local/include/wine/windows
+INCLUDE_PATH          = -I. -I/usr/include -I/usr/include -I/usr/include/wine -I/usr/include/wine/windows
+INCLUDE_PATH          += -I/usr/local/include/wine -I/usr/local/include/wine/windows
 DLL_PATH              =
-LIBRARY_PATH          = -L/usr/lib/i386-linux-gnu/wine
+LIBRARY_PATH          = -L/usr/lib/i386-linux-gnu/wine 
 LIBRARIES             := $(shell pkg-config --libs $(PKG_CONFIG_MODULES)) -L/usr/X11R6/lib -lpthread -lrt -lX11 -m32
 DESTDIR               =
 PREFIX                = /usr

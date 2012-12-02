@@ -29,15 +29,18 @@ bool2str(char *str, bool boolean) {
 }
 
 static bool
-fst_exists(FSTHandle* handle) {
+fst_exists(char *path) {
 	xmlNode* fst_node;
+	xmlChar fullpath[PATH_MAX];
+
+	realpath(path,fullpath);
 
 	for (fst_node = xml_rn->children; fst_node; fst_node = fst_node->next) {
 		if (strcmp(fst_node->name, "fst"))
 			continue;
 
-		if (! strcmp(xmlGetProp(fst_node, "name"), handle->name)) {
-			printf("%s already exists\n", handle->name);
+		if (! strcmp(xmlGetProp(fst_node, "path"), fullpath)) {
+			printf("%s already exists\n", path);
 			return TRUE;
 		}
 	}
@@ -60,12 +63,17 @@ void fst_add2db(FST* fst) {
 	xmlChar fullpath[PATH_MAX];
 	xmlChar tmpstr[32];
 
-	realpath(fst->handle->path,fullpath);
-
 	fst_node = xmlNewChild(xml_rn, NULL,"fst", NULL);
 
-	xmlNewProp(fst_node,"name",fst->handle->name);
-	xmlNewChild(fst_node, NULL,"path",fullpath);
+	realpath(fst->handle->path,fullpath);
+	xmlNewProp(fst_node,"path",fullpath);
+
+	if ( fst_call_dispatcher( fst, effGetEffectName, 0, 0, tmpstr, 0 ) ) {
+		xmlNewChild(fst_node, NULL,"name",tmpstr);
+	} else {
+		xmlNewChild(fst_node, NULL,"name",fst->handle->name);
+	}
+
 	xmlNewChild(fst_node, NULL,"uniqueID", int2str(tmpstr,fst->plugin->uniqueID));
 	xmlNewChild(fst_node, NULL,"version", int2str(tmpstr,fst->plugin->version));
 	xmlNewChild(fst_node, NULL,"vst_version", int2str(tmpstr,fst->vst_version));
@@ -74,30 +82,29 @@ void fst_add2db(FST* fst) {
 	xmlNewChild(fst_node, NULL, "canReceiveVstMidiEvent", bool2str(tmpstr,fst->canReceiveVstMidiEvent));
 	xmlNewChild(fst_node, NULL, "canSendVstEvents", bool2str(tmpstr,fst->canSendVstEvents));
 	xmlNewChild(fst_node, NULL, "canSendVstMidiEvent", bool2str(tmpstr,fst->canSendVstMidiEvent));
+	xmlNewChild(fst_node, NULL, "numInputs", int2str(tmpstr,fst->plugin->numInputs));
+	xmlNewChild(fst_node, NULL, "numOutputs", int2str(tmpstr,fst->plugin->numOutputs));
+	xmlNewChild(fst_node, NULL, "numParams", int2str(tmpstr,fst->plugin->numParams));
+	xmlNewChild(fst_node, NULL, "hasEditor", 
+		bool2str(tmpstr,fst->plugin->flags & effFlagsHasEditor ? TRUE : FALSE));
 
-/*
-    if( (info->Category = read_string( fp )) == NULL ) goto error;
-    if( 1 != fscanf( fp, "%d\n", &info->numInputs ) ) goto error;
-    if( 1 != fscanf( fp, "%d\n", &info->numOutputs ) ) goto error;
-    if( 1 != fscanf( fp, "%d\n", &info->numParams ) ) goto error;
-    if( 1 != fscanf( fp, "%d\n", &info->wantMidi ) ) goto error;
-    if( 1 != fscanf( fp, "%d\n", &info->hasEditor ) ) goto error;
-    if( 1 != fscanf( fp, "%d\n", &info->canProcessReplacing ) ) goto error;
-*/
+	/* TODO: Category need some changes in vestige (additional enum)
+	if( (info->Category = read_string( fp )) == NULL ) goto error;
+	*/
 }
 
 void fst_get_info(char* path) {
 	FST*		fst;
 	FSTHandle*	handle;
 
-	printf("Load plugin %s\n", path);
-	handle = fst_load(path);
-	if (! handle) {
-		fst_error ("can't load plugin %s", path);
-		return;
-	}
+	if (! fst_exists(path)) {
+		printf("Load plugin %s\n", path);
+		handle = fst_load(path);
+		if (! handle) {
+			fst_error ("can't load plugin %s", path);
+			return;
+		}
 
-	if (! fst_exists(handle)) {
 		printf( "Revive plugin: %s\n", handle->name);
 		fst = fst_open(handle, (audioMasterCallback) simple_master_callback, NULL);
 		if (! fst) {
@@ -111,10 +118,10 @@ void fst_get_info(char* path) {
 		fst_close(fst);
 
 		need_save = TRUE;
-	}
 
-	printf("Unload plugin: %s\n", path);
-	fst_unload(handle);
+		printf("Unload plugin: %s\n", path);
+		fst_unload(handle);
+	}
 }
 
 void scandirectory( const char *dir ) {
@@ -149,30 +156,36 @@ void scandirectory( const char *dir ) {
 	closedir(d);
 }
 
-int WINAPI
-WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
+static void cmdline2arg(int *argc, char ***pargv, LPSTR cmdline) {
 	LPWSTR*		szArgList;
-	int		argc;
-	char**		argv;
 	short		i;
+	char**		argv;
 
-	// Parse command line
-	szArgList = CommandLineToArgvW(GetCommandLineW(), &argc);
+	szArgList = CommandLineToArgvW(GetCommandLineW(), argc);
 	if (szArgList == NULL) {
 		fprintf(stderr, "Unable to parse command line\n");
-		return 10;
+		*argc = -1;
+		return;
 	}
 
-    	argv = alloca(argc * sizeof(char*));
-	for (i=0; i < argc; ++i) {
+    	argv = malloc(*argc * sizeof(char*));
+	for (i=0; i < *argc; ++i) {
 		int nsize = WideCharToMultiByte(CP_UNIXCP, 0, szArgList[i], -1, NULL, 0, NULL, NULL);
 		
 		argv[i] = malloc( nsize );
 		WideCharToMultiByte(CP_UNIXCP, 0, szArgList[i], -1, (LPSTR) argv[i], nsize, NULL, NULL);
 	}
 	LocalFree(szArgList);
-	strcpy(argv[0], my_motherfuckin_name); // Force APP name
+	argv[0] = (char*) my_motherfuckin_name; // Force APP name
+	*pargv = argv;
+}
 
+int WINAPI
+WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
+	int		argc = -1;
+	char**		argv = NULL;
+
+	cmdline2arg(&argc, &argv, cmdline);
 	if (argc < 3) {
 		printf("Usage: %s directory database\n", argv[0]);
 		return 9;
