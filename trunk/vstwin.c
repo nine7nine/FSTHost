@@ -9,15 +9,21 @@ static FST* fst_first = NULL;
 int MainThreadId;
 
 static LRESULT WINAPI 
-my_window_proc (HWND w, UINT msg, WPARAM wp, LPARAM lp)
-{
+my_window_proc (HWND w, UINT msg, WPARAM wp, LPARAM lp) {
+	FST* fst = GetPropA(w, "FST");
+
 	switch (msg) {
 	case WM_KEYUP:
 	case WM_KEYDOWN:
 		break;
 
 	case WM_CLOSE:
-		printf("Receive WM_CLOSE - WTF ?\n");
+		if (fst && ! fst->editor_popup) {
+			fst->plugin->dispatcher(fst->plugin, effEditClose, 0, 0, NULL, 0.0f);
+			fst->window = FALSE;
+		} else {
+			printf("Receive WM_CLOSE - WTF ?\n");
+		}
 		break;
 	case WM_NCDESTROY:
 	case WM_DESTROY:
@@ -41,6 +47,7 @@ fst_new ()
 	fst->want_program = -1;
 	//fst->current_program = 0; - calloc done this
 	fst->event_call = RESET;
+//	fst->editor_popup = TRUE;
 
 	return fst;
 }
@@ -70,13 +77,14 @@ fst_update_current_program(FST* fst) {
 }
 
 bool
-fst_run_editor (FST* fst)
+fst_run_editor (FST* fst, bool popup)
 {
 	/* wait for the plugin editor window to be created (or not) */
 	pthread_mutex_lock (&fst->event_call_lock);
 	pthread_mutex_lock (&fst->lock);
 
 	if (!fst->window) {
+		fst->editor_popup = popup;
 		fst->event_call = EDITOR_OPEN;
 		pthread_cond_wait (&fst->event_called, &fst->lock);
 	}
@@ -94,16 +102,12 @@ fst_run_editor (FST* fst)
 
 bool
 fst_show_editor (FST *fst) {
-	pthread_mutex_lock (&fst->event_call_lock);
-	pthread_mutex_lock (&fst->lock);
-
-	if (fst->window) {
-		fst->event_call = EDITOR_SHOW;
-		pthread_cond_wait (&fst->event_called, &fst->lock);
+	if (!fst->window) {
+		fst_error("no window to show");
+		return FALSE;
 	}
 
-	pthread_mutex_unlock (&fst->lock);
-	pthread_mutex_unlock (&fst->event_call_lock);
+	SetWindowPos(fst->window, HWND_BOTTOM, 0, 0, fst->width, fst->height, SWP_SHOWWINDOW|SWP_NOCOPYBITS);
 
 	return TRUE;
 }
@@ -219,11 +223,12 @@ fst_create_editor (FST* fst)
 		return FALSE;
 	}
 	
-	if ((window = CreateWindowA ("FST", fst->handle->name,
-//		       (WS_OVERLAPPEDWINDOW & ~WS_THICKFRAME & ~WS_MAXIMIZEBOX & ~WS_CAPTION),
-			WS_POPUPWINDOW  & ~WS_BORDER & ~WS_SYSMENU & ~WS_TABSTOP,
-			CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-			NULL, NULL, hInst, NULL)) == NULL)
+	if ((window = CreateWindowA ("FST", fst->handle->name, (fst->editor_popup) ? 
+		(WS_POPUPWINDOW  & ~WS_BORDER & ~WS_SYSMENU & ~WS_TABSTOP) :
+//		(WS_OVERLAPPEDWINDOW & ~WS_THICKFRAME & ~WS_MAXIMIZEBOX & ~WS_CAPTION) :
+		(WS_OVERLAPPEDWINDOW),
+		CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+		NULL, NULL, hInst, NULL)) == NULL)
 	{
 		fst_error ("cannot create editor window");
 		return FALSE;
@@ -236,14 +241,23 @@ fst_create_editor (FST* fst)
 	fst->width  = er->right - er->left;
 	fst->height = er->bottom - er->top;
 
-//	SetWindowPos (fst->window, 0, 0, 0, 0, 0, 
-	SetWindowPos (window, 0, 0, 0, fst->width, fst->height, 0);
+	if (! fst->editor_popup) {
+		// Add window title bar height
+		fst->height += 24;
 
-	ShowWindow (window, SW_SHOWNORMAL);
-	UpdateWindow(window);
+		// Bind FST to window
+		if (! SetPropA(window, "FST", fst))
+                	fst_error ("cannot set GUI window property");
+	}
 
+	if (fst->editor_popup) {
+		SetWindowPos (window, 0, 0, 0, fst->width, fst->height, SWP_NOACTIVATE|SWP_SHOWWINDOW|SWP_ASYNCWINDOWPOS|
+			SWP_NOCOPYBITS|SWP_DEFERERASE|SWP_NOOWNERZORDER|SWP_NOSENDCHANGING|SWP_NOZORDER);
+	} else {
+		fst_show_editor(fst);
+	}
 	fst->xid = (int) GetPropA (window, "__wine_x11_whole_window");
-	printf( "And xid = %x\n", fst->xid );
+	printf("And xid = %x\n", fst->xid );
 
 	return TRUE;
 }
@@ -470,6 +484,7 @@ fst_event_handler(FST* fst) {
 	pthread_mutex_lock (&fst->lock);
 	struct AEffect* plugin = fst->plugin;
 	struct FSTDispatcher* dp = fst->dispatcher;
+	bool popup = FALSE;
 
 	switch (fst->event_call) {
 	case CLOSE:
@@ -481,19 +496,11 @@ fst_event_handler(FST* fst) {
 		if (fst->window == NULL)
 			fst_create_editor(fst);
 		break;
-	case EDITOR_SHOW:
-		if (fst->window != NULL) {
-			SetWindowPos (fst->window, HWND_BOTTOM, 0, 0, fst->width, fst->height,
-				SWP_NOACTIVATE | SWP_NOMOVE | SWP_DEFERERASE | SWP_NOCOPYBITS);
-			UpdateWindow(fst->window);
-			ShowWindow(fst->window, SW_SHOWNORMAL);
-		}
-		break;
 	case EDITOR_CLOSE:
 		if (fst->window != NULL) {
 			EnableWindow(fst->window, FALSE);
 			ShowWindow(fst->window, SW_HIDE);
-			UpdateWindow(fst->window);
+//			UpdateWindow(fst->window);
 			plugin->dispatcher(plugin, effEditClose, 0, 0, NULL, 0.0f);
 			DestroyWindow(fst->window);
 			fst->window = FALSE;

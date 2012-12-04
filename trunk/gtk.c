@@ -23,6 +23,7 @@ static	GtkWidget* vpacker;
 static	GtkWidget* hpacker;
 static	GtkWidget* bypass_button;
 static	GtkWidget* editor_button;
+static	GtkWidget* editor_checkbox;
 static	GtkWidget* channel_listbox;
 static  GtkWidget* event_box;
 static  GtkWidget* preset_listbox;
@@ -269,6 +270,10 @@ editor_handler (GtkToggleButton *but, gboolean ptr)
 	JackVST* jvst = (JackVST*) ptr;
 
 	if (gtk_toggle_button_get_active (but)) {
+		bool popup = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(editor_checkbox));
+		if (! fst_run_editor(jvst->fst, popup)) return;
+		if (! popup) return;
+		
 		// Create GTK Socket (Widget)
 		gtk_socket = gtk_socket_new ();
 		GTK_WIDGET_SET_FLAGS(gtk_socket, GTK_CAN_FOCUS);
@@ -276,19 +281,16 @@ editor_handler (GtkToggleButton *but, gboolean ptr)
 		// Add Widget socket to vBox
 		gtk_box_pack_start (GTK_BOX(vpacker), gtk_socket, TRUE, FALSE, 0);
 
-		if (! fst_run_editor(jvst->fst)) return;
-
 		gtk_socket_add_id (GTK_SOCKET (gtk_socket), jvst->fst->xid);
-		fst_show_editor(jvst->fst);
-
-		gtk_widget_grab_focus( gtk_socket );
 		gtk_socket_signal = g_signal_connect (G_OBJECT(window), "configure-event",
 			G_CALLBACK(configure_handler), gtk_socket);
 
-		gtk_widget_set_size_request(gtk_socket, jvst->fst->width, jvst->fst->height);
-		printf("Plugin - Width: %d | Height: %d\n", jvst->fst->width, jvst->fst->height);
+		fst_show_editor(jvst->fst);
 
+		gtk_widget_set_size_request(gtk_socket, jvst->fst->width, jvst->fst->height);
 		gtk_widget_show(gtk_socket);
+	} else if (! jvst->fst->editor_popup) {
+		fst_destroy_editor(jvst->fst);
 	} else {
 		g_signal_handler_disconnect(G_OBJECT(window), gtk_socket_signal);
 		gtk_widget_hide(gtk_socket);
@@ -521,6 +523,9 @@ idle_cb(JackVST *jvst)
 		sprintf(tmpstr, "%d", mode_cc);
 		gtk_widget_set_tooltip_text(bypass_button, tmpstr);
 	}
+	// Editor button in non-popup mode
+	if (! jvst->fst->editor_popup)
+		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(editor_button), jvst->fst->window ? TRUE : FALSE);
 #ifdef HAVE_LASH
 	if (lash_enabled(lash_client)) {
 	    lash_event_t *event;
@@ -630,6 +635,8 @@ gtk_gui_start (JackVST* jvst)
 	bypass_button = gtk_toggle_button_new_with_label ("bypass");
 	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(bypass_button), jvst->bypassed);
 	editor_button = gtk_toggle_button_new_with_label ("editor");
+	editor_checkbox = gtk_check_button_new_with_label("embed");
+	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(editor_checkbox), TRUE);
 	midi_learn_toggle = gtk_toggle_button_new_with_label ("midi Learn");
 	save_button = gtk_button_new_with_label ("save");
 	sysex_button = gtk_button_new_with_label ("SysEx");
@@ -671,6 +678,7 @@ gtk_gui_start (JackVST* jvst)
 		g_signal_connect (G_OBJECT(bypass_button), "toggled", G_CALLBACK(bypass_handler), jvst); 
 	g_signal_connect (G_OBJECT(midi_learn_toggle), "toggled", G_CALLBACK(learn_handler), jvst); 
 	g_signal_connect (G_OBJECT(editor_button), "toggled", G_CALLBACK(editor_handler), jvst); 
+//	g_signal_connect (G_OBJECT(editor_checkbox), "toggled", G_CALLBACK(editor_handler), jvst); 
 	g_signal_connect (G_OBJECT(load_button), "clicked", G_CALLBACK(load_handler), jvst); 
 	g_signal_connect (G_OBJECT(save_button), "clicked", G_CALLBACK(save_handler), jvst); 
 	g_signal_connect (G_OBJECT(sysex_button), "clicked", G_CALLBACK(sysex_handler), jvst); 
@@ -683,6 +691,7 @@ gtk_gui_start (JackVST* jvst)
 	gtk_box_pack_end   (GTK_BOX(hpacker), load_button, FALSE, FALSE, 0);
 	gtk_box_pack_end   (GTK_BOX(hpacker), save_button, FALSE, FALSE, 0);
 	gtk_box_pack_end   (GTK_BOX(hpacker), sysex_button, FALSE, FALSE, 0);
+	gtk_box_pack_end   (GTK_BOX(hpacker), editor_checkbox, FALSE, FALSE, 0);
 	gtk_box_pack_end   (GTK_BOX(hpacker), editor_button, FALSE, FALSE, 0);
 	gtk_box_pack_end   (GTK_BOX(hpacker), channel_listbox, FALSE, FALSE, 0);
 	gtk_box_pack_end   (GTK_BOX(hpacker), volume_slider, FALSE, FALSE, 0);
