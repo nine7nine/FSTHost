@@ -88,7 +88,6 @@ enum EventCall {
 	CLOSE,
 	DISPATCHER,
 	EDITOR_OPEN,
-	EDITOR_SHOW,
 	EDITOR_CLOSE,
 	PROGRAM_CHANGE
 };
@@ -102,6 +101,7 @@ struct _FST
 	enum EventCall		event_call;
 	struct FSTDispatcher*	dispatcher;
 
+	bool			editor_popup;
 	void*			window; /* win32 HWND */
 	int			xid;    /* X11 XWindow */
 	int			width;
@@ -151,7 +151,7 @@ extern void fst_loop_quit();
 extern void fst_program_change (FST *fst, short want_program);
 extern bool fst_get_program_name (FST *fst, short program, char* name, size_t size);
 
-extern bool fst_run_editor (FST*);
+extern bool fst_run_editor (FST*, bool popup);
 extern void fst_destroy_editor (FST*);
 
 //extern FSTInfo *fst_get_info (char *dllpathname);
