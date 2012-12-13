@@ -558,7 +558,6 @@ fst_event_loop (HMODULE hInst)
 {
 	MSG msg;
 	FST* fst;
-	HWND dummy_window;
 	//DWORD gui_thread_id;
 	HANDLE* h_thread;
 
@@ -573,12 +572,7 @@ fst_event_loop (HMODULE hInst)
 	printf ("W32 GUI EVENT Thread Class: %d\n", GetPriorityClass (h_thread));
 	printf ("W32 GUI EVENT Thread Priority: %d\n", GetThreadPriority(h_thread));
 
-	if ((dummy_window = CreateWindowA ("FST", "dummy", WS_OVERLAPPEDWINDOW | WS_DISABLED,
-		0, 0, 0, 0, NULL, NULL, hInst, NULL )) == NULL) {
-		fst_error ("cannot create dummy timer window");
-	}
-
-	if (!SetTimer (dummy_window, 1000, 50, NULL)) {
+	if (!SetTimer (NULL, 1000, 100, NULL)) {
 		fst_error ("cannot set timer on dummy window");
 		return;
 	}
@@ -586,7 +580,7 @@ fst_event_loop (HMODULE hInst)
 	while (GetMessageA (&msg, NULL, 0,0) != 0) {
 		TranslateMessage(&msg);
 		DispatchMessageA(&msg);
-		if ( msg.message != WM_TIMER || msg.hwnd != dummy_window )
+		if ( msg.message != WM_TIMER )
 			continue;
 		for (fst = fst_first; fst; fst = fst->next) {
 			if (fst->wantIdle)
