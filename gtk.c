@@ -45,7 +45,6 @@ learn_handler (GtkToggleButton *but, gboolean ptr)
 	
 	if ( ! gtk_toggle_button_get_active (but) ) {
 		jvst->midi_learn = FALSE;
-		gtk_widget_grab_focus( gtk_socket );
 		return;
 	}
 
@@ -54,9 +53,6 @@ learn_handler (GtkToggleButton *but, gboolean ptr)
 	jvst->midi_learn_CC = -1;
 	jvst->midi_learn_PARAM = -1;
 	pthread_mutex_unlock( &(jvst->fst->lock) );		
-
-
-	gtk_widget_grab_focus( gtk_socket );
 }
 
 static void
@@ -66,8 +62,6 @@ bypass_handler (GtkToggleButton *but, gboolean ptr)
 
 	jvst->want_state = (gtk_toggle_button_get_active (but))
 		? WANT_STATE_BYPASS : WANT_STATE_RESUME;
-
-	gtk_widget_grab_focus( gtk_socket );
 }
 
 static void
@@ -158,7 +152,6 @@ save_handler (GtkToggleButton *but, gboolean ptr)
 		g_free (selected);
 	}
 	gtk_widget_destroy (dialog);
-	gtk_widget_grab_focus( gtk_socket );
 }
 
 static void
@@ -212,7 +205,6 @@ load_handler (GtkToggleButton *but, gboolean ptr)
 		g_free (filename);
 	}
 	gtk_widget_destroy (dialog);
-	gtk_widget_grab_focus( gtk_socket );
 
 	// update preset combo
 	g_signal_handler_block (preset_listbox, preset_listbox_signal);
@@ -338,8 +330,6 @@ channel_change (GtkComboBox *combo, JackVST *jvst) {
 	short channel = gtk_combo_box_get_active (combo);
 
 	jvst->channel = channel;
-
-        gtk_widget_grab_focus( gtk_socket );
 }
 
 #ifdef HAVE_LASH
@@ -508,7 +498,7 @@ idle_cb(JackVST *jvst)
 	channel_check(GTK_COMBO_BOX(channel_listbox), jvst);
 
 	// CPU Usage
-	gchar tmpstr[7];
+	gchar tmpstr[13];
 	sprintf(tmpstr, "%06.2f", CPUusage_getCurrentValue());
 	gtk_label_set_text(GTK_LABEL(cpu_usage), tmpstr);
 
@@ -520,7 +510,7 @@ idle_cb(JackVST *jvst)
 	}
 	if (jvst->want_state_cc != mode_cc) {
 		mode_cc = jvst->want_state_cc;
-		sprintf(tmpstr, "%d", mode_cc);
+		sprintf(tmpstr, "MIDI CC: %d", mode_cc);
 		gtk_widget_set_tooltip_text(bypass_button, tmpstr);
 	}
 	// Editor button in non-popup mode
