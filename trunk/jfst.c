@@ -623,7 +623,7 @@ process_callback( jack_nframes_t nframes, void* data)
 		if (n < nframes) {
 			n++;
 		} else {
-			++o;
+			o++;
 			n=0;
 		}
 	}
