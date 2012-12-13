@@ -94,9 +94,7 @@ jvst_get_volume(JackVST* jvst)
 
 	short ret = roundf(sqrtf(jvst->volume) * 63.0f);
 
-	if (ret < 0) ret = 0;
-	if (ret > 127) ret = 127;
-	return ret;
+	return (ret < 0) ? 0 : (ret > 127) ? 127 : ret;
 }
 
 #endif /* __jack_vst_h__ */
