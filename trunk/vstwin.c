@@ -107,7 +107,9 @@ fst_show_editor (FST *fst) {
 		return FALSE;
 	}
 
-	SetWindowPos(fst->window, HWND_BOTTOM, 0, 0, fst->width, fst->height, SWP_SHOWWINDOW|SWP_NOCOPYBITS);
+	SetWindowPos(fst->window, HWND_BOTTOM, 0, 0, fst->width, fst->height, SWP_STATECHANGED|
+		SWP_ASYNCWINDOWPOS|SWP_NOREDRAW|SWP_NOMOVE|SWP_NOZORDER|SWP_NOOWNERZORDER|SWP_NOCOPYBITS|SWP_DEFERERASE);
+	ShowWindowAsync(fst->window, SW_SHOWNORMAL);
 
 	return TRUE;
 }
@@ -226,7 +228,7 @@ fst_create_editor (FST* fst)
 	if ((window = CreateWindowA ("FST", fst->handle->name, (fst->editor_popup) ? 
 		(WS_POPUPWINDOW  & ~WS_BORDER & ~WS_SYSMENU & ~WS_TABSTOP) :
 //		(WS_OVERLAPPEDWINDOW & ~WS_THICKFRAME & ~WS_MAXIMIZEBOX & ~WS_CAPTION) :
-		(WS_OVERLAPPEDWINDOW),
+		(WS_OVERLAPPEDWINDOW & ~WS_THICKFRAME),
 		CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
 		NULL, NULL, hInst, NULL)) == NULL)
 	{
@@ -242,8 +244,9 @@ fst_create_editor (FST* fst)
 	fst->height = er->bottom - er->top;
 
 	if (! fst->editor_popup) {
-		// Add window title bar height
+		// Add window title height and borders
 		fst->height += 24;
+		fst->width += 6;
 
 		// Bind FST to window
 		if (! SetPropA(window, "FST", fst))
@@ -251,8 +254,9 @@ fst_create_editor (FST* fst)
 	}
 
 	if (fst->editor_popup) {
-		SetWindowPos (window, 0, 0, 0, fst->width, fst->height, SWP_NOACTIVATE|SWP_SHOWWINDOW|SWP_ASYNCWINDOWPOS|
-			SWP_NOCOPYBITS|SWP_DEFERERASE|SWP_NOOWNERZORDER|SWP_NOSENDCHANGING|SWP_NOZORDER);
+		SetWindowPos (window, 0, 0, 0, 0, 0, SWP_SHOWWINDOW|SWP_NOMOVE|SWP_NOOWNERZORDER|
+			SWP_NOREDRAW|SWP_NOCOPYBITS|SWP_DEFERERASE|SWP_NOZORDER|SWP_STATECHANGED);
+		UpdateWindow(window);
 	} else {
 		fst_show_editor(fst);
 	}
@@ -498,9 +502,6 @@ fst_event_handler(FST* fst) {
 		break;
 	case EDITOR_CLOSE:
 		if (fst->window != NULL) {
-			EnableWindow(fst->window, FALSE);
-			ShowWindow(fst->window, SW_HIDE);
-//			UpdateWindow(fst->window);
 			plugin->dispatcher(plugin, effEditClose, 0, 0, NULL, 0.0f);
 			DestroyWindow(fst->window);
 			fst->window = FALSE;
