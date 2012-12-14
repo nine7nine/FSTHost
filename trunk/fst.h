@@ -86,6 +86,8 @@ struct FSTDispatcher {
 enum EventCall {
 	RESET,
 	CLOSE,
+	SUSPEND,
+	RESUME,
 	DISPATCHER,
 	EDITOR_OPEN,
 	EDITOR_CLOSE,

@@ -58,8 +58,7 @@ bypass_handler (GtkToggleButton *but, gboolean ptr)
 {
 	JackVST* jvst = (JackVST*) ptr;
 
-	jvst->want_state = (gtk_toggle_button_get_active (but))
-		? WANT_STATE_BYPASS : WANT_STATE_RESUME;
+	jvst_bypass(jvst, gtk_toggle_button_get_active(but));
 }
 
 static void

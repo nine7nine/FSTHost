@@ -80,6 +80,7 @@ struct _JackVST {
 };
 
 bool jvst_send_sysex(JackVST* jvst, enum SysExWant);
+void jvst_bypass(JackVST* jvst, bool bypass);
 
 static inline void
 jvst_set_volume(JackVST* jvst, short volume)
