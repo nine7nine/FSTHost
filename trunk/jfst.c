@@ -148,9 +148,7 @@ jvst_send_sysex(JackVST* jvst, enum SysExWant sysex_want)
 }
 
 static bool
-jvst_sysex_handler(struct SysExEvent* sysex_event)
-{
-
+jvst_sysex_handler(struct SysExEvent* sysex_event) {
         JackVST* jvst = sysex_event->jvst;
         jack_midi_data_t* data = sysex_event->data;
         size_t size = sysex_event->size;
@@ -699,8 +697,7 @@ jvst_connect(JackVST *jvst, const char *audio_to)
 }
 
 static bool
-jvst_idle_cb(JackVST* jvst)
-{
+jvst_idle_cb(JackVST* jvst) {
 	const char **jports;
 	jack_port_t* port;
 	unsigned short i;
@@ -1100,25 +1097,19 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	// Initialize random generator - usefull for SysEx ID negotiation
 	srand(GetTickCount());
 
+	g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 100,
+		(GSourceFunc) fst_event_callback, NULL, NULL);
+
 	// Create GTK or GlibMain thread
 	if (jvst->with_editor != WITH_EDITOR_NO) {
 		printf( "Start GUI\n" );
 		gtk_gui_init (&argc, &argv);
-
-		if (CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) &gtk_gui_start, jvst, 0, NULL) == NULL) {
-			fst_error ("could not create GTK Thread");
-			return FALSE;
-		}
+		gtk_gui_start(jvst);
 	} else {
 		printf("GUI Disabled - start GlibMainLoop\n");
-		if (CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) &g_main_loop_run, glib_main_loop, 0, NULL) == NULL) {
-			fst_error ("could not create GlibMainLoop thread");
-			return FALSE;
-		}
-	}
 
-	printf("Start FST GUI/event loop\n");
-	fst_event_loop(hInst);
+		g_main_loop_run(glib_main_loop);
+	}
 
 	printf("Unload plugin\n");
 	fst_unload(jvst->handle);
