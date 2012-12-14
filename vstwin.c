@@ -142,7 +142,7 @@ fst_create_editor (FST* fst) {
 	}
 	
 	if ((window = CreateWindowA ("FST", fst->handle->name, (fst->editor_popup) ? 
-		(WS_POPUPWINDOW  & ~WS_BORDER & ~WS_SYSMENU & ~WS_TABSTOP) :
+		(WS_POPUP & ~WS_TABSTOP) :
 //		(WS_OVERLAPPEDWINDOW & ~WS_THICKFRAME & ~WS_MAXIMIZEBOX & ~WS_CAPTION) :
 		(WS_OVERLAPPEDWINDOW & ~WS_THICKFRAME),
 		CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
@@ -198,16 +198,24 @@ fst_event_call(FST *fst, enum EventCall type) {
 
 void
 fst_suspend (FST *fst) {
-	fst_error("Suspend plugin");
-	fst_call_dispatcher (fst, effStopProcess, 0, 0, NULL, 0.0f);
-	fst_call_dispatcher (fst, effMainsChanged, 0, 0, NULL, 0.0f);
+	if (GetCurrentThreadId() == MainThreadId) {
+		fst_error("Suspend plugin");
+		fst_call_dispatcher (fst, effStopProcess, 0, 0, NULL, 0.0f);
+		fst_call_dispatcher (fst, effMainsChanged, 0, 0, NULL, 0.0f);
+	} else {
+		fst_event_call(fst, SUSPEND);
+	}
 } 
 
 void
 fst_resume (FST *fst) {
-	fst_error("Resume plugin");
-	fst_call_dispatcher (fst, effMainsChanged, 0, 1, NULL, 0.0f);
-	fst_call_dispatcher (fst, effStartProcess, 0, 0, NULL, 0.0f);
+	if (GetCurrentThreadId() == MainThreadId) {
+		fst_error("Resume plugin");
+		fst_call_dispatcher (fst, effMainsChanged, 0, 1, NULL, 0.0f);
+		fst_call_dispatcher (fst, effStartProcess, 0, 0, NULL, 0.0f);
+	} else {
+		fst_event_call(fst, RESUME);
+	}
 } 
 
 bool fst_run_editor (FST* fst, bool popup) {
@@ -547,6 +555,12 @@ fst_event_handler(FST* fst) {
 	switch (fst->event_call) {
 	case CLOSE:
 		fst_close(fst);
+		break;
+	case SUSPEND:
+		fst_suspend(fst);
+		break;
+	case RESUME:
+		fst_resume(fst);
 		break;
 	case EDITOR_OPEN:
 		fst_run_editor(fst, fst->editor_popup);

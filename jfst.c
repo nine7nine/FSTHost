@@ -147,6 +147,18 @@ jvst_send_sysex(JackVST* jvst, enum SysExWant sysex_want)
 	printf("SysEx Dumped (%d)\n", sysex_want);
 }
 
+void
+jvst_bypass(JackVST* jvst, bool bypass) {
+	jvst->want_state = WANT_STATE_NO;
+	if (bypass & !jvst->bypassed) {
+		jvst->bypassed = TRUE;
+		fst_suspend(jvst->fst);
+	} else if (!bypass & jvst->bypassed) {
+		fst_resume(jvst->fst);
+		jvst->bypassed = FALSE;
+	}
+}
+
 static bool
 jvst_sysex_handler(struct SysExEvent* sysex_event) {
         JackVST* jvst = sysex_event->jvst;
@@ -170,8 +182,7 @@ jvst_sysex_handler(struct SysExEvent* sysex_event) {
 
 				SysExDumpV1* sysex_v1 = (SysExDumpV1*) data;
 
-				jvst->want_state = (sysex_v1->state == SYSEX_STATE_ACTIVE) ?
-					WANT_STATE_RESUME : WANT_STATE_BYPASS;
+				jvst_bypass(jvst, (sysex_v1->state == SYSEX_STATE_ACTIVE) ? FALSE : TRUE);
 				fst_program_change(jvst->fst, sysex_v1->program);
 				jvst->channel = sysex_v1->channel;
 				jvst_set_volume(jvst, sysex_v1->volume);
@@ -703,14 +714,10 @@ jvst_idle_cb(JackVST* jvst) {
 	unsigned short i;
 
 	// Check state
-	if (jvst->want_state == WANT_STATE_BYPASS && !jvst->bypassed) {
-		jvst->want_state = WANT_STATE_NO;
-		jvst->bypassed = TRUE;
-		fst_suspend(jvst->fst);
-	} else if (jvst->want_state == WANT_STATE_RESUME && jvst->bypassed) {
-		jvst->want_state = WANT_STATE_NO;
-		fst_resume(jvst->fst);
-		jvst->bypassed = FALSE;
+	if (jvst->want_state == WANT_STATE_BYPASS) {
+		jvst_bypass(jvst,TRUE);
+	} else if (jvst->want_state == WANT_STATE_RESUME) {
+		jvst_bypass(jvst,FALSE);
 	}
 
 	// Send notify if something change
