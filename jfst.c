@@ -627,13 +627,9 @@ process_callback( jack_nframes_t nframes, void* data)
 		goto midi_out;
 
 	jack_nframes_t n=0;
-	for(o=0; o < jvst->numOuts; ) {
-		jvst->outs[o][n] *= jvst->volume;
-		if (n < nframes) {
-			n++;
-		} else {
-			o++;
-			n=0;
+	for(o=0; o < jvst->numOuts; o++) {
+		for(n=0; n < nframes; n++) {
+			jvst->outs[o][n] *= jvst->volume;
 		}
 	}
 
