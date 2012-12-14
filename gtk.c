@@ -48,11 +48,9 @@ learn_handler (GtkToggleButton *but, gboolean ptr)
 		return;
 	}
 
-	pthread_mutex_lock( &(jvst->fst->lock) );		
 	jvst->midi_learn = TRUE;
 	jvst->midi_learn_CC = -1;
 	jvst->midi_learn_PARAM = -1;
-	pthread_mutex_unlock( &(jvst->fst->lock) );		
 }
 
 static void
@@ -349,9 +347,9 @@ save_data( JackVST *jvst )
 
 	    config = lash_config_new_with_key( buf );
 
-	    pthread_mutex_lock( &(jvst->fst->lock) );
+	    pthread_mutex_lock( &jvst->fst->lock );
 	    param = jvst->fst->plugin->getParameter( jvst->fst->plugin, i ); 
-	    pthread_mutex_unlock( &(jvst->fst->lock) );
+	    pthread_mutex_unlock( &jvst->fst->lock );
 
 	    lash_config_set_value_double(config, param);
 	    lash_send_config(lash_client, config);
@@ -417,9 +415,9 @@ restore_data(lash_config_t * config, JackVST *jvst )
 		return;
 	    } 
 	} else {
-	    pthread_mutex_lock( & jvst->fst->lock );
+	    pthread_mutex_lock( &jvst->fst->lock );
 	    jvst->fst->plugin->setParameter( jvst->fst->plugin, atoi( key ), lash_config_get_value_double( config ) );
-	    pthread_mutex_unlock( & jvst->fst->lock );
+	    pthread_mutex_unlock( &jvst->fst->lock );
 	}
 
 }
@@ -504,7 +502,7 @@ idle_cb(JackVST *jvst)
 
 	// All about Bypass/Resume
 	if (jvst->bypassed != gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(bypass_button)) &&
-	    jvst->want_state == WANT_STATE_NO
+		jvst->want_state == WANT_STATE_NO
 	) {
 		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(bypass_button), jvst->bypassed);
 	}
@@ -604,10 +602,8 @@ GtkListStore * create_channel_store() {
 	return retval;
 }
 
-//int
-DWORD WINAPI
-gtk_gui_start (JackVST* jvst)
-{
+bool
+gtk_gui_start (JackVST* jvst) {
 	printf("GTK Thread WineID: %d | LWP: %d\n", GetCurrentThreadId (), (int) syscall (SYS_gettid));
 
 	// create a GtkWindow containing a GtkSocket...
@@ -708,7 +704,7 @@ gtk_gui_start (JackVST* jvst)
 	printf("Close plugin\n");
 	fst_close(jvst->fst);
 
-	return 0;
+	return TRUE;
 }
 
 typedef int (*error_handler_t)( Display *, XErrorEvent *);
