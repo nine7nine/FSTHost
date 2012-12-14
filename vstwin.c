@@ -117,7 +117,7 @@ fst_show_editor (FST *fst) {
 		return FALSE;
 	}
 
-	SetWindowPos(fst->window, HWND_BOTTOM, 0, 0, fst->width, fst->height, SWP_STATECHANGED|SWP_NOREDRAW|
+	SetWindowPos(fst->window, HWND_BOTTOM, 0, 0, fst->width, fst->height, SWP_STATECHANGED|
 		SWP_ASYNCWINDOWPOS|SWP_NOCOPYBITS|SWP_NOMOVE|SWP_NOZORDER|SWP_NOOWNERZORDER|SWP_DEFERERASE);
 	ShowWindowAsync(fst->window, SW_SHOWNORMAL);
 
