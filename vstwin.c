@@ -58,7 +58,7 @@ fst_canDo(FST* fst, char* feature)
 {
 	bool can;
 	can = (fst->plugin->dispatcher(fst->plugin, effCanDo, 0, 0, (void*)feature, 0.0f) > 0);
-	printf("Plugin can %s : %s\n", feature, ((can) ? "Yes" : "No"));
+	printf("Plugin can %-20s : %s\n", feature, ((can) ? "Yes" : "No"));
 	return can;
 }
 
@@ -466,7 +466,6 @@ fst_unload (FSTHandle* fhandle) {
 
 FST*
 fst_open (FSTHandle* fhandle, audioMasterCallback amc, void* userptr) {
-	HANDLE* h_thread;
 	FST* fst = fst_new ();
 
 	if( fhandle == NULL ) {
@@ -500,21 +499,13 @@ fst_open (FSTHandle* fhandle, audioMasterCallback amc, void* userptr) {
 		fst->canSendVstMidiEvent = fst_canDo(fst, "sendVstMidiEvent");
 
 		fst->isSynth = (fst->plugin->flags & effFlagsIsSynth) > 0;
-		printf("Plugin isSynth : %s\n", fst->isSynth ? "Yes" : "No");
+		printf("%-31s : %s\n", "Plugin isSynth", fst->isSynth ? "Yes" : "No");
 	}
 
 	++fst->handle->plugincnt;
 	fst_event_loop_add_plugin(fst);
 
 	MainThreadId = GetCurrentThreadId();
-	h_thread = GetCurrentThread();
-
-	//SetPriorityClass ( h_thread, REALTIME_PRIORITY_CLASS);
-	SetPriorityClass ( h_thread, ABOVE_NORMAL_PRIORITY_CLASS);
-	//SetThreadPriority ( h_thread, THREAD_PRIORITY_TIME_CRITICAL);
-	SetThreadPriority ( h_thread, THREAD_PRIORITY_ABOVE_NORMAL);
-	printf ("W32 Main Thread Class: %d\n", GetPriorityClass (h_thread));
-	printf ("W32 Main Thread Priority: %d\n", GetThreadPriority(h_thread));
 
 	return fst;
 }

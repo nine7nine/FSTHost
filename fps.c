@@ -139,7 +139,7 @@ fps_process_node(JackVST* jvst, xmlNode *a_node)
              return FALSE;
           }
 
-          printf("Load %dB chunk\n", chunk_size);
+          printf("Loading %dB chunk into plugin ... ", chunk_size);
           chunk_base64 = trim((char *) cur_node->children->content);
           chunk_data = g_base64_decode(chunk_base64, &out_len);
 
@@ -149,7 +149,7 @@ fps_process_node(JackVST* jvst, xmlNode *a_node)
              return FALSE;
           }
           fst_call_dispatcher( fst, effSetChunk, 0, chunk_size, chunk_data, 0 );
-          printf("Load chunk [DONE]\n");
+          printf("[DONE]\n");
 
           g_free(chunk_data);
        } else {
