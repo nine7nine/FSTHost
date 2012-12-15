@@ -32,7 +32,7 @@
 #include <lash/lash.h>
 #endif
 
-#define VERSION "1.3.2"
+#define VERSION "1.4.0"
 
 const char* my_motherfuckin_name = "fsthost";
 const char* ControlAppName = "FHControl";
@@ -303,33 +303,26 @@ jvst_quit(JackVST* jvst) {
 }
 
 static void
-sigint_handler(int signum, siginfo_t *siginfo, void *context)
-{
+signal_handler(int signum) {
 	JackVST *jvst;
 
 	jvst = jvst_first;
 
-	printf("Caught signal to terminate (SIGINT)\n");
-
-	g_idle_add( (GSourceFunc) jvst_quit, jvst);
-}
-
-static void
-sigusr1_handler(int signum, siginfo_t *siginfo, void *context)
-{
-	JackVST *jvst;
-
-	jvst = jvst_first;
-
-	printf("Caught signal to save state (SIGUSR1)\n");
-
-	jvst_save_state(jvst, jvst->default_state_file);
+	switch(signum) {
+	case SIGINT:
+		printf("Caught signal to terminate (SIGINT)\n");
+		g_idle_add( (GSourceFunc) jvst_quit, jvst);
+		break;
+	case SIGUSR1:
+		printf("Caught signal to save state (SIGUSR1)\n");
+		jvst_save_state(jvst, jvst->default_state_file);
+		break;
+	}
 }
 
 static DWORD WINAPI
-wine_thread_aux( LPVOID arg )
-{
-        printf("Audio Thread WineID: %d | LWP: %d\n", GetCurrentThreadId (), (int) syscall (SYS_gettid));
+wine_thread_aux( LPVOID arg ) {
+        printf("Audio Thread W32ID: %d | LWP: %d\n", GetCurrentThreadId (), (int) syscall (SYS_gettid));
 
 	the_thread_id = pthread_self();
 	sem_post( &sema );
@@ -809,6 +802,7 @@ static void usage(char* appname) {
 
 int WINAPI
 WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
+	HANDLE*		h_thread;
 	LPWSTR*		szArgList;
 	int		argc = -1;
 	char**		argv = NULL;
@@ -928,25 +922,31 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 		fst_error ("can't instantiate plugin %s", plug_path);
 		return 1;
 	}
-
-        printf("Main Thread WineID: %d | LWP: %d\n", GetCurrentThreadId (), (int) syscall (SYS_gettid));
-
+	
 	fst = jvst->fst;
 	plugin = fst->plugin;
 
-	printf("Start Jack thread ...\n");
+	// Set Thread policy - usefull only with WineRT patch
+	h_thread = GetCurrentThread();
+	//SetPriorityClass ( h_thread, REALTIME_PRIORITY_CLASS);
+	SetPriorityClass ( h_thread, ABOVE_NORMAL_PRIORITY_CLASS);
+	//SetThreadPriority ( h_thread, THREAD_PRIORITY_TIME_CRITICAL);
+	SetThreadPriority ( h_thread, THREAD_PRIORITY_ABOVE_NORMAL);
+        printf("Main Thread W32ID: %d | LWP: %d | W32 Class: %d | W32 Priority: %d\n",
+		GetCurrentThreadId (), (int) syscall (SYS_gettid), GetPriorityClass (h_thread), GetThreadPriority(h_thread));
+
+	printf("Starting Jack thread ... ");
 	jvst->client = jack_client_open(jvst->client_name,JackSessionID,NULL,jvst->uuid);
 	if (! jvst->client) {
 		fst_error ("can't connect to JACK");
 		return 1;
 	}
+	printf("Done\n");
 
 	/* set rate and blocksize */
 	sample_rate = (int) jack_get_sample_rate(jvst->client);
 	block_size = jack_get_buffer_size(jvst->client);
-
-	printf("Sample Rate = %d\n", sample_rate);
-	printf("Block Size = %ld\n", block_size);
+	printf("Sample Rate: %d | Block Size: %ld\n", sample_rate, block_size);
 
 	plugin->dispatcher (plugin, effSetSampleRate, 0, 0, NULL, (float) sample_rate);
 	plugin->dispatcher (plugin, effSetBlockSize, 0, jack_get_buffer_size (jvst->client), NULL, 0.0f);
@@ -995,10 +995,10 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	}
 
 	// Register / allocate ports
-	printf("Plugin PortLayout: in: %d out: %d\n", plugin->numInputs, plugin->numOutputs);
 	jvst->numIns = (opt_numIns > 0 && opt_numIns < plugin->numInputs) ? opt_numIns : plugin->numInputs;
 	jvst->numOuts = (opt_numOuts > 0 && opt_numOuts < plugin->numOutputs) ? opt_numOuts : plugin->numOutputs;
-	printf("FSTHost PortLayout: in: %d out: %d\n", jvst->numIns, jvst->numOuts);
+	printf("PortLayout (FSTHost/plugin) IN: %d/%d OUT: %d/%d\n", 
+		jvst->numIns, plugin->numInputs, jvst->numOuts, plugin->numOutputs);
 
 	jvst->inports = (jack_port_t**)malloc(sizeof(jack_port_t*) * jvst->numIns);
 	jvst->ins = (float**)malloc(sizeof(float*) * plugin->numInputs);
@@ -1038,21 +1038,14 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
              jack_set_session_callback( jvst->client, session_callback_aux, jvst );
         }
 
-	// Save state on signal SIGUSR1 - mostly for ladish support
-	if (sigusr1_save_state && jvst->default_state_file) {
-		struct sigaction sa_sigusr1;
-		memset(&sa_sigusr1, 0, sizeof(struct sigaction));
-		sa_sigusr1.sa_sigaction = &sigusr1_handler;
-		sa_sigusr1.sa_flags = SA_SIGINFO;
-		sigaction(SIGUSR1, &sa_sigusr1, NULL);
-	}
-
 	// Handling SIGINT for clean quit
-	struct sigaction sa_sigint;
-	memset(&sa_sigint, 0, sizeof(struct sigaction));
-	sa_sigint.sa_sigaction = &sigint_handler;
-	sa_sigint.sa_flags = SA_SIGINFO;
-	sigaction(SIGINT, &sa_sigint, NULL);
+	struct sigaction sa = {0};
+	sa.sa_handler = &signal_handler;
+	sigaction(SIGINT, &sa, NULL);
+
+	// Save state on signal SIGUSR1 - mostly for ladish support
+	if (sigusr1_save_state && jvst->default_state_file)
+		sigaction(SIGUSR1, &sa, NULL);
 
 #ifdef HAVE_LASH
 	lash_event_t *event;

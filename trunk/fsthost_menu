@@ -24,7 +24,11 @@ show_menu() {
 	{
 	if [ $ZENITY -eq 1 ]; then
 		tr '|' '\n' |
-		zenity --title 'Wybierz Host' --width=$ZENITY_WIDTH --height=$ZENITY_HEIGHT --list --column 'Hostname' --column 'IP Address'
+		zenity --title 'Wybierz Host' \
+			--width=$ZENITY_WIDTH \
+			--height=$ZENITY_HEIGHT \
+			--list --column 'Hostname' \
+			--column 'IP Address'
 	else
 		tr '|' ' ' | xargs dialog --menu 'Select VST' 0 0 0 3>&1 1>&2 2>&3
 	fi
@@ -61,5 +65,5 @@ L=$(
 
 type zenity 1>/dev/null 2>&1 || ZENITY=0
 
-rm /tmp/fsthost_menu.log.*
+rm -f /tmp/fsthost_menu.log.*
 while true; do main_loop; done
