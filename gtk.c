@@ -6,16 +6,15 @@
 #include <sys/syscall.h>
 
 #ifdef HAVE_LASH
-#include <lash/lash.h>
-extern lash_client_t *lash_client;
+extern void jvst_lash_idle(JackVST *jvst, bool *quit);
 #endif
 
 /* from cpuusage.c */
 extern void CPUusage_init();
 extern double CPUusage_getCurrentValue();
 
-gboolean quit = FALSE;
-short	mode_cc = 0;
+static short mode_cc = 0;
+static bool quit = FALSE;
 
 static	GtkWidget* window;
 static	GtkWidget* gtk_socket;
@@ -37,6 +36,11 @@ static	gulong preset_listbox_signal;
 static	gulong volume_signal;
 static	gulong bypass_signal;
 static	gulong gtk_socket_signal;
+
+typedef int (*error_handler_t)( Display *, XErrorEvent *);
+static Display *the_gtk_display;
+error_handler_t wine_error_handler;
+error_handler_t gtk_error_handler;
 
 static void
 learn_handler (GtkToggleButton *but, gboolean ptr)
@@ -329,99 +333,6 @@ channel_change (GtkComboBox *combo, JackVST *jvst) {
 	jvst->channel = channel;
 }
 
-#ifdef HAVE_LASH
-void
-save_data( JackVST *jvst )
-{
-	unsigned short i;
-	size_t bytelen;
-	lash_config_t *config;
-	void *chunk;
-
-	for( i=0; i<jvst->fst->plugin->numParams; i++ ) {
-	    char buf[10];
-	    float param;
-	    
-	    snprintf( buf, 9, "%d", i );
-
-	    config = lash_config_new_with_key( buf );
-
-	    pthread_mutex_lock( &jvst->fst->lock );
-	    param = jvst->fst->plugin->getParameter( jvst->fst->plugin, i ); 
-	    pthread_mutex_unlock( &jvst->fst->lock );
-
-	    lash_config_set_value_double(config, param);
-	    lash_send_config(lash_client, config);
-	    //lash_config_destroy( config );
-	}
-
-	for( i=0; i<128; i++ ) {
-	    char buf[16];
-	    
-	    snprintf( buf, 15, "midi_map%d", i );
-	    config = lash_config_new_with_key( buf );
-	    lash_config_set_value_int(config, jvst->midi_map[i]);
-	    lash_send_config(lash_client, config);
-	    //lash_config_destroy( config );
-	}
-
-	if ( jvst->fst->plugin->flags & effFlagsProgramChunks ) {
-	    // TODO: calling from this thread is wrong.
-	    //       is should move it to fst gui thread.
-	    printf( "getting chunk...\n" );
-
-	    // XXX: alternative. call using the fst->lock
-	    //pthread_mutex_lock( &(fst->lock) );
-	    //bytelen = jvst->fst->plugin->dispatcher( jvst->fst->plugin, 23, 0, 0, &chunk, 0 );
-	    //pthread_mutex_unlock( &(fst->lock) );
-
-	    bytelen = fst_call_dispatcher( jvst->fst, effGetChunk, 0, 0, &chunk, 0 );
-	    printf( "got tha chunk..\n" );
-	    if( bytelen ) {
-		if( bytelen < 0 ) {
-		    printf( "Chunke len < 0 !!! Not saving chunk.\n" );
-		} else {
-		    config = lash_config_new_with_key( "bin_chunk" );
-		    lash_config_set_value(config, chunk, bytelen );
-		    lash_send_config(lash_client, config);
-		    //lash_config_destroy( config );
-		}
-	    }
-	}
-}
-
-void
-restore_data(lash_config_t * config, JackVST *jvst )
-{
-	const char *key;
-
-	key = lash_config_get_key(config);
-
-	if (strncmp(key, "midi_map", strlen( "midi_map")) == 0) {
-	    short cc = atoi( key+strlen("midi_map") );
-	    int param = lash_config_get_value_int( config );
-
-	    if( cc < 0 || cc>=128 || param<0 || param>=jvst->fst->plugin->numParams ) 
-		return;
-
-	    jvst->midi_map[cc] = param;
-	    return;
-	}
-
-	if ( jvst->fst->plugin->flags & effFlagsProgramChunks) {
-	    if (strcmp(key, "bin_chunk") == 0) {
-		fst_call_dispatcher( jvst->fst, effSetChunk, 0, lash_config_get_value_size( config ), (void *) lash_config_get_value( config ), 0 );
-		return;
-	    } 
-	} else {
-	    pthread_mutex_lock( &jvst->fst->lock );
-	    jvst->fst->plugin->setParameter( jvst->fst->plugin, atoi( key ), lash_config_get_value_double( config ) );
-	    pthread_mutex_unlock( &jvst->fst->lock );
-	}
-
-}
-#endif
-
 static gboolean
 idle_cb(JackVST *jvst)
 {
@@ -511,44 +422,13 @@ idle_cb(JackVST *jvst)
 		gtk_widget_set_tooltip_text(bypass_button, tmpstr);
 	}
 	// Editor button in non-popup mode
-	if (! jvst->fst->editor_popup)
-		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(editor_button), jvst->fst->window ? TRUE : FALSE);
-#ifdef HAVE_LASH
-	if (lash_enabled(lash_client)) {
-	    lash_event_t *event;
-	    lash_config_t *config;
-
-	    while ((event = lash_get_event(lash_client))) {
-		switch (lash_event_get_type(event)) {
-		    case LASH_Quit:
-			quit = 1;
-			lash_event_destroy(event);
-			break;
-		    case LASH_Restore_Data_Set:
-			printf( "lash_restore... \n" );
-			lash_send_event(lash_client, event);
-			break;
-		    case LASH_Save_Data_Set:
-			printf( "lash_save... \n" );
-			save_data( jvst );
-			lash_send_event(lash_client, event);
-			break;
-		    case LASH_Server_Lost:
-			return 1;
-		    default:
-			printf("%s: receieved unknown LASH event of type %d",
-				__FUNCTION__, lash_event_get_type(event));
-			lash_event_destroy(event);
-			break;
-		}
-	    }
-
-	    while ((config = lash_get_config(lash_client))) {
-		restore_data(config, jvst);
-		lash_config_destroy(config);
-	    }
-
+	if (! jvst->fst->editor_popup) {
+		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(editor_button), 
+			jvst->fst->window ? TRUE : FALSE);
 	}
+
+#ifdef HAVE_LASH
+	jvst_lash_idle(jvst, &quit);
 #endif
 	return TRUE;
 }
@@ -624,12 +504,13 @@ make_img_button(const gchar *stock_id, const gchar *tooltip, bool toggle,
 
 bool
 gtk_gui_start (JackVST* jvst) {
-	printf("GTK Thread WineID: %d | LWP: %d\n", GetCurrentThreadId (), (int) syscall (SYS_gettid));
+//	printf("GTK Thread WineID: %d | LWP: %d\n", GetCurrentThreadId (), (int) syscall (SYS_gettid));
 
 	// create a GtkWindow containing a GtkSocket...
 	//
 	// notice the order of the functions.
 	// you can only add an id to an anchored widget.
+
 	GtkCellRenderer *renderer;
 	
 	window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
@@ -638,20 +519,26 @@ gtk_gui_start (JackVST* jvst) {
 
 	vpacker = gtk_vbox_new (FALSE, 7);
 	hpacker = gtk_hbox_new (FALSE, 7);
-	bypass_button = make_img_button(GTK_STOCK_STOP, "Bypass", TRUE, G_CALLBACK(bypass_handler), jvst, jvst->bypassed, hpacker);
+	bypass_button = make_img_button(GTK_STOCK_STOP, "Bypass", TRUE, G_CALLBACK(bypass_handler),
+		jvst, jvst->bypassed, hpacker);
 
-	load_button = make_img_button(GTK_STOCK_OPEN, "Load", FALSE, G_CALLBACK(load_handler), jvst, FALSE, hpacker);
-	save_button = make_img_button(GTK_STOCK_SAVE_AS, "Save", FALSE, G_CALLBACK(save_handler), jvst, FALSE, hpacker);
+	load_button = make_img_button(GTK_STOCK_OPEN, "Load", FALSE, G_CALLBACK(load_handler),
+		jvst, FALSE, hpacker);
+	save_button = make_img_button(GTK_STOCK_SAVE_AS, "Save", FALSE, G_CALLBACK(save_handler),
+		jvst, FALSE, hpacker);
 
 	//----------------------------------------------------------------------------------
-	editor_button = make_img_button(GTK_STOCK_EDIT, "Editor", TRUE, G_CALLBACK(editor_handler), jvst, FALSE, hpacker);
+	editor_button = make_img_button(GTK_STOCK_EDIT, "Editor", TRUE, G_CALLBACK(editor_handler),
+		jvst, FALSE, hpacker);
 	editor_checkbox = gtk_check_button_new();
 	gtk_widget_set_tooltip_text(editor_checkbox, "Embedded Editor");
 	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(editor_checkbox), TRUE);
 	gtk_box_pack_start(GTK_BOX(hpacker), editor_checkbox, FALSE, FALSE, 0);
 	//----------------------------------------------------------------------------------
-	midi_learn_toggle = make_img_button(GTK_STOCK_DND, "MIDI Learn", TRUE, G_CALLBACK(learn_handler), jvst, FALSE, hpacker);
-	sysex_button = make_img_button(GTK_STOCK_EXECUTE, "Send SysEx", FALSE, G_CALLBACK(sysex_handler), jvst, FALSE, hpacker);
+	midi_learn_toggle = make_img_button(GTK_STOCK_DND, "MIDI Learn", TRUE, G_CALLBACK(learn_handler),
+		jvst, FALSE, hpacker);
+	sysex_button = make_img_button(GTK_STOCK_EXECUTE, "Send SysEx", FALSE, G_CALLBACK(sysex_handler),
+		jvst, FALSE, hpacker);
 	//----------------------------------------------------------------------------------
 	if (jvst->volume != -1) {
 		volume_slider = gtk_hscale_new_with_range(0,127,1);
@@ -719,13 +606,8 @@ gtk_gui_start (JackVST* jvst) {
 	return TRUE;
 }
 
-typedef int (*error_handler_t)( Display *, XErrorEvent *);
-static Display *the_gtk_display;
-error_handler_t wine_error_handler;
-error_handler_t gtk_error_handler;
-
-int fst_xerror_handler( Display *disp, XErrorEvent *ev )
-{
+int
+fst_xerror_handler( Display *disp, XErrorEvent *ev ) {
 	int error_code = (int) ev->error_code;
 	char error_text[256];
 
@@ -741,12 +623,10 @@ int fst_xerror_handler( Display *disp, XErrorEvent *ev )
 }
 
 void
-gtk_gui_init (int *argc, char **argv[])
-{
+gtk_gui_init(int *argc, char **argv[]) {
 	wine_error_handler = XSetErrorHandler( NULL );
 	gtk_init (argc, argv);
 	the_gtk_display = gdk_x11_display_get_xdisplay( gdk_display_get_default() );
 	gtk_error_handler = XSetErrorHandler( fst_xerror_handler );
 	CPUusage_init();
-
 }

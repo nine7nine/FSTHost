@@ -24,18 +24,15 @@
 #include <semaphore.h>
 #include <signal.h>
 #include <sys/syscall.h>
-#include <jack/midiport.h>
 
 #include "jackvst.h"
 
-#ifdef HAVE_LASH
-#include <lash/lash.h>
-#endif
-
 #define VERSION "1.4.0"
+#define APPNAME "fsthost"
+#define CTRLAPP "FHControl"
 
-const char* my_motherfuckin_name = "fsthost";
-const char* ControlAppName = "FHControl";
+#define RINGBUFFER_SIZE 128*sizeof(struct MidiMessage)
+#define MIDI_EVENT_MAX 1024
 
 /* audiomaster.c */
 extern long jack_host_callback (struct AEffect*, int32_t, int32_t, intptr_t, void *, float );
@@ -47,25 +44,17 @@ extern int gtk_gui_start (JackVST * jvst);
 /* info.c */
 extern int fst_info(const char *dbpath, const char *fst_path);
 
+/* lash.c */
+#ifdef HAVE_LASH
+extern void jvst_lash_init(JackVST *jvst, int* argc, char** argv[]);
+#endif
+
 /* Structures & Prototypes for midi output and associated queue */
 struct MidiMessage {
         jack_nframes_t time;
         int            len; /* Length of MIDI message, in bytes. */
         unsigned char  data[3];
 };
-
-struct SysExEvent {
-        JackVST* jvst;
-        jack_midi_data_t* data;
-        size_t size;
-};
-
-#define RINGBUFFER_SIZE 128*sizeof(struct MidiMessage)
-#define MIDI_EVENT_MAX 1024
-
-#ifdef HAVE_LASH
-lash_client_t * lash_client;
-#endif
 
 static void *(*the_function)(void*);
 static void *the_arg;
@@ -160,11 +149,8 @@ jvst_bypass(JackVST* jvst, bool bypass) {
 }
 
 static bool
-jvst_sysex_handler(struct SysExEvent* sysex_event) {
-        JackVST* jvst = sysex_event->jvst;
-        jack_midi_data_t* data = sysex_event->data;
-        size_t size = sysex_event->size;
-        free(sysex_event);
+jvst_sysex_handler(JackVST* jvst) {
+        jack_midi_data_t* data = jvst->sysex_data;
 
 	switch(data[1]) {
 	case SYSEX_MYID:
@@ -189,15 +175,15 @@ jvst_sysex_handler(struct SysExEvent* sysex_event) {
 
 				// Copy sysex state for preserve resending SysEx Dump
 				memcpy(&jvst->sysex_dump,sysex_v1,sizeof(SysExDumpV1));
-
 				break;
 			case SYSEX_TYPE_RQST: ;
 				SysExDumpRequestV1* sysex_request_v1 = (SysExDumpRequestV1*) data;
 				printf("REQUEST - ID %X - OK\n", sysex_request_v1->uuid);
 				if (sysex_request_v1->uuid == jvst->sysex_dump.uuid)
 					jvst_send_sysex(jvst, SYSEX_WANT_DUMP);
-
-				// If we got DumpRequest then it mean that there is FHControl, so we wanna notify
+				/* If we got DumpRequest then it mean that there is FHControl,
+					so we wanna notify
+				*/
 				jvst->sysex_want_notify = true;
 				break;
 			case SYSEX_TYPE_OFFER: ;
@@ -227,7 +213,7 @@ jvst_sysex_handler(struct SysExEvent* sysex_event) {
 		break;
 	case SYSEX_NON_REALTIME:
 		// Identity request
-		if (size >= sizeof(SysExIdentRqst)) {
+		if (jvst->sysex_size >= sizeof(SysExIdentRqst)) {
 			// TODO: for now we just always answer ;-)
 			SysExIdentRqst sxir = SYSEX_IDENT_REQUEST;
 			data[2] = 0x7F; // veil
@@ -238,7 +224,8 @@ jvst_sysex_handler(struct SysExEvent* sysex_event) {
 		}
 		break;
 	}
-	free(data);
+	/* Allow process next sysex */
+	jvst->sysex_size = 0;
 
 	return FALSE;
 }
@@ -444,16 +431,13 @@ process_midi_input(JackVST* jvst, jack_nframes_t nframes)
 		// SysEx
 		if ( jackevent.buffer[0] == SYSEX_BEGIN) {
 			/* FIXME:
-			we shoudn't call malloc in RT thread
-			but I have no better idea :-(
-			this memory will be free in sysex handler function
+			Only one event can be processed at the same time (it is fail or not ?)
 			*/
-			struct SysExEvent* sysex_event = malloc(sizeof(struct SysExEvent));
-                        sysex_event->data = malloc(jackevent.size);
-                        sysex_event->jvst = jvst;
-                        sysex_event->size = jackevent.size;
-                        memcpy(sysex_event->data, jackevent.buffer, jackevent.size);
-                        g_idle_add( (GSourceFunc) jvst_sysex_handler, sysex_event);
+			if (! jvst->sysex_size) {
+                	        jvst->sysex_size = jackevent.size;
+                        	memcpy(jvst->sysex_data, jackevent.buffer, jackevent.size);
+	                        g_idle_add( (GSourceFunc) jvst_sysex_handler, jvst);
+			}
 	
 			/* TODO:
 			For now we simply drop all SysEx messages because VST standard
@@ -648,7 +632,7 @@ session_callback( JackVST* jvst )
 		event->flags |= JackSessionSaveError;
 
 	snprintf( retval, sizeof(retval), "%s -U %d -u %s -s \"${SESSION_DIR}state.fps\" \"%s\" >>/dev/null 2>&1",
-		my_motherfuckin_name, jvst->sysex_dump.uuid, event->client_uuid, jvst->handle->path );
+		APPNAME, jvst->sysex_dump.uuid, event->client_uuid, jvst->handle->path );
 	event->command_line = strdup( retval );
 
 	jack_session_reply(jvst->client, event);
@@ -720,7 +704,7 @@ jvst_idle_cb(JackVST* jvst) {
 	}
 
 	// Connect MIDI ports to control app
-	jports = jack_get_ports(jvst->client, ControlAppName, JACK_DEFAULT_MIDI_TYPE, 0);
+	jports = jack_get_ports(jvst->client, CTRLAPP, JACK_DEFAULT_MIDI_TYPE, 0);
 	if (jports == NULL) return TRUE;
 
 	for (i=0; jports[i] != NULL; i++) {
@@ -770,7 +754,7 @@ static void cmdline2arg(int *argc, char ***pargv, LPSTR cmdline) {
 		WideCharToMultiByte(CP_UNIXCP, 0, szArgList[i], -1, (LPSTR) argv[i], nsize, NULL, NULL);
 	}
 	LocalFree(szArgList);
-	argv[0] = (char*) my_motherfuckin_name; // Force APP name
+	argv[0] = (char*) APPNAME; // Force APP name
 	*pargv = argv;
 }
 
@@ -994,7 +978,11 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 		}
 	}
 
-	// Register / allocate ports
+	/* Alocate buffer fo incoming SysEx messages */
+	size_t midi_event_max_size = jack_midi_max_event_size(jack_port_get_buffer(jvst->midi_inport,block_size));
+	jvst->sysex_data = malloc(midi_event_max_size);
+
+	// Register / allocate audio ports
 	jvst->numIns = (opt_numIns > 0 && opt_numIns < plugin->numInputs) ? opt_numIns : plugin->numInputs;
 	jvst->numOuts = (opt_numOuts > 0 && opt_numOuts < plugin->numOutputs) ? opt_numOuts : plugin->numOutputs;
 	printf("PortLayout (FSTHost/plugin) IN: %d/%d OUT: %d/%d\n", 
@@ -1007,7 +995,8 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 		if (i < jvst->numIns) {
 			char buf[64];
 			snprintf (buf, sizeof(buf), "in%d", i+1);
-			jvst->inports[i] = jack_port_register (jvst->client, buf, JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
+			jvst->inports[i] = jack_port_register (jvst->client, buf,
+				JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
 		} else {
 			// Swap area for plugin not used ports;-)
 			jvst->outs[i] = malloc(sizeof(float) * jack_get_buffer_size (jvst->client));
@@ -1048,29 +1037,9 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 		sigaction(SIGUSR1, &sa, NULL);
 
 #ifdef HAVE_LASH
-	lash_event_t *event;
-	lash_args_t* lash_args = lash_extract_args(&argc, &argv);
-
-	int flags = LASH_Config_Data_Set;
-
-	lash_client = lash_init(lash_args, jvst->client_name, flags, LASH_PROTOCOL(2, 0));
-
-	if (!lash_client) {
-		fprintf(stderr, "%s: could not initialise lash\n", __FUNCTION__);
-		fprintf(stderr, "%s: running fst without lash session-support\n", __FUNCTION__);
-		fprintf(stderr, "%s: to enable lash session-support launch the lash server prior fst\n", __FUNCTION__);
-	}
-
-	if (lash_enabled(lash_client)) {
-		event = lash_event_new_with_type(LASH_Client_Name);
-		lash_event_set_string(event, jvst->client_name);
-		lash_send_event(lash_client, event);
-
-		event = lash_event_new_with_type(LASH_Jack_Client_Name);
-		lash_event_set_string(event, jvst->client_name);
-		lash_send_event(lash_client, event);
-	}
+	jvst_lash_init(jvst, &argc, &argv);
 #endif
+
         // load state if requested
 	if ( load_state && ! jvst_load_state (jvst, jvst->default_state_file) && ! sigusr1_save_state )
 		return 1;
@@ -1099,11 +1068,10 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	// Create GTK or GlibMain thread
 	if (jvst->with_editor != WITH_EDITOR_NO) {
 		printf( "Start GUI\n" );
-		gtk_gui_init (&argc, &argv);
+		gtk_gui_init(&argc, &argv);
 		gtk_gui_start(jvst);
 	} else {
 		printf("GUI Disabled - start GlibMainLoop\n");
-
 		g_main_loop_run(glib_main_loop);
 	}
 
