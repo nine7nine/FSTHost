@@ -5,6 +5,7 @@
 #include <jack/jack.h>
 #include <jack/ringbuffer.h>
 #include <jack/session.h>
+#include <jack/midiport.h>
 #include <math.h>
 
 #include "sysex.h"
@@ -64,6 +65,10 @@ struct _JackVST {
     bool              sysex_want_notify;
     SysExDumpV1       sysex_dump;
     SysExIdentReply   sysex_ident_reply;
+
+    /* SysEx receive support */
+    jack_midi_data_t* sysex_data;
+    size_t sysex_size;
 
     /* For VST/i support */
     bool                 want_midi_in;

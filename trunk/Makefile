@@ -36,6 +36,9 @@ BIN_INST_PATH         = $(PREFIX)/bin
 ### fsthost.exe sources and settings
 fsthost_MODULE        = fsthost
 fsthost_C_SRCS        = audiomaster.c fst.c gtk.c jfst.c fxb.c fps.c vstwin.c cpuusage.c info.c
+ifeq ($(LASH_EXISTS),yes)
+fsthost_C_SRCS        += lash.c
+endif
 fsthost_LDFLAGS       = -mwindows
 fsthost_DLL_PATH      =
 fsthost_DLLS          = 
