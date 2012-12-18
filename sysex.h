@@ -10,6 +10,7 @@
 #include <ctype.h>
 #include <string.h>
 
+#define SYSEX_MAX_SIZE sizeof(SysExDumpV1)
 #define SYSEX_BEGIN 0xF0
 #define SYSEX_END 0xF7
 #define SYSEX_NON_REALTIME 0x7E

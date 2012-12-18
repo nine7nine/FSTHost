@@ -86,6 +86,8 @@ JackVST* jvst_new() {
 	SysExDumpV1 sxd = SYSEX_DUMP;
 	memcpy(&jvst->sysex_dump, &sxd, sizeof(SysExDumpV1));
 
+	jvst->sysex_data = malloc(SYSEX_MAX_SIZE);
+
 	return jvst;
 }
 
@@ -340,7 +342,7 @@ process_midi_output(JackVST* jvst, jack_nframes_t nframes)
 	int t;
 
 	port_buffer = jack_port_get_buffer(jvst->midi_outport, nframes);
-	if (port_buffer == NULL) {
+	if (! port_buffer) {
 		fst_error("jack_port_get_buffer failed, cannot send anything.");
 		return;
 	}
@@ -434,9 +436,13 @@ process_midi_input(JackVST* jvst, jack_nframes_t nframes)
 			Only one event can be processed at the same time (it is fail or not ?)
 			*/
 			if (! jvst->sysex_size) {
-                	        jvst->sysex_size = jackevent.size;
-                        	memcpy(jvst->sysex_data, jackevent.buffer, jackevent.size);
-	                        g_idle_add( (GSourceFunc) jvst_sysex_handler, jvst);
+				if (jackevent.size > SYSEX_MAX_SIZE) {
+					fst_error("Sysex is too big. Skip. Requested %d, but MAX is %d", jackevent.size, SYSEX_MAX_SIZE);
+				} else {
+	                	        jvst->sysex_size = jackevent.size;
+        	                	memcpy(jvst->sysex_data, jackevent.buffer, jackevent.size);
+	        	                g_idle_add( (GSourceFunc) jvst_sysex_handler, jvst);
+				}
 			}
 	
 			/* TODO:
@@ -969,7 +975,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 		if (fst->canSendVstEvents || fst->canSendVstMidiEvent) {
 			jvst->want_midi_out = TRUE;
 			jvst->ringbuffer = jack_ringbuffer_create(RINGBUFFER_SIZE);
-			if (jvst->ringbuffer == NULL) {
+			if (! jvst->ringbuffer) {
 				fst_error("Cannot create JACK ringbuffer.");
 				return 1;
 			}
@@ -977,11 +983,6 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 			jack_ringbuffer_mlock(jvst->ringbuffer);
 		}
 	}
-
-	/* Alocate buffer fo incoming SysEx messages */
-	size_t midi_event_max_size = jack_midi_max_event_size(jack_port_get_buffer(jvst->midi_inport,block_size));
-	jvst->sysex_data = malloc(midi_event_max_size);
-
 	// Register / allocate audio ports
 	jvst->numIns = (opt_numIns > 0 && opt_numIns < plugin->numInputs) ? opt_numIns : plugin->numInputs;
 	jvst->numOuts = (opt_numOuts > 0 && opt_numOuts < plugin->numOutputs) ? opt_numOuts : plugin->numOutputs;
