@@ -4,6 +4,7 @@
 #include <gdk/gdkevents.h>
 #include <X11/Xlib.h>
 #include <sys/syscall.h>
+#include "fsthost.xpm"
 
 #ifdef HAVE_LASH
 extern void jvst_lash_idle(JackVST *jvst, bool *quit);
@@ -516,6 +517,8 @@ gtk_gui_start (JackVST* jvst) {
 	window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
 	gtk_window_set_title (GTK_WINDOW(window), jvst->client_name);
 	gtk_window_set_resizable (GTK_WINDOW(window), FALSE);
+
+	gtk_window_set_icon(GTK_WINDOW(window), gdk_pixbuf_new_from_xpm_data((const char**) fsthost_xpm));
 
 	vpacker = gtk_vbox_new (FALSE, 7);
 	hpacker = gtk_hbox_new (FALSE, 7);

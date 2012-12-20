@@ -663,7 +663,7 @@ session_callback_aux( jack_session_event_t *event, void* arg )
         g_idle_add( (GSourceFunc) session_callback, jvst );
 }
 
-int
+static int
 jvst_connect(JackVST *jvst, const char *audio_to)
 {
 	unsigned short i,j;
@@ -684,6 +684,26 @@ jvst_connect(JackVST *jvst, const char *audio_to)
 		printf("Connect: %s -> %s\n", pname, jports[i]);
 	}
 	jack_free(jports);
+}
+
+static void
+jvst_connect_midi_to_physical(JackVST* jvst) {
+	int i;
+	const char **jports;
+
+        jports = jack_get_ports(jvst->client, NULL, JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput|JackPortIsPhysical);
+        if (jports == NULL)
+		return;
+
+	const char *pname = jack_port_name(jvst->midi_inport);
+        for (i=0; jports[i] != NULL; i++) {
+		if (jack_port_connected_to(jvst->midi_inport, jports[i]))
+			continue;
+
+                jack_connect(jvst->client, jports[i], pname);
+                printf("%s -> %s\n", pname, jports[i]);
+        }
+        jack_free(jports);
 }
 
 static bool
@@ -776,13 +796,14 @@ static void usage(char* appname) {
 	fprintf(stderr, format, "-n", "Disable Editor and GTK GUI");
 	fprintf(stderr, format, "-N", "Notify changes by SysEx");
 	fprintf(stderr, format, "-e", "Hide Editor");
-	fprintf(stderr, format, "-s state_file", "Load state_file");
-	fprintf(stderr, format, "-c client_name", "Jack Client name");
+	fprintf(stderr, format, "-s <state_file>", "Load <state_file>");
+	fprintf(stderr, format, "-c <client_name>", "Jack Client name");
 	fprintf(stderr, format, "-k channel", "MIDI Channel (0: all, 17: none)");
 	fprintf(stderr, format, "-i num_in", "Jack number In ports");
-	fprintf(stderr, format, "-j connect_to", "Connect Audio Out to connect_to");
+	fprintf(stderr, format, "-j <connect_to>", "Connect Audio Out to <connect_to>");
 	fprintf(stderr, format, "-l", "save state to state_file on SIGUSR1 - require -s");
 	fprintf(stderr, format, "-m mode_midi_cc", "Bypass/Resume MIDI CC (default: 122)");
+	fprintf(stderr, format, "-p", "Connect MIDI In port to all physical");
 	fprintf(stderr, format, "-o num_out", "Jack number Out ports");
 	fprintf(stderr, format, "-t tempo", "Set fixed Tempo rather than using JackTransport");
 	fprintf(stderr, format, "-u uuid", "JackSession UUID");
@@ -804,6 +825,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	short		opt_numOuts = 0;
 	bool		load_state = FALSE;
 	bool		sigusr1_save_state = FALSE;
+	bool		connect_midi_to_physical = FALSE;
 	const char*	dbinfo_path = NULL;
 	const char*	connect_to = NULL;
 	const char*	plug_path;
@@ -817,7 +839,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 
         // Parse command line options
 	cmdline2arg(&argc, &argv, cmdline);
-	while ( (i = getopt (argc, argv, "bd:es:c:k:i:j:lnNm:o:t:u:U:V")) != -1) {
+	while ( (i = getopt (argc, argv, "bd:es:c:k:i:j:lnNm:po:t:u:U:V")) != -1) {
 		switch (i) {
 			case 'b':
 				jvst->bypassed = TRUE;
@@ -848,6 +870,9 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 				break;
 			case 'l':
 				sigusr1_save_state = TRUE;
+				break;
+			case 'p':
+				connect_midi_to_physical = TRUE;
 				break;
 			case 'o':
 				opt_numOuts = strtol(optarg, NULL, 10);
@@ -1059,6 +1084,9 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	// Auto connect on start
 	if (connect_to)
 		jvst_connect(jvst, connect_to);
+
+	if (connect_midi_to_physical)
+		jvst_connect_midi_to_physical(jvst);
 
 	// Initialize random generator - usefull for SysEx ID negotiation
 	srand(GetTickCount());
