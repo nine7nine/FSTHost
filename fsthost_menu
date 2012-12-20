@@ -41,7 +41,7 @@ main_loop() {
 	
 	F=$(echo "$L" | grep "^$G|" | cut -d'|' -f3 | tr -d '"')
 	
-	fsthost -j '' "$F" 1>/tmp/fsthost_menu.log.$G 2>&1 &
+	fsthost -pj '' "$F" 1>/tmp/fsthost_menu.log.$G 2>&1 &
 }
 
 FSTHOST_DB=$1
