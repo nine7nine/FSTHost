@@ -63,6 +63,8 @@ static sem_t sema;
 GMainLoop* glib_main_loop;
 JackVST *jvst_first;
 
+static void jvst_log(const char *msg) { fprintf(stderr, "JACK: ", msg); }
+
 JackVST* jvst_new() {
 	JackVST* jvst = calloc (1, sizeof (JackVST));
 	short i;
@@ -79,7 +81,7 @@ JackVST* jvst_new() {
 	for(i=0; i<128;++i)
 		jvst->midi_map[i] = -1;
 
-	// Little trick
+	// Little trick (const enrties)
 	SysExIdentReply sxir = SYSEX_IDENT_REPLY;
 	memcpy(&jvst->sysex_ident_reply, &sxir, sizeof(SysExIdentReply));
 
@@ -91,16 +93,19 @@ JackVST* jvst_new() {
 	return jvst;
 }
 
-void
-jvst_destroy(JackVST* jvst)
-{
-	free(jvst);
+void jvst_destroy(JackVST* jvst) { free(jvst); }
+
+static void
+sysex_makeASCII(uint8_t* ascii_midi_dest, char* name, size_t size_dest) {
+	size_t i;
+	for (i=0; i < strlen(name) && i < size_dest - 1; i++)
+		if ( isprint( toascii( name[i]) ) )
+			ascii_midi_dest[i] = name[i];
+	memset(ascii_midi_dest + i, 0, size_dest - i - 1); /* Set rest to 0 */
 }
 
 // Prepare data for RT thread and wait for send
-bool
-jvst_send_sysex(JackVST* jvst, enum SysExWant sysex_want)
-{
+bool jvst_send_sysex(JackVST* jvst, enum SysExWant sysex_want) {
 	pthread_mutex_lock (&jvst->sysex_lock);
 	short g = 0;
 
@@ -508,9 +513,9 @@ process_midi_input(JackVST* jvst, jack_nframes_t nframes)
 
 		for (j=0; j < 4; j++) {
 			jvst->event_array[stuffed_events].midiData[j] = 
-				(j<jackevent.size) ? jackevent.buffer[j] : 0;
+				(j < jackevent.size) ? jackevent.buffer[j] : 0;
 		}
-		stuffed_events += 1;
+		++stuffed_events;
 	}
 
 	if ( stuffed_events > 0 ) {
@@ -811,6 +816,7 @@ static void usage(char* appname) {
 	fprintf(stderr, format, "-V", "Disable Volume control / filtering CC7 messages");
 }
 
+
 int WINAPI
 WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	HANDLE*		h_thread;
@@ -950,6 +956,9 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
         printf("Main Thread W32ID: %d | LWP: %d | W32 Class: %d | W32 Priority: %d\n",
 		GetCurrentThreadId (), (int) syscall (SYS_gettid), GetPriorityClass (h_thread), GetThreadPriority(h_thread));
 
+	jack_set_info_function(jvst_log);
+	jack_set_error_function(jvst_log);
+
 	printf("Starting Jack thread ... ");
 	jvst->client = jack_client_open(jvst->client_name,JackSessionID,NULL,jvst->uuid);
 	if (! jvst->client) {
@@ -1011,7 +1020,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	// Register / allocate audio ports
 	jvst->numIns = (opt_numIns > 0 && opt_numIns < plugin->numInputs) ? opt_numIns : plugin->numInputs;
 	jvst->numOuts = (opt_numOuts > 0 && opt_numOuts < plugin->numOutputs) ? opt_numOuts : plugin->numOutputs;
-	printf("PortLayout (FSTHost/plugin) IN: %d/%d OUT: %d/%d\n", 
+	printf("Port Layout (FSTHost/plugin) IN: %d/%d OUT: %d/%d\n", 
 		jvst->numIns, plugin->numInputs, jvst->numOuts, plugin->numOutputs);
 
 	jvst->inports = (jack_port_t**)malloc(sizeof(jack_port_t*) * jvst->numIns);
