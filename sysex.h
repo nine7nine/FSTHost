@@ -90,18 +90,4 @@ typedef struct {
 	const uint8_t end;
 } SysExDumpV1;
 
-static void
-sysex_makeASCII(uint8_t* ascii_midi_dest, char* name, size_t size_dest) {
-	size_t i;
-	for (i=0; i < strlen(name) && i < size_dest - 1; i++) {
-		if ( ! isprint( toascii( name[i]) ) )
-			continue;
-
-		ascii_midi_dest[i] = name[i];
-	}
-
-	/* Set rest to 0 */
-	memset(ascii_midi_dest + i, 0, size_dest - i - 1);
-}
-
 #endif /* __sysex_h__ */
