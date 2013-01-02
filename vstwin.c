@@ -9,34 +9,6 @@ static FST* fst_first = NULL;
 static int MainThreadId;
 static bool WindowClassRegistered = FALSE;
 
-static LRESULT WINAPI 
-my_window_proc (HWND w, UINT msg, WPARAM wp, LPARAM lp) {
-	FST* fst = GetPropA(w, "FST");
-
-	switch (msg) {
-	case WM_KEYUP:
-	case WM_KEYDOWN:
-		break;
-
-	case WM_CLOSE:
-		if (fst && ! fst->editor_popup) {
-			fst->plugin->dispatcher(fst->plugin, effEditClose, 0, 0, NULL, 0.0f);
-			fst->window = NULL;
-		} else {
-			printf("Receive WM_CLOSE - WTF ?\n");
-		}
-		break;
-	case WM_NCDESTROY:
-	case WM_DESTROY:
-//		printf("Get destroy %d\n", w);
-		break;
-	default:
-		break;
-	}
-
-	return DefWindowProcA (w, msg, wp, lp );
-}
-
 static FST* 
 fst_new () {
 	FST* fst = (FST*) calloc (1, sizeof (FST));
@@ -74,6 +46,34 @@ fst_update_current_program(FST* fst) {
 		fst_get_program_name(fst, fst->current_program, progName, sizeof(progName));
 		printf("Program: %d : %s\n", newProg, progName);
 	}
+}
+
+static LRESULT WINAPI 
+my_window_proc (HWND w, UINT msg, WPARAM wp, LPARAM lp) {
+	FST* fst = GetPropA(w, "FST");
+
+	switch (msg) {
+	case WM_KEYUP:
+	case WM_KEYDOWN:
+		break;
+
+	case WM_CLOSE:
+		if (fst && ! fst->editor_popup) {
+			fst->plugin->dispatcher(fst->plugin, effEditClose, 0, 0, NULL, 0.0f);
+			fst->window = NULL;
+		} else {
+			printf("Receive WM_CLOSE - WTF ?\n");
+		}
+		break;
+	case WM_NCDESTROY:
+	case WM_DESTROY:
+//		printf("Get destroy %d\n", w);
+		break;
+	default:
+		break;
+	}
+
+	return DefWindowProcA (w, msg, wp, lp );
 }
 
 static bool
