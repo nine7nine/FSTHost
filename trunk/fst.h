@@ -141,31 +141,31 @@ struct _FXHeader {
         unsigned int numPrograms;
 };
 
-extern FSTHandle* fst_load (const char * );
-extern bool fst_unload (FSTHandle*);
+FSTHandle* fst_load (const char * );
+bool fst_unload (FSTHandle*);
 
 void fst_event_loop();
 bool fst_event_callback();
 
-extern FST* fst_open (FSTHandle*, audioMasterCallback amc, void* userptr);
-extern void fst_close (FST*);
-extern void fst_loop_quit();
+FST* fst_open (FSTHandle*, audioMasterCallback amc, void* userptr);
+void fst_close (FST*);
+void fst_loop_quit();
 
-extern void fst_program_change (FST *fst, short want_program);
-extern bool fst_get_program_name (FST *fst, short program, char* name, size_t size);
+void fst_program_change (FST *fst, short want_program);
+bool fst_get_program_name (FST *fst, short program, char* name, size_t size);
 
-extern bool fst_run_editor (FST*, bool popup);
-extern void fst_destroy_editor (FST*);
+bool fst_run_editor (FST*, bool popup);
+void fst_destroy_editor (FST*);
 
 //extern FSTInfo *fst_get_info (char *dllpathname);
 //extern void fst_free_info (FSTInfo *info);
-extern int fst_call_dispatcher(FST *fst, int opcode, int index, int val, void *ptr, float opt );
+int fst_call_dispatcher(FST *fst, int opcode, int index, int val, void *ptr, float opt );
 
-/**
- * Save a plugin state to a file.
- */
-extern int fst_save_state (FST * fst, const char * filename);
-extern int fst_save_fps (FST * fst, const char * filename);
-extern int fst_save_fxfile (FST * fst, const char * filename, enum FxFileType fileType);
+/* Support for FXB/FXP files (fxb.c) */
+int fst_load_fxfile ( FST *fst, const char *filename );
+int fst_save_fxfile (FST * fst, const char * filename, enum FxFileType fileType);
+
+/* Support for XML Database (info.c) */
+int fst_info(const char *dbpath, const char *fst_path);
 
 #endif /* __fst_fst_h__ */

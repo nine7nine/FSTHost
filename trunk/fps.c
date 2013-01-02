@@ -161,8 +161,7 @@ fps_process_node(JackVST* jvst, xmlNode *a_node)
     return TRUE;
 }
 
-bool
-fps_load ( JackVST* jvst, const char* filename ) {
+bool fps_load(JackVST* jvst, const char* filename) {
    bool success;
    xmlDoc *doc = NULL;
    xmlNode *plugin_state_node = NULL;
@@ -201,8 +200,7 @@ fps_add_check (FST *fst, xmlNode *node, int opcode, const char *field) {
    }
 } 
 
-bool
-fps_save (JackVST* jvst, const char * filename) {
+bool fps_save (JackVST* jvst, const char* filename) {
    int paramIndex;
    unsigned int cc;
    char tString[64];
