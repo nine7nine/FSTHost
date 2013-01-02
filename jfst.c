@@ -31,8 +31,8 @@
 #define APPNAME "fsthost"
 #define CTRLAPP "FHControl"
 
-#define RINGBUFFER_SIZE 128*sizeof(struct MidiMessage)
-#define MIDI_EVENT_MAX 1024
+#define RINGBUFFER_SIZE 16*sizeof(struct MidiMessage)
+#define MIDI_EVENT_MAX 16 /* Max counts of events in one process */
 
 /* audiomaster.c */
 extern long jack_host_callback (struct AEffect*, int32_t, int32_t, intptr_t, void *, float );
@@ -41,13 +41,14 @@ extern long jack_host_callback (struct AEffect*, int32_t, int32_t, intptr_t, voi
 extern void gtk_gui_init (int* argc, char** argv[]);
 extern int gtk_gui_start (JackVST * jvst);
 
-/* info.c */
-extern int fst_info(const char *dbpath, const char *fst_path);
-
 /* lash.c */
 #ifdef HAVE_LASH
 extern void jvst_lash_init(JackVST *jvst, int* argc, char** argv[]);
 #endif
+
+/* fps.c */
+bool fps_save(JackVST* jvst, const char* filename);
+bool fps_load(JackVST* jvst, const char* filename);
 
 /* Structures & Prototypes for midi output and associated queue */
 struct MidiMessage {
@@ -506,12 +507,17 @@ process_midi_input(JackVST* jvst, jack_nframes_t nframes)
 		if ( jvst->bypassed || ! jvst->want_midi_in )
 			continue;
 		
+		if (stuffed_events >= MIDI_EVENT_MAX) {
+			fst_error("Error: Note dropped, no more space in buffer (max %d notes)", MIDI_EVENT_MAX);
+			continue;
+		}
+
 		// ... let's the music play
 		jvst->event_array[stuffed_events].type = kVstMidiType;
 		jvst->event_array[stuffed_events].byteSize = 24;
 		jvst->event_array[stuffed_events].deltaFrames = jackevent.time;
 
-		for (j=0; j < 4; j++) {
+		for (j=0; j < 3; j++) { /* event_array[3] remain 0 (according to VST Spec) */
 			jvst->event_array[stuffed_events].midiData[j] = 
 				(j < jackevent.size) ? jackevent.buffer[j] : 0;
 		}
