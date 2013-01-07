@@ -174,21 +174,27 @@ jvst_sysex_handler(JackVST* jvst) {
 			case SYSEX_TYPE_DUMP:
 				printf("DUMP - OK\n");
 
-				SysExDumpV1* sysex_v1 = (SysExDumpV1*) data;
+				SysExDumpV1* sysex = (SysExDumpV1*) data;
+				printf("uuid:%d state:%d program:%d channel:%d volume:%d", sysex->uuid,
+					sysex->state, sysex->program, sysex->channel, sysex->volume);
 
-				jvst_bypass(jvst, (sysex_v1->state == SYSEX_STATE_ACTIVE) ? FALSE : TRUE);
-				fst_program_change(jvst->fst, sysex_v1->program);
-				jvst->channel = sysex_v1->channel;
-				jvst_set_volume(jvst, sysex_v1->volume);
+				jvst_bypass(jvst, (sysex->state == SYSEX_STATE_ACTIVE) ? FALSE : TRUE);
+				fst_program_change(jvst->fst, sysex->program);
+				jvst->channel = sysex->channel;
+				jvst_set_volume(jvst, sysex->volume);
 
 				// Copy sysex state for preserve resending SysEx Dump
-				memcpy(&jvst->sysex_dump,sysex_v1,sizeof(SysExDumpV1));
+				memcpy(&jvst->sysex_dump,sysex,sizeof(SysExDumpV1));
 				break;
 			case SYSEX_TYPE_RQST: ;
-				SysExDumpRequestV1* sysex_request_v1 = (SysExDumpRequestV1*) data;
-				printf("REQUEST - ID %X - OK\n", sysex_request_v1->uuid);
-				if (sysex_request_v1->uuid == jvst->sysex_dump.uuid)
+				SysExDumpRequestV1* sysex_request = (SysExDumpRequestV1*) data;
+				printf("REQUEST - ID %X - ", sysex_request->uuid);
+				if (sysex_request->uuid == jvst->sysex_dump.uuid) {
+					printf("OK\n");
 					jvst_send_sysex(jvst, SYSEX_WANT_DUMP);
+				} else {
+					printf("Not to Us\n");
+				}
 				/* If we got DumpRequest then it mean that there is FHControl,
 					so we wanna notify
 				*/
@@ -438,9 +444,7 @@ process_midi_input(JackVST* jvst, jack_nframes_t nframes)
 
 		// SysEx
 		if ( jackevent.buffer[0] == SYSEX_BEGIN) {
-			/* FIXME:
-			Only one event can be processed at the same time (it is fail or not ?)
-			*/
+			// FIXME: Only one event can be processed at the same time (it is fail or not ?)
 			if (! jvst->sysex_size) {
 				if (jackevent.size > SYSEX_MAX_SIZE) {
 					fst_error("Sysex is too big. Skip. Requested %d, but MAX is %d", jackevent.size, SYSEX_MAX_SIZE);
