@@ -652,8 +652,8 @@ session_callback( JackVST* jvst )
 	if ( ! jvst_save_state( jvst, filename ) )
 		event->flags |= JackSessionSaveError;
 
-	snprintf( retval, sizeof(retval), "%s -U %d -u %s -s \"${SESSION_DIR}state.fps\" \"%s\" >>/dev/null 2>&1",
-		APPNAME, jvst->sysex_dump.uuid, event->client_uuid, jvst->handle->path );
+	snprintf( retval, sizeof(retval), "%s -U %d -u %s -s \"${SESSION_DIR}state.fps\" \"%s\"",
+		APPNAME, jvst->sysex_dump.uuid, event->client_uuid, jvst->handle->path);
 	event->command_line = strdup( retval );
 
 	jack_session_reply(jvst->client, event);
