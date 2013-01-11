@@ -325,12 +325,34 @@ jack_host_callback (struct AEffect* effect, int32_t  opcode, int32_t  index, int
 		SHOW_CALLBACK ("amc: audioMasterSetIcon\n");
 		// void* in <ptr>, format not defined yet
 		return 0;
-		
 	case audioMasterCanDo:
-		SHOW_CALLBACK ("amc: audioMasterCanDo\n");
-		// string in ptr, see below
+		SHOW_CALLBACK ("amc: audioMasterCanDo %s\n", (char*)ptr);
+		/* Supported */
+		if (
+			!strcmp((char*)ptr, "sendVstEvents") ||
+			!strcmp((char*)ptr, "sendVstMidiEvent") ||
+			!strcmp((char*)ptr, "sendVstTimeInfo") ||
+			!strcmp((char*)ptr, "receiveVstEvents") ||
+			!strcmp((char*)ptr, "receiveVstMidiEvent") ||
+			!strcmp((char*)ptr, "sizeWindow") ||
+			!strcmp((char*)ptr, "supplyIdle")
+		) return 1;
+
+		/* Not Supported */
+		if (
+			!strcmp((char*)ptr, "reportConnectionChanges") ||
+			!strcmp((char*)ptr, "acceptIOChanges") ||
+			!strcmp((char*)ptr, "offline") ||
+			!strcmp((char*)ptr, "openFileSelector") ||
+			!strcmp((char*)ptr, "closeFileSelector") ||
+			!strcmp((char*)ptr, "startStopProcess") ||
+			!strcmp((char*)ptr, "shellCategory") ||
+			!strcmp((char*)ptr, "asyncProcessing") ||
+			!strcmp((char*)ptr, "sendVstMidiEventFlagIsRealtime")
+		) return -1;
+
+		/* What this plugin want from us ? */
 		return 0;
-		
 	case audioMasterGetLanguage:
 		SHOW_CALLBACK ("amc: audioMasterGetLanguage\n");
 		// see enum
