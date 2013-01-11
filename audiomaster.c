@@ -96,9 +96,7 @@ jack_host_callback (struct AEffect* effect, int32_t  opcode, int32_t  index, int
 		// <value> should contain a mask indicating which fields are required
 		// (see valid masks above), as some items may require extensive
 		// conversions
-
-		if (! jackvst)
-			return 0;
+		if (! jackvst) return 0;
 
 		//printf( "get time value=%d\n", value );
 		// Clear VstTimeInfo structure
@@ -161,22 +159,21 @@ jack_host_callback (struct AEffect* effect, int32_t  opcode, int32_t  index, int
 	case audioMasterProcessEvents:
 		SHOW_CALLBACK ("amc: audioMasterProcessEvents\n");
 		// VstEvents* in <ptr>
-		if (jackvst) {
-			int i;
-			long numEvents;
-			VstEvents* events = (VstEvents*)ptr;
+		if (! jackvst) return 0;
 
-			numEvents = events->numEvents;
-			for (i = 0; i < numEvents; i++) {
-				char* midiData;
-				VstMidiEvent* event = (VstMidiEvent*)events->events[i];
-				//printf( "delta = %d\n", (int) event->deltaFrames );
-				midiData = event->midiData;
-				queue_midi_message(jackvst, midiData[0], midiData[1], midiData[2], event->deltaFrames);
-			}
+		int i;
+		long numEvents;
+		VstEvents* events = (VstEvents*)ptr;
+
+		numEvents = events->numEvents;
+		for (i = 0; i < numEvents; i++) {
+			char* midiData;
+			VstMidiEvent* event = (VstMidiEvent*)events->events[i];
+			//printf( "delta = %d\n", (int) event->deltaFrames );
+			midiData = event->midiData;
+			queue_midi_message(jackvst, midiData[0], midiData[1], midiData[2], event->deltaFrames);
 		}
 		return 1;
-
 	case audioMasterSetTime:
 		SHOW_CALLBACK ("amc: audioMasterSetTime\n");
 		// VstTimenfo* in <ptr>, filter in <value>, not supported
@@ -185,13 +182,11 @@ jack_host_callback (struct AEffect* effect, int32_t  opcode, int32_t  index, int
 	case audioMasterTempoAt:
 		SHOW_CALLBACK ("amc: audioMasterTempoAt\n");
 		memset(&_timeInfo, 0, sizeof(_timeInfo));
-		if (jackvst) {
-			tstate = jack_transport_query (jackvst->client, &jack_pos);
-			return jack_pos.beats_per_minute * 10000.0;
-		}
+		if (! jackvst) return 0;
+		
+		tstate = jack_transport_query (jackvst->client, &jack_pos);
 		// returns tempo (in bpm * 10000) at sample frame location passed in <value>
-		return 0;
-
+		return jack_pos.beats_per_minute * 10000.0;
 	case audioMasterGetNumAutomatableParameters:
 		SHOW_CALLBACK ("amc: audioMasterGetNumAutomatableParameters\n");
 		return 0;
@@ -211,16 +206,19 @@ jack_host_callback (struct AEffect* effect, int32_t  opcode, int32_t  index, int
 	case audioMasterNeedIdle:
 		SHOW_CALLBACK ("amc: audioMasterNeedIdle\n");
 		// plug needs idle calls (outside its editor window)
-                if( jackvst )
-                    jackvst->fst->wantIdle = TRUE;
-		
+                if( jackvst ) jackvst->fst->wantIdle = TRUE;
 		return 1;
-
 	case audioMasterSizeWindow:
-		SHOW_CALLBACK ("amc: audioMasterSizeWindow\n");
+		SHOW_CALLBACK ("amc: audioMasterSizeWindow %d %d\n", index, value);
 		// index: width, value: height
-		return 0;
+		if (! jackvst) return 0;
 
+		jackvst->fst->width = index + 6;
+		jackvst->fst->height = value + 24;
+		jackvst->fst->wantResize = TRUE;
+		/* Resize also GTK window in popup (embedded) mode */
+		if (jackvst->fst->editor_popup) jackvst->want_resize = TRUE;
+		return 1;
 	case audioMasterGetSampleRate:
 		SHOW_CALLBACK ("amc: audioMasterGetSampleRate\n");
 		if( jackvst )

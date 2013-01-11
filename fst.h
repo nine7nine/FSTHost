@@ -108,6 +108,7 @@ struct _FST
 	int			xid;    /* X11 XWindow */
 	int			width;
 	int			height;
+	bool			wantResize;
 	bool			wantIdle;
 
 	bool			program_changed;
