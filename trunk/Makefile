@@ -96,7 +96,7 @@ clean:: $(SUBDIRS:%=%/__clean__) $(EXTRASUBDIRS:%=%/__clean__)
 	$(RM) $(EXES:%=%.dbg.o) $(EXES:%=%.so) $(EXES:%.exe=%)
 
 install: $(fsthost_MODULE)
-	install -Dm 0644 fsthost.exe.so $(DESTDIR)$(LIB_INST_PATH)/fsthost.exe.so
+	install -Dm 0644 fsthost.so $(DESTDIR)$(LIB_INST_PATH)/fsthost.so
 	install -Dm 0755 fsthost $(DESTDIR)$(BIN_INST_PATH)/fsthost
 	install -Dm 0755 fsthost_menu $(DESTDIR)$(BIN_INST_PATH)/fsthost_menu
 
@@ -111,13 +111,15 @@ DEFLIB = $(LIBRARY_PATH) $(LIBRARIES) $(DLL_PATH)
 
 $(fsthost_MODULE): $(fsthost_OBJS)
 	$(LINK) $(fsthost_LDFLAGS) -o $@ $(fsthost_OBJS) $(fsthost_LIBRARY_PATH) $(DEFLIB) $(fsthost_DLLS:%=-l%) $(fsthost_LIBRARIES:%=-l%)
+# Fix names
+	mv $@.exe $@
+	mv $@.exe.so $@.so
 # Add support for WINE_RT
 	sed -i -e 's|-n "$$appdir"|-r "$$appdir/$$appname"|' \
+		-e 's|.exe.so|.so|' \
 		-e '3i export WINEPATH="$(LIB_INST_PATH)"' \
 		-e '3i export WINE_RT=$${WINE_RT:-10}' \
 		-e '3i export L_RT_THREADS=1' \
 		-e '3i export L_ENABLE_PIPE_SYNC_FOR_APP=1' \
-		-e '3i export WINE_SRV_RT=$${WINE_SRV_RT:-15}' $(fsthost_MODULE).exe
-# Cut extension from binary name
-	mv $(fsthost_MODULE).exe $(fsthost_MODULE)
+		-e '3i export WINE_SRV_RT=$${WINE_SRV_RT:-15}' $@
 
