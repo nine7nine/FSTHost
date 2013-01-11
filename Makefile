@@ -4,8 +4,8 @@ SUBDIRS               =
 DLLS                  =
 EXES                  = fsthost
 
-#LASH_EXISTS := $(shell if pkg-config --exists lash-1.0; then echo yes; else echo no; fi)
-LAST_EXISTS := 'no'
+LASH_EXISTS := $(shell if pkg-config --exists lash-1.0; then echo yes; else echo no; fi)
+#LAST_EXISTS := 'no'
 
 ### Common settings
 
