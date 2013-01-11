@@ -110,15 +110,19 @@ register_window_class() {
 	return TRUE;
 }
 
+static void fst_resize_editor (FST *fst) {
+	SetWindowPos(fst->window, HWND_BOTTOM, 0, 0, fst->width, fst->height, SWP_STATECHANGED|
+		SWP_ASYNCWINDOWPOS|SWP_NOCOPYBITS|SWP_NOMOVE|SWP_NOZORDER|SWP_NOOWNERZORDER|SWP_DEFERERASE);
+}
+
 bool
 fst_show_editor (FST *fst) {
 	if (!fst->window) {
 		fst_error("no window to show");
 		return FALSE;
 	}
-
-	SetWindowPos(fst->window, HWND_BOTTOM, 0, 0, fst->width, fst->height, SWP_STATECHANGED|
-		SWP_ASYNCWINDOWPOS|SWP_NOCOPYBITS|SWP_NOMOVE|SWP_NOZORDER|SWP_NOOWNERZORDER|SWP_DEFERERASE);
+	
+	fst_resize_editor(fst);
 	ShowWindowAsync(fst->window, SW_SHOWNORMAL);
 
 	return TRUE;
@@ -578,8 +582,13 @@ static void fst_event_dispatcher() {
 		if (fst->wantIdle)
 			fst->plugin->dispatcher (fst->plugin, effIdle, 0, 0, NULL, 0);  
 
-		if (fst->window)
+		if (fst->window) {
 			fst->plugin->dispatcher (fst->plugin, effEditIdle, 0, 0, NULL, 0);
+			if (fst->wantResize) {
+				fst->wantResize = FALSE;
+				fst_resize_editor(fst);
+			}
+		}
 
 		fst_update_current_program(fst);
 

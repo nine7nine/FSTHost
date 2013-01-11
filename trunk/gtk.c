@@ -217,8 +217,7 @@ load_handler (GtkToggleButton *but, gboolean ptr)
 }
 
 static gboolean
-configure_handler (GtkWidget* widget, GdkEventConfigure* ev, GtkSocket *sock)
-{
+configure_handler (GtkWidget* widget, GdkEventConfigure* ev, GtkSocket *sock) {
 	XEvent event;
 	gint x, y;
 	GdkWindow *w;
@@ -335,8 +334,7 @@ channel_change (GtkComboBox *combo, JackVST *jvst) {
 }
 
 static gboolean
-idle_cb(JackVST *jvst)
-{
+idle_cb(JackVST *jvst) {
 	FST* fst = (FST*) jvst->fst;
 	if (quit) {
 		gtk_main_quit();
@@ -422,10 +420,14 @@ idle_cb(JackVST *jvst)
 		sprintf(tmpstr, "Bypass (MIDI CC: %d)", mode_cc);
 		gtk_widget_set_tooltip_text(bypass_button, tmpstr);
 	}
-	// Editor button in non-popup mode
+
+	// Editor button in non-popup mode (not embedded)
 	if (! jvst->fst->editor_popup) {
-		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(editor_button), 
-			jvst->fst->window ? TRUE : FALSE);
+		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(editor_button), jvst->fst->window ? TRUE : FALSE);
+	// If is embedded and want resize window
+	} else if (jvst->fst->window && jvst->want_resize) {
+		jvst->want_resize = FALSE;
+		gtk_widget_set_size_request(gtk_socket, jvst->fst->width-6, jvst->fst->height-24);
 	}
 
 #ifdef HAVE_LASH
