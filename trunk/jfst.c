@@ -977,7 +977,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	printf("Done\n");
 
 	if (status & JackNameNotUnique) {
-		jvst->client_name = jack_get_client_name(client);
+		jvst->client_name = jack_get_client_name(jvst->client);
 		printf("Jack change our name to %s\n", jvst->client_name);
 	}
 
