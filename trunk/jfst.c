@@ -133,7 +133,7 @@ bool jvst_send_sysex(JackVST* jvst, enum SysExWant sysex_want) {
 				jvst->sysex_ident_reply.version[g] = rand() % 128;
 				printf(" %X", jvst->sysex_ident_reply.version[g]);
 			}
-			printf("\n");
+			putchar('\n');
 		}
 		break;
 	}
@@ -639,8 +639,7 @@ midi_out:
 }
 
 static bool
-session_callback( JackVST* jvst )
-{
+session_callback( JackVST* jvst ) {
 	printf("session callback\n");
 
 	jack_session_event_t *event = jvst->session_event;
@@ -649,8 +648,10 @@ session_callback( JackVST* jvst )
 	char filename[MAX_PATH];
 
 	snprintf( filename, sizeof(filename), "%sstate.fps", event->session_dir );
-	if ( ! jvst_save_state( jvst, filename ) )
+	if ( ! jvst_save_state( jvst, filename ) ) {
+		printf("SET ERROR\n");
 		event->flags |= JackSessionSaveError;
+	}
 
 	snprintf( retval, sizeof(retval), "%s -U %d -u %s -s \"${SESSION_DIR}state.fps\" \"%s\"",
 		APPNAME, jvst->sysex_dump.uuid, event->client_uuid, jvst->handle->path);
@@ -669,8 +670,7 @@ session_callback( JackVST* jvst )
 }
 
 static void
-session_callback_aux( jack_session_event_t *event, void* arg )
-{
+session_callback_aux( jack_session_event_t *event, void* arg ) {
 	JackVST* jvst = (JackVST*) arg;
 
         jvst->session_event = event;
@@ -836,6 +836,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	char*		menv;
 	FST*		fst;
 	struct AEffect*	plugin;
+	jack_status_t	status;
 	short		i;
 	short		opt_numIns = 0;
 	short		opt_numOuts = 0;
@@ -845,7 +846,6 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	const char*	dbinfo_path = NULL;
 	const char*	connect_to = NULL;
 	const char*	plug_path;
-
 	int		sample_rate = 0;
 	long		block_size = 0;
 
@@ -934,8 +934,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	jvst_first = jvst;
 
 	menv = getenv("FSTHOST_NOGUI");
-	if (menv && strtol(menv, NULL, 2) == 1)
-		jvst->with_editor = WITH_EDITOR_NO;
+	if (menv && strtol(menv, NULL, 2) == 1) jvst->with_editor = WITH_EDITOR_NO;
 
 	jvst_set_volume(jvst, 63);
 
@@ -957,7 +956,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	fst = jvst->fst;
 	plugin = fst->plugin;
 
-	// Set Thread policy - usefull only with WineRT patch
+	// Set Thread policy - usefull only with WineRT/LPA patch
 	h_thread = GetCurrentThread();
 	//SetPriorityClass ( h_thread, REALTIME_PRIORITY_CLASS);
 	SetPriorityClass ( h_thread, ABOVE_NORMAL_PRIORITY_CLASS);
@@ -970,12 +969,22 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	jack_set_error_function(jvst_log);
 
 	printf("Starting Jack thread ... ");
-	jvst->client = jack_client_open(jvst->client_name,JackSessionID,NULL,jvst->uuid);
+	jvst->client = jack_client_open(jvst->client_name,JackSessionID,&status,jvst->uuid);
 	if (! jvst->client) {
 		fst_error ("can't connect to JACK");
 		return 1;
 	}
 	printf("Done\n");
+
+	if (status & JackNameNotUnique) {
+		jvst->client_name = jack_get_client_name(client);
+		printf("Jack change our name to %s\n", jvst->client_name);
+	}
+
+	// Set client callbacks
+	jack_set_thread_creator (wine_pthread_create);
+	jack_set_process_callback (jvst->client, (JackProcessCallback) process_callback, jvst);
+	jack_set_session_callback( jvst->client, session_callback_aux, jvst );
 
 	/* set rate and blocksize */
 	sample_rate = (int) jack_get_sample_rate(jvst->client);
@@ -985,8 +994,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	plugin->dispatcher (plugin, effSetSampleRate, 0, 0, NULL, (float) sample_rate);
 	plugin->dispatcher (plugin, effSetBlockSize, 0, jack_get_buffer_size (jvst->client), NULL, 0.0f);
 
-	// ok.... plugin is running... lets bind to lash...
-	
+	// Register / allocate MIDI ports
 	jvst->midi_inport = 
 		jack_port_register(jvst->client, "midi-in", JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
 
@@ -1027,6 +1035,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 			jack_ringbuffer_mlock(jvst->ringbuffer);
 		}
 	}
+
 	// Register / allocate audio ports
 	jvst->numIns = (opt_numIns > 0 && opt_numIns < plugin->numInputs) ? opt_numIns : plugin->numInputs;
 	jvst->numOuts = (opt_numOuts > 0 && opt_numOuts < plugin->numOutputs) ? opt_numOuts : plugin->numOutputs;
@@ -1062,22 +1071,12 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 		}
 	}
 
-	jack_set_thread_creator (wine_pthread_create);
-
-	// Start process audio
-	jack_set_process_callback (jvst->client, (JackProcessCallback) process_callback, jvst);
-
-        if (jack_set_session_callback) {
-             printf( "Setting up session callback\n" );
-             jack_set_session_callback( jvst->client, session_callback_aux, jvst );
-        }
-
 	// Handling SIGINT for clean quit
 	struct sigaction sa = {0};
 	sa.sa_handler = &signal_handler;
 	sigaction(SIGINT, &sa, NULL);
 
-	// Save state on signal SIGUSR1 - mostly for ladish support
+	// Handling SIGUSR1 for save state - mostly for ladish support
 	if (sigusr1_save_state && jvst->default_state_file)
 		sigaction(SIGUSR1, &sa, NULL);
 
@@ -1101,11 +1100,8 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 		(GSourceFunc) jvst_idle_cb, jvst, NULL);
 
 	// Auto connect on start
-	if (connect_to)
-		jvst_connect(jvst, connect_to);
-
-	if (connect_midi_to_physical)
-		jvst_connect_midi_to_physical(jvst);
+	if (connect_to) jvst_connect(jvst, connect_to);
+	if (connect_midi_to_physical) jvst_connect_midi_to_physical(jvst);
 
 	// Initialize random generator - usefull for SysEx ID negotiation
 	srand(GetTickCount());
