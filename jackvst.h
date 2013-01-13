@@ -58,6 +58,7 @@ struct _JackVST {
     bool            midi_learn;
     short           midi_learn_CC;
     int             midi_learn_PARAM;
+    short           midi_self_pc;
 
     /* SysEx send support */
     pthread_mutex_t   sysex_lock;
