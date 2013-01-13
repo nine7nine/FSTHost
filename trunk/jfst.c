@@ -79,8 +79,8 @@ JackVST* jvst_new() {
 	jvst->midi_learn = FALSE;
 	jvst->midi_learn_CC = -1;
 	jvst->midi_learn_PARAM = -1;
-	for(i=0; i<128;++i)
-		jvst->midi_map[i] = -1;
+	for(i=0; i<128;++i) jvst->midi_map[i] = -1;
+	jvst->midi_self_pc = -2; // -2 here mean that plugin take care of Program Change
 
 	// Little trick (const enrties)
 	SysExIdentReply sxir = SYSEX_IDENT_REPLY;
@@ -361,8 +361,7 @@ process_midi_output(JackVST* jvst, jack_nframes_t nframes)
 
 	jack_midi_clear_buffer(port_buffer);
 
-	if (! jvst->want_midi_out)
-		goto send_sysex;
+	if (! jvst->want_midi_out) goto send_sysex;
 
 	int read;
 	struct MidiMessage ev;
@@ -390,7 +389,6 @@ process_midi_output(JackVST* jvst, jack_nframes_t nframes)
 		if ( jack_midi_event_write(port_buffer, t, ev.data, ev.len) )
 			fst_error("queue: jack_midi_event_write failed, NOTE LOST.");
 	}
-
 send_sysex:
 	// Send SysEx
 	if (jvst->sysex_want == SYSEX_WANT_NO)
@@ -426,8 +424,7 @@ send_sysex:
 }
 
 static inline void
-process_midi_input(JackVST* jvst, jack_nframes_t nframes)
-{
+process_midi_input(JackVST* jvst, jack_nframes_t nframes) {
 	struct AEffect* plugin = jvst->fst->plugin;
 
 	void *port_buffer = jack_port_get_buffer( jvst->midi_inport, nframes );
@@ -439,7 +436,7 @@ process_midi_input(JackVST* jvst, jack_nframes_t nframes)
 		num_jackevents = MIDI_EVENT_MAX;
 
 	for( i=0; i < num_jackevents; i++ ) {
-		if ( jack_midi_event_get( &jackevent, port_buffer, i ) != 0 )
+		if ( jack_midi_event_get( &jackevent, port_buffer, i ) )
 			break;
 
 		// SysEx
@@ -469,8 +466,9 @@ process_midi_input(JackVST* jvst, jack_nframes_t nframes)
 			&&  ( (jackevent.buffer[0] & 0x0F) != jvst->channel - 1) )
 			continue;
 
-		// CC assigments
-		if ( (jackevent.buffer[0] & 0xF0) == 0xB0 ) {
+		switch ( jackevent.buffer[0] & 0xF0) {
+		case 0xB0: ;
+			// CC assigments
 			short CC = jackevent.buffer[1];
 			short VALUE = jackevent.buffer[2];
 
@@ -487,15 +485,13 @@ process_midi_input(JackVST* jvst, jack_nframes_t nframes)
 					jvst->want_state = WANT_STATE_NO;
 				}
 				continue;
-			}
 			// If Volume control is enabled then grab CC7 messages
-			if ( (jvst->volume != -1) && (CC == 7) ) {
+			} else if (CC == 7 && jvst->volume != -1) {
 				jvst_set_volume(jvst, VALUE);
 				continue;
 			}
 			// In bypass mode do not touch plugin
-			if (jvst->bypassed)
-				continue;
+			if (jvst->bypassed) continue;
 			// Mapping MIDI CC
 			if ( jvst->midi_learn ) {
 				jvst->midi_learn_CC = CC;
@@ -505,18 +501,25 @@ process_midi_input(JackVST* jvst, jack_nframes_t nframes)
 				float value = 1.0/127.0 * (float) VALUE;
 				plugin->setParameter( plugin, parameter, value );
 			}
+			break;
+		case 0xC0:
+			// Self Program Change
+			if (jvst->midi_self_pc != -2) {
+				jvst->midi_self_pc = jackevent.buffer[1];
+				// OFC don't forward this message to plugin
+				continue;
+			}
+			break;
 		}
 
 		// ... wanna play ?
-		if ( jvst->bypassed || ! jvst->want_midi_in )
-			continue;
+		if ( jvst->bypassed || ! jvst->want_midi_in ) continue;
 		
 		if (stuffed_events >= MIDI_EVENT_MAX) {
 			fst_error("Error: Note dropped, no more space in buffer (max %d notes)", MIDI_EVENT_MAX);
 			continue;
 		}
-
-		// ... let's the music play
+		/* Prepare MIDI events */
 		jvst->event_array[stuffed_events].type = kVstMidiType;
 		jvst->event_array[stuffed_events].byteSize = 24;
 		jvst->event_array[stuffed_events].deltaFrames = jackevent.time;
@@ -528,6 +531,7 @@ process_midi_input(JackVST* jvst, jack_nframes_t nframes)
 		++stuffed_events;
 	}
 
+	// ... let's the music play
 	if ( stuffed_events > 0 ) {
 		jvst->events->numEvents = stuffed_events;
 		plugin->dispatcher (plugin, effProcessEvents, 0, 0, jvst->events, 0.0f);
@@ -540,8 +544,8 @@ queue_midi_message(JackVST* jvst, int status, int d1, int d2, jack_nframes_t del
 {
 	jack_ringbuffer_t* ringbuffer;
 	int	written;
-	int	statusHi = (status >> 4) & 0xF;
-	int	statusLo = status & 0xF;
+	short	statusHi = (status >> 4) & 0xF;
+	short	statusLo = status & 0xF;
 	struct  MidiMessage ev;
 
 	/*fst_error("queue_new_message = 0x%hhX, %d, %d\n", status, d1, d2);*/
@@ -581,8 +585,7 @@ queue_midi_message(JackVST* jvst, int status, int d1, int d2, jack_nframes_t del
 }
 
 static int
-process_callback( jack_nframes_t nframes, void* data) 
-{
+process_callback( jack_nframes_t nframes, void* data) {
 	short i, o;
 	JackVST* jvst = (JackVST*) data;
 	struct AEffect* plugin = jvst->fst->plugin;
@@ -610,8 +613,7 @@ process_callback( jack_nframes_t nframes, void* data)
 	process_midi_input(jvst, nframes);
 
 	// Bypass - because all audio jobs are done  - simply return
-	if (jvst->bypassed)
-		goto midi_out;
+	if (jvst->bypassed) goto midi_out;
 
 	// Deal with plugin
 	if (plugin->flags & effFlagsCanReplacing) {
@@ -621,14 +623,11 @@ process_callback( jack_nframes_t nframes, void* data)
 	}
 
 	// Output volume control - if enabled
-	if (jvst->volume == -1)
-		goto midi_out;
+	if (jvst->volume == -1) goto midi_out;
 
-	jack_nframes_t n=0;
+	jack_nframes_t n;
 	for(o=0; o < jvst->numOuts; o++) {
-		for(n=0; n < nframes; n++) {
-			jvst->outs[o][n] *= jvst->volume;
-		}
+		for(n=0; n < nframes; n++) jvst->outs[o][n] *= jvst->volume;
 	}
 
 midi_out:
@@ -649,7 +648,7 @@ session_callback( JackVST* jvst ) {
 
 	snprintf( filename, sizeof(filename), "%sstate.fps", event->session_dir );
 	if ( ! jvst_save_state( jvst, filename ) ) {
-		printf("SET ERROR\n");
+		printf("SAVE ERROR\n");
 		event->flags |= JackSessionSaveError;
 	}
 
@@ -679,8 +678,7 @@ session_callback_aux( jack_session_event_t *event, void* arg ) {
 }
 
 static int
-jvst_connect(JackVST *jvst, const char *audio_to)
-{
+jvst_connect(JackVST *jvst, const char *audio_to) {
 	unsigned short i,j;
 	const char *pname;
 	const char **jports;
@@ -688,13 +686,13 @@ jvst_connect(JackVST *jvst, const char *audio_to)
 
 	// Connect audio port
 	jports = jack_get_ports(jvst->client, audio_to, JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput);
-	if (jports == NULL) {
+	if (!jports) {
 		printf("Can't find any ports for %s\n", audio_to);
 		return 0;
 	}
 
-	for (i=0, j=0; jports[i] != NULL && j < jvst->numOuts; i++) {
-		pname = jack_port_name(jvst->outports[j++]);
+	for (i=0, j=0; jports[i] && j < jvst->numOuts; i++, j++) {
+		pname = jack_port_name(jvst->outports[j]);
 		jack_connect(jvst->client, pname, jports[i]);
 		printf("Connect: %s -> %s\n", pname, jports[i]);
 	}
@@ -707,11 +705,10 @@ jvst_connect_midi_to_physical(JackVST* jvst) {
 	const char **jports;
 
         jports = jack_get_ports(jvst->client, NULL, JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput|JackPortIsPhysical);
-        if (jports == NULL)
-		return;
+        if (!jports) return;
 
 	const char *pname = jack_port_name(jvst->midi_inport);
-        for (i=0; jports[i] != NULL; i++) {
+        for (i=0; jports[i]; i++) {
 		if (jack_port_connected_to(jvst->midi_inport, jports[i]))
 			continue;
 
@@ -722,7 +719,7 @@ jvst_connect_midi_to_physical(JackVST* jvst) {
 }
 
 static bool
-jvst_idle_cb(JackVST* jvst) {
+jvst_idle(JackVST* jvst) {
 	const char **jports;
 	jack_port_t* port;
 	unsigned short i;
@@ -744,16 +741,21 @@ jvst_idle_cb(JackVST* jvst) {
 		) jvst_send_sysex(jvst, SYSEX_WANT_DUMP);
 	}
 
+	// Self Program change support
+	if (jvst->midi_self_pc > -1) {
+		fst_program_change(jvst->fst, jvst->midi_self_pc);
+		jvst->midi_self_pc = -1;
+	}
+
 	// Connect MIDI ports to control app
 	jports = jack_get_ports(jvst->client, CTRLAPP, JACK_DEFAULT_MIDI_TYPE, 0);
-	if (jports == NULL) return TRUE;
+	if (!jports) return TRUE;
 
-	for (i=0; jports[i] != NULL; i++) {
+	for (i=0; jports[i]; i++) {
 		port = jack_port_by_name(jvst->client, jports[i]);
 
 		// Skip mine
-		if ( jack_port_is_mine(jvst->client, port) )
-			continue;
+		if ( jack_port_is_mine(jvst->client, port) ) continue;
 
 		if (jack_port_flags(port) & JackPortIsInput) {
 			if ( jack_port_connected_to(jvst->midi_outport, jports[i]) )
@@ -768,7 +770,6 @@ jvst_idle_cb(JackVST* jvst) {
 			printf("Connect to: %s\n", jports[i]);
 			jack_connect(jvst->client, jports[i], jack_port_name(jvst->midi_inport));
 		}
-
 	}
         jack_free(jports);
 
@@ -781,7 +782,7 @@ static void cmdline2arg(int *argc, char ***pargv, LPSTR cmdline) {
 	char**		argv;
 
 	szArgList = CommandLineToArgvW(GetCommandLineW(), argc);
-	if (szArgList == NULL) {
+	if (!szArgList) {
 		fprintf(stderr, "Unable to parse command line\n");
 		*argc = -1;
 		return;
@@ -819,13 +820,13 @@ static void usage(char* appname) {
 	fprintf(stderr, format, "-l", "save state to state_file on SIGUSR1 - require -s");
 	fprintf(stderr, format, "-m mode_midi_cc", "Bypass/Resume MIDI CC (default: 122)");
 	fprintf(stderr, format, "-p", "Connect MIDI In port to all physical");
+	fprintf(stderr, format, "-P", "Self MIDI Program Change handling");
 	fprintf(stderr, format, "-o num_out", "Jack number Out ports");
 	fprintf(stderr, format, "-t tempo", "Set fixed Tempo rather than using JackTransport");
 	fprintf(stderr, format, "-u uuid", "JackSession UUID");
 	fprintf(stderr, format, "-U uuid", "SysEx ID (1-127). 0 is default (do not use it)");
 	fprintf(stderr, format, "-V", "Disable Volume control / filtering CC7 messages");
 }
-
 
 int WINAPI
 WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
@@ -852,10 +853,11 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	printf("FSTHost Version: %s\n", VERSION);
 
 	JackVST*	jvst = jvst_new();
+	jvst_first = jvst;
 
         // Parse command line options
 	cmdline2arg(&argc, &argv, cmdline);
-	while ( (i = getopt (argc, argv, "bd:es:c:k:i:j:lnNm:po:t:u:U:V")) != -1) {
+	while ( (i = getopt (argc, argv, "bd:es:c:k:i:j:lnNm:pPo:t:u:U:V")) != -1) {
 		switch (i) {
 			case 'b':
 				jvst->bypassed = TRUE;
@@ -889,6 +891,10 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 				break;
 			case 'p':
 				connect_midi_to_physical = TRUE;
+				break;
+			case 'P':
+				/* -1 here mean used but not enabled */
+				jvst->midi_self_pc = -1;
 				break;
 			case 'o':
 				opt_numOuts = strtol(optarg, NULL, 10);
@@ -928,10 +934,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 
 	plug_path = argv[optind];
 
-	if (dbinfo_path)
-		return fst_info(dbinfo_path, plug_path);
-
-	jvst_first = jvst;
+	if (dbinfo_path) return fst_info(dbinfo_path, plug_path);
 
 	menv = getenv("FSTHOST_NOGUI");
 	if (menv && strtol(menv, NULL, 2) == 1) jvst->with_editor = WITH_EDITOR_NO;
@@ -944,8 +947,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 		return 1;
 	}
 
-	if (!jvst->client_name)
-		jvst->client_name = jvst->handle->name;
+	if (!jvst->client_name) jvst->client_name = jvst->handle->name;
 
 	printf( "Revive plugin: %s\n", jvst->client_name);
 	if ((jvst->fst = fst_open (jvst->handle, (audioMasterCallback) jack_host_callback, jvst)) == NULL) {
@@ -1097,7 +1099,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	// Init Glib main event loop
 	glib_main_loop = g_main_loop_new(NULL, FALSE);
 	g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 750,
-		(GSourceFunc) jvst_idle_cb, jvst, NULL);
+		(GSourceFunc) jvst_idle, jvst, NULL);
 
 	// Auto connect on start
 	if (connect_to) jvst_connect(jvst, connect_to);

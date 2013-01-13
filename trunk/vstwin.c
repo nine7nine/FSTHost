@@ -262,14 +262,14 @@ fst_get_program_name (FST *fst, short program, char* name, size_t size) {
 	// remove all non ascii signs
 	for (c = name; (*c != 0) && (c - name) < size; c++) {
 		if ( isprint(*c)) {
-			if (m != NULL) {
+			if (m) {
 				*m = *c;
 				m = c;
 			}
-		} else if (m == NULL) m = c;
+		} else if (!m) m = c;
 	}
 	// make sure of string terminator
-	if (m != NULL) *m = 0; else *c = 0;
+	if (m) *m = 0; else *c = 0;
 
 	return TRUE; 
 }
@@ -376,7 +376,7 @@ fst_event_loop_remove_plugin (FST* fst) {
 
 static void
 fst_event_loop_add_plugin (FST* fst) {
-	if (fst_first == NULL) {
+	if (!fst_first) {
 		fst_first = fst;
 	} else {
 		FST* p = fst_first;
@@ -409,7 +409,7 @@ fst_load (const char * path) {
 	if ( !dll && (envdup = getenv("VST_PATH"))) {
 		envdup = strdup (envdup);
 		vst_path = strtok (envdup, ":");
-		while (vst_path != NULL) {
+		while (vst_path) {
 			last = vst_path + strlen(vst_path) - 1;
 			if (*last == '/') *last='\0';
 
