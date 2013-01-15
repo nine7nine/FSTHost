@@ -346,8 +346,10 @@ wine_pthread_create (pthread_t* thread_id, const pthread_attr_t* attr, void *(*f
 }
 
 static inline void
-process_midi_output(JackVST* jvst, jack_nframes_t nframes)
-{
+process_midi_output(JackVST* jvst, jack_nframes_t nframes) {
+	// Do not process anything if MIDI OUT port is not connected
+	if ( ! jack_port_connected ( jvst->midi_outport ) ) return;
+
 	/* This jack ringbuffer consume code was largely taken from jack-keyboard */
 	/* written by Edward Tomasz Napierala <trasz@FreeBSD.org>                 */
 	void *port_buffer;
@@ -425,6 +427,9 @@ send_sysex:
 
 static inline void
 process_midi_input(JackVST* jvst, jack_nframes_t nframes) {
+	// Do not process anything if MIDI IN port is not connected
+	if ( ! jack_port_connected ( jvst->midi_inport ) ) return;
+
 	struct AEffect* plugin = jvst->fst->plugin;
 
 	void *port_buffer = jack_port_get_buffer( jvst->midi_inport, nframes );
@@ -540,8 +545,7 @@ process_midi_input(JackVST* jvst, jack_nframes_t nframes) {
 
 // This function is used in audiomaster.c
 void
-queue_midi_message(JackVST* jvst, int status, int d1, int d2, jack_nframes_t delta )
-{
+queue_midi_message(JackVST* jvst, int status, int d1, int d2, jack_nframes_t delta ) {
 	jack_ringbuffer_t* ringbuffer;
 	int	written;
 	short	statusHi = (status >> 4) & 0xF;
@@ -754,7 +758,10 @@ jvst_idle(JackVST* jvst) {
 	}
 
 	// Connect MIDI ports to control app if Graph order change
-	if (! jvst->graph_order_change) return FALSE;
+	if (! jvst->graph_order_change) return TRUE;
+	jvst->graph_order_change = FALSE;
+
+	printf("Jack order chnge\n");
 
 	jports = jack_get_ports(jvst->client, CTRLAPP, JACK_DEFAULT_MIDI_TYPE, 0);
 	if (!jports) return TRUE;
