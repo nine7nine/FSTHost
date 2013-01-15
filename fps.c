@@ -109,6 +109,15 @@ fps_process_node(JackVST* jvst, xmlNode *a_node)
 
 	  if (channel >= 0 && channel <= 17)
 	     jvst->channel = channel;
+       // MIDI Program Change handling type
+       } else if (strcmp(cur_node->name, "midi_pc") == 0) {
+          if ( strcmp(xmlGetProp(cur_node, "type"), "plugin") == 0 ) {
+              jvst->midi_pc = MIDI_PC_PLUG;
+          } else if ( strcmp(xmlGetProp(cur_node, "type"), "self") == 0 ) {
+              jvst->midi_pc = MIDI_PC_SELF;
+          } else {
+              printf("FPS: midi_pc : wrong value - allowed: \"plugin\" or \"self\"\n");
+          }
        // Volume
        } else if (strcmp(cur_node->name, "volume") == 0) {
           jvst_set_volume(jvst, strtol(xmlGetProp(cur_node, "level"), NULL, 10));
@@ -239,6 +248,11 @@ bool fps_save (JackVST* jvst, const char* filename) {
    // MIDI Channel
    cur_node = xmlNewChild(plugin_state_node, NULL, "channel", NULL);
    xmlNewProp(cur_node, "number", int2str(tString, &jvst->channel));
+
+   // MIDI Program Change handling type
+   cur_node = xmlNewChild(plugin_state_node, NULL, "midi_pc", NULL);
+   snprintf(tString, sizeof(tString), (jvst->midi_pc > MIDI_PC_PLUG) ? "self" : "plugin");
+   xmlNewProp(cur_node, "type", tString);
 
    // Volume
    if (jvst->volume != -1) {

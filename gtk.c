@@ -28,6 +28,7 @@ static	GtkWidget* channel_listbox;
 static  GtkWidget* event_box;
 static  GtkWidget* preset_listbox;
 static	GtkWidget* midi_learn_toggle;
+static	GtkWidget* midi_pc;
 static	GtkWidget* load_button;
 static	GtkWidget* save_button;
 static	GtkWidget* sysex_button;
@@ -76,15 +77,19 @@ volume_handler (GtkVScale *slider, gboolean ptr)
 }
 
 static void
-sysex_handler (GtkToggleButton *but, gboolean ptr)
-{
+sysex_handler (GtkToggleButton *but, gboolean ptr) {
 	JackVST* jvst = (JackVST*) ptr;
 	jvst_send_sysex(jvst, SYSEX_WANT_DUMP);
 }
 
 static void
-save_handler (GtkToggleButton *but, gboolean ptr)
-{
+midi_pc_handler (GtkToggleButton *but, gboolean ptr) {
+	JackVST* jvst = (JackVST*) ptr;
+	jvst->midi_pc = 
+		(gtk_toggle_button_get_active (but)) ? MIDI_PC_SELF : MIDI_PC_PLUG;
+}
+static void
+save_handler (GtkToggleButton *but, gboolean ptr) {
 	JackVST* jvst = (JackVST*) ptr;
 
 	GtkWidget *dialog;
@@ -214,6 +219,9 @@ load_handler (GtkToggleButton *but, gboolean ptr)
 	gtk_list_store_clear( GTK_LIST_STORE( store ) );
 	create_preset_store( store, jvst->fst );
         g_signal_handler_unblock (preset_listbox, preset_listbox_signal);
+
+	// Update MIDI PC button
+	gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON( midi_pc ), (jvst->midi_pc > MIDI_PC_PLUG) );
 }
 
 static gboolean
@@ -497,8 +505,7 @@ make_img_button(const gchar *stock_id, const gchar *tooltip, bool toggle,
 
 	g_signal_connect (G_OBJECT(button), (toggle ? "toggled" : "clicked"), handler, jvst); 
 
-	if (state)
-		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(button), state);
+	if (state) gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(button), state);
 	
 	gtk_box_pack_start(GTK_BOX(hpacker), button, FALSE, FALSE, 0);
 
@@ -544,6 +551,8 @@ gtk_gui_start (JackVST* jvst) {
 		jvst, FALSE, hpacker);
 	sysex_button = make_img_button(GTK_STOCK_EXECUTE, "Send SysEx", FALSE, G_CALLBACK(sysex_handler),
 		jvst, FALSE, hpacker);
+	midi_pc = make_img_button(GTK_STOCK_CONVERT, "Self handling MIDI PC", TRUE, G_CALLBACK(midi_pc_handler),
+		jvst, (jvst->midi_pc > MIDI_PC_PLUG), hpacker);
 	//----------------------------------------------------------------------------------
 	if (jvst->volume != -1) {
 		volume_slider = gtk_hscale_new_with_range(0,127,1);

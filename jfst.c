@@ -80,7 +80,7 @@ JackVST* jvst_new() {
 	jvst->midi_learn_CC = -1;
 	jvst->midi_learn_PARAM = -1;
 	for(i=0; i<128;++i) jvst->midi_map[i] = -1;
-	jvst->midi_self_pc = -2; // -2 here mean that plugin take care of Program Change
+	jvst->midi_pc = MIDI_PC_PLUG; // mean that plugin take care of Program Change
 
 	// Little trick (const enrties)
 	SysExIdentReply sxir = SYSEX_IDENT_REPLY;
@@ -504,8 +504,8 @@ process_midi_input(JackVST* jvst, jack_nframes_t nframes) {
 			break;
 		case 0xC0:
 			// Self Program Change
-			if (jvst->midi_self_pc != -2) {
-				jvst->midi_self_pc = jackevent.buffer[1];
+			if (jvst->midi_pc != MIDI_PC_PLUG) {
+				jvst->midi_pc = jackevent.buffer[1];
 				// OFC don't forward this message to plugin
 				continue;
 			}
@@ -742,9 +742,9 @@ jvst_idle(JackVST* jvst) {
 	}
 
 	// Self Program change support
-	if (jvst->midi_self_pc > -1) {
-		fst_program_change(jvst->fst, jvst->midi_self_pc);
-		jvst->midi_self_pc = -1;
+	if (jvst->midi_pc > MIDI_PC_SELF) {
+		fst_program_change(jvst->fst, jvst->midi_pc);
+		jvst->midi_pc = MIDI_PC_SELF;
 	}
 
 	// Connect MIDI ports to control app
@@ -893,8 +893,8 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 				connect_midi_to_physical = TRUE;
 				break;
 			case 'P':
-				/* -1 here mean used but not enabled */
-				jvst->midi_self_pc = -1;
+				/* mean used but not enabled */
+				jvst->midi_self_pc = MIDI_PC_SELF;
 				break;
 			case 'o':
 				opt_numOuts = strtol(optarg, NULL, 10);

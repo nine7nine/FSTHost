@@ -11,6 +11,9 @@
 #include "sysex.h"
 #include "fst.h"
 
+#define MIDI_PC_SELF -1
+#define MIDI_PC_PLUG -2
+
 typedef struct _JackVST JackVST;
 
 enum WantState {
@@ -58,7 +61,7 @@ struct _JackVST {
     bool            midi_learn;
     short           midi_learn_CC;
     int             midi_learn_PARAM;
-    short           midi_self_pc;
+    short           midi_pc;
 
     /* SysEx send support */
     pthread_mutex_t   sysex_lock;
