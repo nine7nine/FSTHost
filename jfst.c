@@ -718,6 +718,12 @@ jvst_connect_midi_to_physical(JackVST* jvst) {
         jack_free(jports);
 }
 
+static int
+graph_order_callback( void *arg ) {
+	JackVST* jvst = arg;
+	jvst->graph_order_change = TRUE;
+}
+
 static bool
 jvst_idle(JackVST* jvst) {
 	const char **jports;
@@ -747,7 +753,9 @@ jvst_idle(JackVST* jvst) {
 		jvst->midi_pc = MIDI_PC_SELF;
 	}
 
-	// Connect MIDI ports to control app
+	// Connect MIDI ports to control app if Graph order change
+	if (! jvst->graph_order_change) return FALSE;
+
 	jports = jack_get_ports(jvst->client, CTRLAPP, JACK_DEFAULT_MIDI_TYPE, 0);
 	if (!jports) return TRUE;
 
@@ -894,7 +902,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 				break;
 			case 'P':
 				/* mean used but not enabled */
-				jvst->midi_self_pc = MIDI_PC_SELF;
+				jvst->midi_pc = MIDI_PC_SELF;
 				break;
 			case 'o':
 				opt_numOuts = strtol(optarg, NULL, 10);
@@ -987,6 +995,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	jack_set_thread_creator (wine_pthread_create);
 	jack_set_process_callback (jvst->client, (JackProcessCallback) process_callback, jvst);
 	jack_set_session_callback( jvst->client, session_callback_aux, jvst );
+	jack_set_graph_order_callback(jvst->client, graph_order_callback, jvst);
 
 	/* set rate and blocksize */
 	sample_rate = (int) jack_get_sample_rate(jvst->client);

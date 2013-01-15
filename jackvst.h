@@ -56,6 +56,7 @@ struct _JackVST {
     bool            want_resize;
     double          tempo;
     float           volume; /* where 0.0 mean silence */
+    bool            graph_order_change;
 
     int             midi_map[128];
     bool            midi_learn;
