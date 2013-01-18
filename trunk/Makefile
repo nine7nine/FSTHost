@@ -119,6 +119,8 @@ $(fsthost_MODULE): $(fsthost_OBJS)
 		-e 's|.exe.so|.so|' \
 		-e '3i export WINEPATH="$(LIB_INST_PATH)"' \
 		-e '3i export WINE_RT=$${WINE_RT:-10}' \
-		-e '3i export L_ENABLE_PIPE_SYNC_FOR_APP=$${0##*/}' \
+		-e '3i export L_ENABLE_PIPE_SYNC_FOR_APP="$@"' \
+		-e '3i export L_RT_POLICY="FF"' \
+		-e '3i export L_RT_PRIO=$${L_RT_PRIO:-10}' \
 		-e '3i export WINE_SRV_RT=$${WINE_SRV_RT:-15}' $@
 
