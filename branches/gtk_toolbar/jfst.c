@@ -106,7 +106,11 @@ sysex_makeASCII(uint8_t* ascii_midi_dest, char* name, size_t size_dest) {
 }
 
 // Prepare data for RT thread and wait for send
-bool jvst_send_sysex(JackVST* jvst, enum SysExWant sysex_want) {
+void
+jvst_send_sysex(JackVST* jvst, enum SysExWant sysex_want) {
+	/* Do not send anything if we are not connected */
+	if (! jack_port_connected ( jvst->midi_outport  ) ) return;
+
 	pthread_mutex_lock (&jvst->sysex_lock);
 	short g = 0;
 
@@ -126,7 +130,6 @@ bool jvst_send_sysex(JackVST* jvst, enum SysExWant sysex_want) {
 		break;
 	/* Set once on start */
 	case SYSEX_WANT_IDENT_REPLY:
-//		jvst->sysex_ident_reply.model[1] = ;
 		if (jvst->sysex_ident_reply.model[1] == 0) {
 			printf("Random ID:");
 			for(g=0; g < sizeof(jvst->sysex_ident_reply.version); g++) {

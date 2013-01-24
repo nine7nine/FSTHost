@@ -282,13 +282,12 @@ editor_handler (GtkToggleButton *but, gboolean ptr)
 		// Add Widget socket to vBox
 		gtk_box_pack_start (GTK_BOX(vpacker), gtk_socket, TRUE, FALSE, 0);
 
+		gtk_widget_set_size_request(gtk_socket, jvst->fst->width, jvst->fst->height);
 		gtk_socket_add_id (GTK_SOCKET (gtk_socket), jvst->fst->xid);
 		gtk_socket_signal = g_signal_connect (G_OBJECT(window), "configure-event",
 			G_CALLBACK(configure_handler), gtk_socket);
 
 		fst_show_editor(jvst->fst);
-
-		gtk_widget_set_size_request(gtk_socket, jvst->fst->width, jvst->fst->height);
 		gtk_widget_show(gtk_socket);
 	} else if (! jvst->fst->editor_popup) {
 		fst_destroy_editor(jvst->fst);
