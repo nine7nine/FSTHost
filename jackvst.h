@@ -90,7 +90,7 @@ struct _JackVST {
     jack_ringbuffer_t* ringbuffer;
 };
 
-bool jvst_send_sysex(JackVST* jvst, enum SysExWant);
+void jvst_send_sysex(JackVST* jvst, enum SysExWant);
 void jvst_bypass(JackVST* jvst, bool bypass);
 
 static inline void
