@@ -729,6 +729,7 @@ static int
 graph_order_callback( void *arg ) {
 	JackVST* jvst = arg;
 	jvst->graph_order_change = TRUE;
+	return 0;
 }
 
 static bool
@@ -763,8 +764,6 @@ jvst_idle(JackVST* jvst) {
 	// Connect MIDI ports to control app if Graph order change
 	if (! jvst->graph_order_change) return TRUE;
 	jvst->graph_order_change = FALSE;
-
-	printf("Jack order chnge\n");
 
 	jports = jack_get_ports(jvst->client, CTRLAPP, JACK_DEFAULT_MIDI_TYPE, 0);
 	if (!jports) return TRUE;

@@ -96,7 +96,8 @@ register_window_class() {
 	wclass.hInstance = hInst;
 	wclass.hIcon = LoadIcon(hInst, "FST");
 	wclass.hCursor = LoadCursor(0, IDI_APPLICATION);
-	wclass.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
+//	wclass.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
+	wclass.hbrBackground = GetSysColorBrush(COLOR_BTNFACE);
 	wclass.lpszMenuName = "MENU_FST";
 	wclass.lpszClassName = "FST";
 	wclass.hIconSm = 0;
