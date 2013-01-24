@@ -20,7 +20,7 @@ static bool quit = FALSE;
 static	GtkWidget* window;
 static	GtkWidget* gtk_socket;
 static	GtkWidget* vpacker;
-static	GtkWidget* hpacker;
+static	GtkWidget *toolbar;
 static	GtkWidget* bypass_button;
 static	GtkWidget* editor_button;
 static	GtkWidget* editor_checkbox;
@@ -45,11 +45,11 @@ error_handler_t wine_error_handler;
 error_handler_t gtk_error_handler;
 
 static void
-learn_handler (GtkToggleButton *but, gboolean ptr)
+learn_handler (GtkToggleToolButton *but, gboolean ptr)
 {
 	JackVST* jvst = (JackVST*) ptr;
 	
-	if ( ! gtk_toggle_button_get_active (but) ) {
+	if ( ! gtk_toggle_tool_button_get_active (but) ) {
 		jvst->midi_learn = FALSE;
 		return;
 	}
@@ -60,11 +60,11 @@ learn_handler (GtkToggleButton *but, gboolean ptr)
 }
 
 static void
-bypass_handler (GtkToggleButton *but, gboolean ptr)
+bypass_handler (GtkToggleToolButton *but, gboolean ptr)
 {
 	JackVST* jvst = (JackVST*) ptr;
 
-	jvst_bypass(jvst, gtk_toggle_button_get_active(but));
+	jvst_bypass(jvst, gtk_toggle_tool_button_get_active(but));
 }
 
 static void
@@ -77,19 +77,19 @@ volume_handler (GtkVScale *slider, gboolean ptr)
 }
 
 static void
-sysex_handler (GtkToggleButton *but, gboolean ptr) {
+sysex_handler (GtkToggleToolButton *but, gboolean ptr) {
 	JackVST* jvst = (JackVST*) ptr;
 	jvst_send_sysex(jvst, SYSEX_WANT_DUMP);
 }
 
 static void
-midi_pc_handler (GtkToggleButton *but, gboolean ptr) {
+midi_pc_handler (GtkToggleToolButton *but, gboolean ptr) {
 	JackVST* jvst = (JackVST*) ptr;
 	jvst->midi_pc = 
-		(gtk_toggle_button_get_active (but)) ? MIDI_PC_SELF : MIDI_PC_PLUG;
+		(gtk_toggle_tool_button_get_active (but)) ? MIDI_PC_SELF : MIDI_PC_PLUG;
 }
 static void
-save_handler (GtkToggleButton *but, gboolean ptr) {
+save_handler (GtkToggleToolButton *but, gboolean ptr) {
 	JackVST* jvst = (JackVST*) ptr;
 
 	GtkWidget *dialog;
@@ -162,7 +162,7 @@ save_handler (GtkToggleButton *but, gboolean ptr) {
 }
 
 static void
-load_handler (GtkToggleButton *but, gboolean ptr)
+load_handler (GtkToggleToolButton *but, gboolean ptr)
 {
 	JackVST* jvst = (JackVST*) ptr;
 
@@ -266,11 +266,11 @@ configure_handler (GtkWidget* widget, GdkEventConfigure* ev, GtkSocket *sock) {
 }
 
 static void
-editor_handler (GtkToggleButton *but, gboolean ptr)
+editor_handler (GtkToggleToolButton *but, gboolean ptr)
 {
 	JackVST* jvst = (JackVST*) ptr;
 
-	if (gtk_toggle_button_get_active (but)) {
+	if (gtk_toggle_tool_button_get_active (but)) {
 		bool popup = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(editor_checkbox));
 		if (! fst_run_editor(jvst->fst, popup)) return;
 		if (! popup) return;
@@ -418,10 +418,10 @@ idle_cb(JackVST *jvst) {
 	gtk_label_set_text(GTK_LABEL(cpu_usage), tmpstr);
 
 	// All about Bypass/Resume
-	if (jvst->bypassed != gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(bypass_button)) &&
+	if (jvst->bypassed != gtk_toggle_tool_button_get_active (GTK_TOGGLE_TOOL_BUTTON(bypass_button)) &&
 		jvst->want_state == WANT_STATE_NO
 	) {
-		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(bypass_button), jvst->bypassed);
+		gtk_toggle_tool_button_set_active(GTK_TOGGLE_TOOL_BUTTON(bypass_button), jvst->bypassed);
 	}
 	if (jvst->want_state_cc != mode_cc) {
 		mode_cc = jvst->want_state_cc;
@@ -495,21 +495,30 @@ GtkListStore * create_channel_store() {
 // Really ugly auxiliary function for create buttons ;-)
 static GtkWidget*
 make_img_button(const gchar *stock_id, const gchar *tooltip, bool toggle,
-	GCallback handler, JackVST* jvst, bool state, GtkWidget* hpacker)
+	GCallback handler, JackVST* jvst, bool state, GtkWidget* toolbar)
 {
-	GtkWidget* button = (toggle) ? gtk_toggle_button_new() : gtk_button_new();
-	GtkWidget* image = gtk_image_new_from_stock(stock_id, GTK_ICON_SIZE_SMALL_TOOLBAR);
-	gtk_button_set_image(GTK_BUTTON(button), image);
+//	GtkToolItem* button = (toggle) ? gtk_toggle_tool_button_new() : gtk_tool_button_new(NULL, NULL);
+//	GtkWidget* image = gtk_image_new_from_stock(stock_id, GTK_ICON_SIZE_SMALL_TOOLBAR);
+//	gtk_button_set_image(GTK_BUTTON(button), image);
 
-	gtk_widget_set_tooltip_text(button, tooltip);
+
+	GtkToolItem* button;
+
+	if (toggle) {
+		button = gtk_toggle_tool_button_new_from_stock(stock_id);
+	} else {
+		button = gtk_tool_button_new_from_stock(stock_id);
+	}
+	gtk_tool_item_set_tooltip_text(button, tooltip);
 
 	g_signal_connect (G_OBJECT(button), (toggle ? "toggled" : "clicked"), handler, jvst); 
 
-	if (state) gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(button), state);
+//	if (state) gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(button), state);
 	
-	gtk_box_pack_start(GTK_BOX(hpacker), button, FALSE, FALSE, 0);
+//	gtk_box_pack_start(GTK_BOX(toolbar), button, FALSE, FALSE, 0);
+	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), button, -1);
 
-	return button;
+	return GTK_WIDGET(button);
 }
 
 bool
@@ -526,33 +535,42 @@ gtk_gui_start (JackVST* jvst) {
 	window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
 	gtk_window_set_title (GTK_WINDOW(window), jvst->client_name);
 	gtk_window_set_resizable (GTK_WINDOW(window), FALSE);
+//	gtk_window_set_default_size(GTK_WINDOW(window), 250, 200);
 
 	gtk_window_set_icon(GTK_WINDOW(window), gdk_pixbuf_new_from_xpm_data((const char**) fsthost_xpm));
-
+	
 	vpacker = gtk_vbox_new (FALSE, 7);
-	hpacker = gtk_hbox_new (FALSE, 7);
+	toolbar = gtk_toolbar_new();
+	gtk_toolbar_set_style(GTK_TOOLBAR(toolbar), GTK_TOOLBAR_ICONS);
+
+//	GtkToolItem* new = gtk_tool_button_new_from_stock(GTK_STOCK_NEW);
+//	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), new, -1);
+
+//	GtkWidget* open = gtk_tool_button_new_from_stock(GTK_STOCK_OPEN);
+//	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), open, -1);
+
 	bypass_button = make_img_button(GTK_STOCK_STOP, "Bypass", TRUE, G_CALLBACK(bypass_handler),
-		jvst, jvst->bypassed, hpacker);
+		jvst, jvst->bypassed, toolbar);
 
 	load_button = make_img_button(GTK_STOCK_OPEN, "Load", FALSE, G_CALLBACK(load_handler),
-		jvst, FALSE, hpacker);
+		jvst, FALSE, toolbar);
 	save_button = make_img_button(GTK_STOCK_SAVE_AS, "Save", FALSE, G_CALLBACK(save_handler),
-		jvst, FALSE, hpacker);
+		jvst, FALSE, toolbar);
 
 	//----------------------------------------------------------------------------------
 	editor_button = make_img_button(GTK_STOCK_EDIT, "Editor", TRUE, G_CALLBACK(editor_handler),
-		jvst, FALSE, hpacker);
+		jvst, FALSE, toolbar);
 	editor_checkbox = gtk_check_button_new();
 	gtk_widget_set_tooltip_text(editor_checkbox, "Embedded Editor");
 	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(editor_checkbox), TRUE);
-	gtk_box_pack_start(GTK_BOX(hpacker), editor_checkbox, FALSE, FALSE, 0);
+//	gtk_box_pack_start(GTK_BOX(hpacker), editor_checkbox, FALSE, FALSE, 0);
 	//----------------------------------------------------------------------------------
 	midi_learn_toggle = make_img_button(GTK_STOCK_DND, "MIDI Learn", TRUE, G_CALLBACK(learn_handler),
-		jvst, FALSE, hpacker);
+		jvst, FALSE, toolbar);
 	sysex_button = make_img_button(GTK_STOCK_EXECUTE, "Send SysEx", FALSE, G_CALLBACK(sysex_handler),
-		jvst, FALSE, hpacker);
+		jvst, FALSE, toolbar);
 	midi_pc = make_img_button(GTK_STOCK_CONVERT, "Self handling MIDI PC", TRUE, G_CALLBACK(midi_pc_handler),
-		jvst, (jvst->midi_pc > MIDI_PC_PLUG), hpacker);
+		jvst, (jvst->midi_pc > MIDI_PC_PLUG), toolbar);
 	//----------------------------------------------------------------------------------
 	if (jvst->volume != -1) {
 		volume_slider = gtk_hscale_new_with_range(0,127,1);
@@ -561,8 +579,8 @@ gtk_gui_start (JackVST* jvst) {
 		gtk_range_set_value(GTK_RANGE(volume_slider), jvst_get_volume(jvst));
 		volume_signal = g_signal_connect (G_OBJECT(volume_slider), "value_changed", 
 			G_CALLBACK(volume_handler), jvst);
-		gtk_box_pack_start(GTK_BOX(hpacker), volume_slider, FALSE, FALSE, 0);
 		gtk_widget_set_tooltip_text(volume_slider, "Volume");
+//		gtk_box_pack_start(GTK_BOX(hpacker), volume_slider, FALSE, FALSE, 0);
 	}
 	//----------------------------------------------------------------------------------
 	channel_listbox = gtk_combo_box_new_with_model ( GTK_TREE_MODEL(create_channel_store()) );
@@ -571,8 +589,8 @@ gtk_gui_start (JackVST* jvst) {
 	gtk_cell_layout_set_attributes (GTK_CELL_LAYOUT (channel_listbox), renderer, "text", 0, NULL);
 	channel_check( GTK_COMBO_BOX(channel_listbox), jvst );
 	g_signal_connect( G_OBJECT(channel_listbox), "changed", G_CALLBACK(channel_change), jvst ); 
-	gtk_box_pack_start(GTK_BOX(hpacker), channel_listbox, FALSE, FALSE, 0);
 	gtk_widget_set_tooltip_text(channel_listbox, "MIDI Channel");
+//	gtk_box_pack_start(GTK_BOX(hpacker), channel_listbox, FALSE, FALSE, 0);
 	//----------------------------------------------------------------------------------
 	GtkListStore* store = gtk_list_store_new( 2, G_TYPE_STRING, G_TYPE_INT );
 	preset_listbox = gtk_combo_box_new_with_model( GTK_TREE_MODEL(store) );
@@ -584,26 +602,28 @@ gtk_gui_start (JackVST* jvst) {
 	gtk_combo_box_set_active( GTK_COMBO_BOX(preset_listbox), jvst->fst->current_program );
 	preset_listbox_signal = g_signal_connect( G_OBJECT(preset_listbox), "changed", 
 		G_CALLBACK( program_change ), jvst ); 
-	gtk_box_pack_start(GTK_BOX(hpacker), preset_listbox, FALSE, FALSE, 0);
 	gtk_widget_set_tooltip_text(preset_listbox, "Plugin Presets");
+//	gtk_box_pack_start(GTK_BOX(hpacker), preset_listbox, FALSE, FALSE, 0);
 	//----------------------------------------------------------------------------------
 	cpu_usage = gtk_label_new ("0");
-	gtk_box_pack_start(GTK_BOX(hpacker), cpu_usage, FALSE, FALSE, 0);
 	gtk_widget_set_tooltip_text(cpu_usage, "CPU Usage");
+//	gtk_box_pack_start(GTK_BOX(hpacker), cpu_usage, FALSE, FALSE, 0);
 	//----------------------------------------------------------------------------------
 
-	gtk_container_set_border_width (GTK_CONTAINER(hpacker), 3); 
+//	gtk_container_set_border_width (GTK_CONTAINER(hpacker), 3); 
 	g_signal_connect (G_OBJECT(window), "delete_event", G_CALLBACK(destroy_handler), jvst);
 	
-	gtk_box_pack_start(GTK_BOX(vpacker), hpacker, FALSE, FALSE, 0);
+	//gtk_box_pack_start(GTK_BOX(vpacker), hpacker, FALSE, FALSE, 0);
 
+	gtk_box_pack_start(GTK_BOX(vpacker), toolbar, FALSE, FALSE, 0);
 	gtk_container_add (GTK_CONTAINER (window), vpacker);
 
  	gtk_widget_show_all (window);
 
 	// Nasty hack - toggle when signal is already connected ;-)
 	if (jvst->with_editor == WITH_EDITOR_SHOW)
-		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(editor_button), TRUE);
+//		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(editor_button), TRUE);
+		gtk_toggle_tool_button_set_active(GTK_TOGGLE_TOOL_BUTTON(editor_button), TRUE);
 
 	g_timeout_add(500, (GSourceFunc) idle_cb, jvst);
 	
