@@ -281,7 +281,7 @@ editor_handler (GtkToggleToolButton *but, gboolean ptr)
 		GTK_WIDGET_SET_FLAGS(gtk_socket, GTK_CAN_FOCUS);
 
 		// Add Widget socket to vBox
-		socket_align = gtk_alignment_new(0, 0, 0, 0);
+		socket_align = gtk_alignment_new(0.5, 0, 0, 0);
 		gtk_container_add(GTK_CONTAINER(socket_align), gtk_socket);
 		gtk_box_pack_start (GTK_BOX(vpacker), socket_align, TRUE, FALSE, 0);
 
