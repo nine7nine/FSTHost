@@ -19,6 +19,7 @@ static bool quit = FALSE;
 
 static	GtkWidget* window;
 static	GtkWidget* gtk_socket;
+static	GtkWidget* socket_align;
 static	GtkWidget* vpacker;
 static	GtkWidget *toolbar;
 static	GtkWidget* bypass_button;
@@ -280,7 +281,9 @@ editor_handler (GtkToggleToolButton *but, gboolean ptr)
 		GTK_WIDGET_SET_FLAGS(gtk_socket, GTK_CAN_FOCUS);
 
 		// Add Widget socket to vBox
-		gtk_box_pack_start (GTK_BOX(vpacker), gtk_socket, TRUE, FALSE, 0);
+		socket_align = gtk_alignment_new(0, 0, 0, 0);
+		gtk_container_add(GTK_CONTAINER(socket_align), gtk_socket);
+		gtk_box_pack_start (GTK_BOX(vpacker), socket_align, TRUE, FALSE, 0);
 
 		gtk_widget_set_size_request(gtk_socket, jvst->fst->width, jvst->fst->height);
 		gtk_socket_add_id (GTK_SOCKET (gtk_socket), jvst->fst->xid);
@@ -289,6 +292,7 @@ editor_handler (GtkToggleToolButton *but, gboolean ptr)
 
 		fst_show_editor(jvst->fst);
 
+		gtk_widget_show(socket_align);
 		gtk_widget_show(gtk_socket);
 	} else if (! jvst->fst->editor_popup) {
 		fst_destroy_editor(jvst->fst);
@@ -298,6 +302,7 @@ editor_handler (GtkToggleToolButton *but, gboolean ptr)
 		fst_destroy_editor(jvst->fst);
 		gtk_widget_set_size_request(gtk_socket, -1, -1);
 		gtk_widget_destroy(gtk_socket);
+		gtk_widget_destroy(socket_align);
 		gtk_window_resize(GTK_WINDOW(window), 1, 1);
 	}
 }
