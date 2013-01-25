@@ -536,23 +536,17 @@ gtk_gui_start (JackVST* jvst) {
 	// you can only add an id to an anchored widget.
 
 	GtkCellRenderer *renderer;
+	GtkToolItem* toolitem;
 	
 	window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
 	gtk_window_set_title (GTK_WINDOW(window), jvst->client_name);
 	gtk_window_set_resizable (GTK_WINDOW(window), FALSE);
-//	gtk_window_set_default_size(GTK_WINDOW(window), 250, 200);
 
 	gtk_window_set_icon(GTK_WINDOW(window), gdk_pixbuf_new_from_xpm_data((const char**) fsthost_xpm));
 	
 	vpacker = gtk_vbox_new (FALSE, 7);
 	toolbar = gtk_toolbar_new();
 	gtk_toolbar_set_style(GTK_TOOLBAR(toolbar), GTK_TOOLBAR_ICONS);
-
-//	GtkToolItem* new = gtk_tool_button_new_from_stock(GTK_STOCK_NEW);
-//	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), new, -1);
-
-//	GtkWidget* open = gtk_tool_button_new_from_stock(GTK_STOCK_OPEN);
-//	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), open, -1);
 
 	bypass_button = make_img_button(GTK_STOCK_STOP, "Bypass", TRUE, G_CALLBACK(bypass_handler),
 		jvst, jvst->bypassed, toolbar);
@@ -595,7 +589,9 @@ gtk_gui_start (JackVST* jvst) {
 	channel_check( GTK_COMBO_BOX(channel_listbox), jvst );
 	g_signal_connect( G_OBJECT(channel_listbox), "changed", G_CALLBACK(channel_change), jvst ); 
 	gtk_widget_set_tooltip_text(channel_listbox, "MIDI Channel");
-//	gtk_box_pack_start(GTK_BOX(hpacker), channel_listbox, FALSE, FALSE, 0);
+	toolitem = gtk_tool_item_new();
+	gtk_container_add(GTK_CONTAINER(toolitem), channel_listbox);
+	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), toolitem, -1);
 	//----------------------------------------------------------------------------------
 	GtkListStore* store = gtk_list_store_new( 2, G_TYPE_STRING, G_TYPE_INT );
 	preset_listbox = gtk_combo_box_new_with_model( GTK_TREE_MODEL(store) );
@@ -608,18 +604,20 @@ gtk_gui_start (JackVST* jvst) {
 	preset_listbox_signal = g_signal_connect( G_OBJECT(preset_listbox), "changed", 
 		G_CALLBACK( program_change ), jvst ); 
 	gtk_widget_set_tooltip_text(preset_listbox, "Plugin Presets");
-//	gtk_box_pack_start(GTK_BOX(hpacker), preset_listbox, FALSE, FALSE, 0);
+	toolitem = gtk_tool_item_new();
+	gtk_container_add(GTK_CONTAINER(toolitem), preset_listbox);
+	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), toolitem, -1);
 	//----------------------------------------------------------------------------------
 	cpu_usage = gtk_label_new ("0");
 	gtk_widget_set_tooltip_text(cpu_usage, "CPU Usage");
-//	gtk_box_pack_start(GTK_BOX(hpacker), cpu_usage, FALSE, FALSE, 0);
+	toolitem = gtk_tool_item_new();
+	gtk_container_add(GTK_CONTAINER(toolitem), cpu_usage);
+	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), toolitem, -1);
 	//----------------------------------------------------------------------------------
 
 //	gtk_container_set_border_width (GTK_CONTAINER(hpacker), 3); 
 	g_signal_connect (G_OBJECT(window), "delete_event", G_CALLBACK(destroy_handler), jvst);
 	
-	//gtk_box_pack_start(GTK_BOX(vpacker), hpacker, FALSE, FALSE, 0);
-
 	gtk_box_pack_start(GTK_BOX(vpacker), toolbar, FALSE, FALSE, 0);
 	gtk_container_add (GTK_CONTAINER (window), vpacker);
 
