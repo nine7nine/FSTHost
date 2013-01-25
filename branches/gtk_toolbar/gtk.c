@@ -579,7 +579,9 @@ gtk_gui_start (JackVST* jvst) {
 		volume_signal = g_signal_connect (G_OBJECT(volume_slider), "value_changed", 
 			G_CALLBACK(volume_handler), jvst);
 		gtk_widget_set_tooltip_text(volume_slider, "Volume");
-//		gtk_box_pack_start(GTK_BOX(hpacker), volume_slider, FALSE, FALSE, 0);
+		toolitem = gtk_tool_item_new();
+		gtk_container_add(GTK_CONTAINER(toolitem), volume_slider);
+		gtk_toolbar_insert(GTK_TOOLBAR(toolbar), toolitem, -1);
 	}
 	//----------------------------------------------------------------------------------
 	channel_listbox = gtk_combo_box_new_with_model ( GTK_TREE_MODEL(create_channel_store()) );
