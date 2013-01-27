@@ -73,8 +73,7 @@ struct _JackVST {
     SysExIdentReply   sysex_ident_reply;
 
     /* SysEx receive support */
-    jack_midi_data_t* sysex_data;
-    size_t sysex_size;
+    jack_ringbuffer_t* sysex_ringbuffer;
 
     /* For VST/i support */
     bool                 want_midi_in;
