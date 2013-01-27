@@ -31,7 +31,8 @@
 #define APPNAME "fsthost"
 #define CTRLAPP "FHControl"
 
-#define RINGBUFFER_SIZE 16*sizeof(struct MidiMessage)
+#define RINGBUFFER_SIZE 16 * sizeof(struct MidiMessage)
+#define SYSEX_RINGBUFFER_SIZE 16 * SYSEX_MAX_SIZE
 #define MIDI_EVENT_MAX 16 /* Max counts of events in one process */
 
 /* audiomaster.c */
@@ -88,8 +89,6 @@ JackVST* jvst_new() {
 
 	SysExDumpV1 sxd = SYSEX_DUMP;
 	memcpy(&jvst->sysex_dump, &sxd, sizeof(SysExDumpV1));
-
-	jvst->sysex_data = malloc(SYSEX_MAX_SIZE);
 
 	return jvst;
 }
@@ -159,10 +158,22 @@ jvst_bypass(JackVST* jvst, bool bypass) {
 	}
 }
 
-static bool
-jvst_sysex_handler(JackVST* jvst) {
-        jack_midi_data_t* data = jvst->sysex_data;
+static void
+jvst_queue_sysex(JackVST* jvst, jack_midi_data_t* data, size_t size) {
+	jack_ringbuffer_t* rb = jvst->sysex_ringbuffer;
+	if (jack_ringbuffer_write_space(rb) < size + sizeof(size)) {
+		fst_error("No space in SysexInput buffer");
+	} else {
+		// Size of message
+		jack_ringbuffer_write(rb, (char*) &size, sizeof size);
+		// Message itself
+		jack_ringbuffer_write(rb, (char*) data, size);
+	}
+}
 
+/* Process Sysex messages in non-realtime thread */
+static void
+jvst_parse_sysex_input(JackVST* jvst, jack_midi_data_t* data, size_t size) {
 	switch(data[1]) {
 	case SYSEX_MYID:
 		// Our sysex
@@ -230,7 +241,7 @@ jvst_sysex_handler(JackVST* jvst) {
 		break;
 	case SYSEX_NON_REALTIME:
 		// Identity request
-		if (jvst->sysex_size >= sizeof(SysExIdentRqst)) {
+		if (size >= sizeof(SysExIdentRqst)) {
 			// TODO: for now we just always answer ;-)
 			SysExIdentRqst sxir = SYSEX_IDENT_REQUEST;
 			data[2] = 0x7F; // veil
@@ -241,15 +252,27 @@ jvst_sysex_handler(JackVST* jvst) {
 		}
 		break;
 	}
-	/* Allow process next sysex */
-	jvst->sysex_size = 0;
+}
 
-	return FALSE;
+static void
+jvst_sysex_handler(JackVST* jvst) {
+	jack_ringbuffer_t* rb = jvst->sysex_ringbuffer;
+	/* Send our queued messages */
+	while (jack_ringbuffer_read_space(rb)) {
+		size_t size;
+		jack_ringbuffer_peek(rb, (char*) &size, sizeof size);
+		jack_ringbuffer_read_advance(rb, sizeof size);
+
+                jack_midi_data_t tmpbuf[size];
+		jack_ringbuffer_peek(rb, (char*) &tmpbuf, size);
+		jack_ringbuffer_read_advance(rb, size);
+
+		jvst_parse_sysex_input(jvst, (jack_midi_data_t *) &tmpbuf, size);
+        }
 }
 
 bool
-jvst_load_state (JackVST* jvst, const char * filename)
-{
+jvst_load_state (JackVST* jvst, const char * filename) {
 	bool success;
 	char* file_ext = strrchr(filename, '.');
 
@@ -335,8 +358,7 @@ wine_thread_aux( LPVOID arg ) {
 }
 
 static int
-wine_pthread_create (pthread_t* thread_id, const pthread_attr_t* attr, void *(*function)(void*), void* arg)
-{
+wine_pthread_create (pthread_t* thread_id, const pthread_attr_t* attr, void *(*function)(void*), void* arg) {
 	sem_init( &sema, 0, 0 );
 	the_function = function;
 	the_arg = arg;
@@ -449,15 +471,10 @@ process_midi_input(JackVST* jvst, jack_nframes_t nframes) {
 
 		// SysEx
 		if ( jackevent.buffer[0] == SYSEX_BEGIN) {
-			// FIXME: Only one event can be processed at the same time (it is fail or not ?)
-			if (! jvst->sysex_size) {
-				if (jackevent.size > SYSEX_MAX_SIZE) {
-					fst_error("Sysex is too big. Skip. Requested %d, but MAX is %d", jackevent.size, SYSEX_MAX_SIZE);
-				} else {
-	                	        jvst->sysex_size = jackevent.size;
-        	                	memcpy(jvst->sysex_data, jackevent.buffer, jackevent.size);
-	        	                g_idle_add( (GSourceFunc) jvst_sysex_handler, jvst);
-				}
+			if (jackevent.size > SYSEX_MAX_SIZE) {
+				fst_error("Sysex is too big. Skip. Requested %d, but MAX is %d", jackevent.size, SYSEX_MAX_SIZE);
+			} else {
+				jvst_queue_sysex(jvst, jackevent.buffer, jackevent.size);
 			}
 	
 			/* TODO:
@@ -760,6 +777,9 @@ jvst_idle(JackVST* jvst) {
 		fst_program_change(jvst->fst, jvst->midi_pc);
 		jvst->midi_pc = MIDI_PC_SELF;
 	}
+
+	// Handle SysEx Input
+	jvst_sysex_handler(jvst);
 
 	// Connect MIDI ports to control app if Graph order change
 	if (! jvst->graph_order_change) return TRUE;
@@ -1078,6 +1098,14 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 			jvst->outs[i] = malloc(sizeof(float) * jack_get_buffer_size (jvst->client));
 		}
 	}
+	
+	/* Init MIDI Input sysex buffer */
+	jvst->sysex_ringbuffer = jack_ringbuffer_create(SYSEX_RINGBUFFER_SIZE);
+	if (! jvst->sysex_ringbuffer) {
+		fst_error("Cannot create JACK ringbuffer.");
+		return 1;
+	}
+	jack_ringbuffer_mlock(jvst->sysex_ringbuffer);
 	
 	jvst->outports = (jack_port_t **) malloc (sizeof(jack_port_t*) * jvst->numOuts);
 	jvst->outs = (float **) malloc (sizeof (float *) * plugin->numOutputs);
