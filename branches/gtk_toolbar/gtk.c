@@ -509,11 +509,9 @@ make_img_button(const gchar *stock_id, const gchar *tooltip, bool toggle,
 
 	GtkToolItem* button;
 
-	if (toggle) {
-		button = gtk_toggle_tool_button_new_from_stock(stock_id);
-	} else {
-		button = gtk_tool_button_new_from_stock(stock_id);
-	}
+	button = (toggle) ? 
+		gtk_toggle_tool_button_new_from_stock(stock_id) :
+		gtk_tool_button_new_from_stock(stock_id);
 	gtk_tool_item_set_tooltip_text(button, tooltip);
 
 	g_signal_connect (G_OBJECT(button), (toggle ? "toggled" : "clicked"), handler, jvst); 
@@ -526,6 +524,13 @@ make_img_button(const gchar *stock_id, const gchar *tooltip, bool toggle,
 	return GTK_WIDGET(button);
 }
 
+void
+add_widget2toolbar(GtkWidget* w, GtkToolbar* t) {
+	GtkToolItem* toolitem = gtk_tool_item_new();
+	gtk_container_add(GTK_CONTAINER(toolitem), w);
+	gtk_toolbar_insert(t, toolitem, -1);
+}
+
 bool
 gtk_gui_start (JackVST* jvst) {
 //	printf("GTK Thread WineID: %d | LWP: %d\n", GetCurrentThreadId (), (int) syscall (SYS_gettid));
@@ -536,7 +541,6 @@ gtk_gui_start (JackVST* jvst) {
 	// you can only add an id to an anchored widget.
 
 	GtkCellRenderer *renderer;
-	GtkToolItem* toolitem;
 	
 	window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
 	gtk_window_set_title (GTK_WINDOW(window), jvst->client_name);
@@ -555,14 +559,13 @@ gtk_gui_start (JackVST* jvst) {
 		jvst, FALSE, toolbar);
 	save_button = make_img_button(GTK_STOCK_SAVE_AS, "Save", FALSE, G_CALLBACK(save_handler),
 		jvst, FALSE, toolbar);
-
 	//----------------------------------------------------------------------------------
 	editor_button = make_img_button(GTK_STOCK_EDIT, "Editor", TRUE, G_CALLBACK(editor_handler),
 		jvst, FALSE, toolbar);
 	editor_checkbox = gtk_check_button_new();
 	gtk_widget_set_tooltip_text(editor_checkbox, "Embedded Editor");
 	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(editor_checkbox), TRUE);
-//	gtk_box_pack_start(GTK_BOX(hpacker), editor_checkbox, FALSE, FALSE, 0);
+	add_widget2toolbar( editor_checkbox, GTK_TOOLBAR(toolbar) );
 	//----------------------------------------------------------------------------------
 	midi_learn_toggle = make_img_button(GTK_STOCK_DND, "MIDI Learn", TRUE, G_CALLBACK(learn_handler),
 		jvst, FALSE, toolbar);
@@ -579,9 +582,7 @@ gtk_gui_start (JackVST* jvst) {
 		volume_signal = g_signal_connect (G_OBJECT(volume_slider), "value_changed", 
 			G_CALLBACK(volume_handler), jvst);
 		gtk_widget_set_tooltip_text(volume_slider, "Volume");
-		toolitem = gtk_tool_item_new();
-		gtk_container_add(GTK_CONTAINER(toolitem), volume_slider);
-		gtk_toolbar_insert(GTK_TOOLBAR(toolbar), toolitem, -1);
+		add_widget2toolbar( volume_slider, GTK_TOOLBAR(toolbar) );
 	}
 	//----------------------------------------------------------------------------------
 	channel_listbox = gtk_combo_box_new_with_model ( GTK_TREE_MODEL(create_channel_store()) );
@@ -591,9 +592,7 @@ gtk_gui_start (JackVST* jvst) {
 	channel_check( GTK_COMBO_BOX(channel_listbox), jvst );
 	g_signal_connect( G_OBJECT(channel_listbox), "changed", G_CALLBACK(channel_change), jvst ); 
 	gtk_widget_set_tooltip_text(channel_listbox, "MIDI Channel");
-	toolitem = gtk_tool_item_new();
-	gtk_container_add(GTK_CONTAINER(toolitem), channel_listbox);
-	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), toolitem, -1);
+	add_widget2toolbar( channel_listbox, GTK_TOOLBAR(toolbar) );
 	//----------------------------------------------------------------------------------
 	GtkListStore* store = gtk_list_store_new( 2, G_TYPE_STRING, G_TYPE_INT );
 	preset_listbox = gtk_combo_box_new_with_model( GTK_TREE_MODEL(store) );
@@ -606,15 +605,11 @@ gtk_gui_start (JackVST* jvst) {
 	preset_listbox_signal = g_signal_connect( G_OBJECT(preset_listbox), "changed", 
 		G_CALLBACK( program_change ), jvst ); 
 	gtk_widget_set_tooltip_text(preset_listbox, "Plugin Presets");
-	toolitem = gtk_tool_item_new();
-	gtk_container_add(GTK_CONTAINER(toolitem), preset_listbox);
-	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), toolitem, -1);
+	add_widget2toolbar( preset_listbox, GTK_TOOLBAR(toolbar) );
 	//----------------------------------------------------------------------------------
 	cpu_usage = gtk_label_new ("0");
 	gtk_widget_set_tooltip_text(cpu_usage, "CPU Usage");
-	toolitem = gtk_tool_item_new();
-	gtk_container_add(GTK_CONTAINER(toolitem), cpu_usage);
-	gtk_toolbar_insert(GTK_TOOLBAR(toolbar), toolitem, -1);
+	add_widget2toolbar( cpu_usage, GTK_TOOLBAR(toolbar) );
 	//----------------------------------------------------------------------------------
 
 //	gtk_container_set_border_width (GTK_CONTAINER(hpacker), 3); 
