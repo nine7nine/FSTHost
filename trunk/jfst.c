@@ -780,12 +780,14 @@ jvst_idle(JackVST* jvst) {
 
 			printf("Connect to: %s\n", jports[i]);
 			jack_connect(jvst->client, jack_port_name(jvst->midi_outport), jports[i]);
+			jvst->sysex_want_notify = true; /* Now we are connected to CTRL APP */
 		} else if (jack_port_flags(port) & JackPortIsOutput) {
 			if ( jack_port_connected_to(jvst->midi_inport, jports[i]) )
 				continue;
 
 			printf("Connect to: %s\n", jports[i]);
 			jack_connect(jvst->client, jports[i], jack_port_name(jvst->midi_inport));
+			jvst->sysex_want_notify = true; /* Now we are connected to CTRL APP */
 		}
 	}
         jack_free(jports);
