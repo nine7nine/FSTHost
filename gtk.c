@@ -4,7 +4,16 @@
 #include <gdk/gdkevents.h>
 #include <X11/Xlib.h>
 #include <sys/syscall.h>
-#include "fsthost.xpm"
+
+/* Include icons */
+#include "icons/fsthost.xpm"
+#include "icons/editor.xpm"
+#include "icons/bypass.xpm"  
+#include "icons/load.xpm"
+#include "icons/midi-learn.xpm"
+#include "icons/save.xpm"
+#include "icons/midi-pc.xpm"
+#include "icons/sysex.xpm"
 
 #ifdef HAVE_LASH
 extern void jvst_lash_idle(JackVST *jvst, bool *quit);
@@ -222,7 +231,7 @@ load_handler (GtkToggleToolButton *but, gboolean ptr)
         g_signal_handler_unblock (preset_listbox, preset_listbox_signal);
 
 	// Update MIDI PC button
-	gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON( midi_pc ), (jvst->midi_pc > MIDI_PC_PLUG) );
+	gtk_toggle_tool_button_set_active( GTK_TOGGLE_TOOL_BUTTON( midi_pc ), (jvst->midi_pc > MIDI_PC_PLUG) );
 }
 
 static gboolean
@@ -404,7 +413,7 @@ idle_cb(JackVST *jvst) {
 				gtk_widget_set_tooltip_text(midi_learn_toggle, tooltip);
 		}
 		jvst->midi_learn = FALSE;
-		gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON( midi_learn_toggle ), FALSE );
+		gtk_toggle_tool_button_set_active( GTK_TOGGLE_TOOL_BUTTON( midi_learn_toggle ), FALSE );
 	}
 
 	// If volume was changed by MIDI CC7 message
@@ -500,7 +509,7 @@ GtkListStore * create_channel_store() {
 // Really ugly auxiliary function for create buttons ;-)
 static GtkWidget*
 make_img_button(const gchar *stock_id, const gchar *tooltip, bool toggle,
-	GCallback handler, JackVST* jvst, bool state, GtkWidget* toolbar)
+	GCallback handler, JackVST* jvst, bool state, GtkWidget* toolbar, char** xpm)
 {
 //	GtkToolItem* button = (toggle) ? gtk_toggle_tool_button_new() : gtk_tool_button_new(NULL, NULL);
 //	GtkWidget* image = gtk_image_new_from_stock(stock_id, GTK_ICON_SIZE_SMALL_TOOLBAR);
@@ -513,6 +522,9 @@ make_img_button(const gchar *stock_id, const gchar *tooltip, bool toggle,
 		gtk_toggle_tool_button_new_from_stock(stock_id) :
 		gtk_tool_button_new_from_stock(stock_id);
 	gtk_tool_item_set_tooltip_text(button, tooltip);
+
+	if (xpm) gtk_tool_button_set_icon_widget( GTK_TOOL_BUTTON(button),
+		gtk_image_new_from_pixbuf( gdk_pixbuf_new_from_xpm_data( (const char**) xpm )) );
 
 	g_signal_connect (G_OBJECT(button), (toggle ? "toggled" : "clicked"), handler, jvst); 
 
@@ -553,26 +565,26 @@ gtk_gui_start (JackVST* jvst) {
 	gtk_toolbar_set_style(GTK_TOOLBAR(toolbar), GTK_TOOLBAR_ICONS);
 
 	bypass_button = make_img_button(GTK_STOCK_STOP, "Bypass", TRUE, G_CALLBACK(bypass_handler),
-		jvst, jvst->bypassed, toolbar);
+		jvst, jvst->bypassed, toolbar, bypass_xpm);
 
 	load_button = make_img_button(GTK_STOCK_OPEN, "Load", FALSE, G_CALLBACK(load_handler),
-		jvst, FALSE, toolbar);
+		jvst, FALSE, toolbar, load_xpm);
 	save_button = make_img_button(GTK_STOCK_SAVE_AS, "Save", FALSE, G_CALLBACK(save_handler),
-		jvst, FALSE, toolbar);
+		jvst, FALSE, toolbar, save_xpm);
 	//----------------------------------------------------------------------------------
 	editor_button = make_img_button(GTK_STOCK_EDIT, "Editor", TRUE, G_CALLBACK(editor_handler),
-		jvst, FALSE, toolbar);
+		jvst, FALSE, toolbar, editor_xpm);
 	editor_checkbox = gtk_check_button_new();
 	gtk_widget_set_tooltip_text(editor_checkbox, "Embedded Editor");
 	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(editor_checkbox), TRUE);
 	add_widget2toolbar( editor_checkbox, GTK_TOOLBAR(toolbar) );
 	//----------------------------------------------------------------------------------
 	midi_learn_toggle = make_img_button(GTK_STOCK_DND, "MIDI Learn", TRUE, G_CALLBACK(learn_handler),
-		jvst, FALSE, toolbar);
+		jvst, FALSE, toolbar, midi_learn_xpm);
 	sysex_button = make_img_button(GTK_STOCK_EXECUTE, "Send SysEx", FALSE, G_CALLBACK(sysex_handler),
-		jvst, FALSE, toolbar);
+		jvst, FALSE, toolbar, sysex_xpm);
 	midi_pc = make_img_button(GTK_STOCK_CONVERT, "Self handling MIDI PC", TRUE, G_CALLBACK(midi_pc_handler),
-		jvst, (jvst->midi_pc > MIDI_PC_PLUG), toolbar);
+		jvst, (jvst->midi_pc > MIDI_PC_PLUG), toolbar, midi_pc_xpm);
 	//----------------------------------------------------------------------------------
 	if (jvst->volume != -1) {
 		volume_slider = gtk_hscale_new_with_range(0,127,1);
