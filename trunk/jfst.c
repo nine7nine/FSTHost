@@ -486,10 +486,12 @@ process_midi_input(JackVST* jvst, jack_nframes_t nframes) {
 		}
 
 		// Midi channel
-		if ( (jvst->channel > 0 )
-			&&  ( jackevent.buffer[0] >= 0x80 && jackevent.buffer[0] <= 0xEF)
-			&&  ( (jackevent.buffer[0] & 0x0F) != jvst->channel - 1) )
-			continue;
+		if ( (jvst->channel > 0 && jackevent.buffer[0] >= 0x80 && jackevent.buffer[0] <= 0xEF) ) {
+			/* Filter out mismatched messages */
+			if ( (jackevent.buffer[0] & 0x0F) != jvst->channel - 1 ) continue;
+			/* Redirect to first channel */
+			jackevent.buffer[0] &= 0xF0;
+		}
 
 		switch ( jackevent.buffer[0] & 0xF0) {
 		case 0xB0: ;
