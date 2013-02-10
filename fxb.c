@@ -240,7 +240,7 @@ int fst_save_fxfile ( FST *fst, const char *filename, enum FxFileType fileType )
 	}
 
 	fxHeader.fxMagic = endian_swap ( fxHeader.fxMagic );
-        fxHeader.version = endian_swap( 2 );
+        fxHeader.version = endian_swap( (isBank) ? 2 : 1 );
         fxHeader.fxID = endian_swap( fst->plugin->uniqueID );
         fxHeader.fxVersion = endian_swap( fst->plugin->version );
         fxHeader.numPrograms = endian_swap( (isBank) ? fst->plugin->numPrograms : fst->plugin->numParams );
