@@ -1,6 +1,6 @@
-#include "stdlib.h"
-#include "stdio.h"
-#include "sys/times.h"
+#include <stdlib.h>
+#include <stdio.h>
+#include <sys/times.h>
 
 static clock_t lastCPU, lastSysCPU, lastUserCPU;
 //static int numProcessors;

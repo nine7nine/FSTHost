@@ -93,7 +93,10 @@ JackVST* jvst_new() {
 	return jvst;
 }
 
-void jvst_destroy(JackVST* jvst) { free(jvst); }
+void jvst_destroy(JackVST* jvst) {
+	midi_filter_cleanup( &jvst->filters );
+	free(jvst);
+}
 
 static void
 sysex_makeASCII(uint8_t* ascii_midi_dest, char* name, size_t size_dest) {
@@ -122,6 +125,7 @@ jvst_send_sysex(JackVST* jvst, enum SysExWant sysex_want) {
 //		sxd->uuid = ; /* Set once on start */
 		sxd->program = jvst->fst->current_program;
 		sxd->channel = jvst->channel;
+		midi_filter_one_channel( &jvst->filters, sxd->channel );
 		sxd->volume = jvst_get_volume(jvst);
 		sxd->state = (jvst->bypassed) ? SYSEX_STATE_NOACTIVE : SYSEX_STATE_ACTIVE;
 		sysex_makeASCII(sxd->program_name, progName, 24);
@@ -195,6 +199,7 @@ jvst_parse_sysex_input(JackVST* jvst, jack_midi_data_t* data, size_t size) {
 				jvst_bypass(jvst, (sysex->state == SYSEX_STATE_ACTIVE) ? FALSE : TRUE);
 				fst_program_change(jvst->fst, sysex->program);
 				jvst->channel = sysex->channel;
+				midi_filter_one_channel( &jvst->filters, sysex->channel );
 				jvst_set_volume(jvst, sysex->volume);
 
 				// Copy sysex state for preserve resending SysEx Dump
@@ -485,13 +490,8 @@ process_midi_input(JackVST* jvst, jack_nframes_t nframes) {
 			continue;
 		}
 
-		// Midi channel
-		if ( (jvst->channel > 0 && jackevent.buffer[0] >= 0x80 && jackevent.buffer[0] <= 0xEF) ) {
-			/* Filter out mismatched messages */
-			if ( (jackevent.buffer[0] & 0x0F) != jvst->channel - 1 ) continue;
-			/* Redirect to first channel */
-			jackevent.buffer[0] &= 0xF0;
-		}
+		/* MIDI FILTERS */
+		if ( ! midi_filter_check( &jvst->filters, (uint8_t*) jackevent.buffer, jackevent.size ) ) continue;
 
 		switch ( jackevent.buffer[0] & 0xF0) {
 		case 0xB0: ;
@@ -920,6 +920,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 				jvst->channel = strtol(optarg, NULL, 10);
 				if (jvst->channel < 0 || jvst->channel > 17)
 					jvst->channel = 0;
+				midi_filter_one_channel( &jvst->filters, jvst->channel );
 				break;
 			case 'i':
 				opt_numIns = strtol(optarg, NULL, 10);

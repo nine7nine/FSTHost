@@ -343,6 +343,7 @@ channel_change (GtkComboBox *combo, JackVST *jvst) {
 	short channel = gtk_combo_box_get_active (combo);
 
 	jvst->channel = channel;
+	midi_filter_one_channel( &jvst->filters, channel );
 }
 
 static gboolean
