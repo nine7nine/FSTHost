@@ -10,6 +10,7 @@
 
 #include "sysex.h"
 #include "fst.h"
+#include "midifilter.h"
 
 #define MIDI_PC_SELF -1
 #define MIDI_PC_PLUG -2
@@ -63,6 +64,7 @@ struct _JackVST {
     short           midi_learn_CC;
     int             midi_learn_PARAM;
     short           midi_pc;
+    MIDIFILTER*     filters;
 
     /* SysEx send support */
     pthread_mutex_t   sysex_lock;

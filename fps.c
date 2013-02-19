@@ -107,8 +107,10 @@ fps_process_node(JackVST* jvst, xmlNode *a_node)
        } else if (strcmp(cur_node->name, "channel") == 0) {
 	  int channel = strtol(xmlGetProp(cur_node, "number"), NULL, 10);
 
-	  if (channel >= 0 && channel <= 17)
+	  if (channel >= 0 && channel <= 17) {
 	     jvst->channel = channel;
+             midi_filter_one_channel( &jvst->filters, channel );
+          }
        // MIDI Program Change handling type
        } else if (strcmp(cur_node->name, "midi_pc") == 0) {
           if ( strcmp(xmlGetProp(cur_node, "type"), "plugin") == 0 ) {
