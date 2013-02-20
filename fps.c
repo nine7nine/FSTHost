@@ -23,14 +23,14 @@ trim(char * s) {
 // -----------------------------------
 
 static char *
-int2str(char *str, int *integer) {
-   sprintf(str, "%d", *integer);
+int2str(char *str, int integer) {
+   sprintf(str, "%d", integer);
    return str;
 }
 
 static char *
-float2str(char *str, float *floating) {
-   sprintf(str, "%f", *floating);
+float2str(char *str, float floating) {
+   sprintf(str, "%f", floating);
    return str;
 }
 
@@ -243,13 +243,38 @@ bool fps_save (JackVST* jvst, const char* filename) {
 
       cur_node = xmlNewChild(plugin_state_node, NULL, "map", NULL);
       xmlNewProp(cur_node, "name", tString);
-      xmlNewProp(cur_node, "cc", int2str(tString, &cc));
-      xmlNewProp(cur_node, "index", int2str(tString, &paramIndex));
+      xmlNewProp(cur_node, "cc", int2str(tString, cc));
+      xmlNewProp(cur_node, "index", int2str(tString, paramIndex));
    }
 
-   // MIDI Channel
-   cur_node = xmlNewChild(plugin_state_node, NULL, "channel", NULL);
-   xmlNewProp(cur_node, "number", int2str(tString, &jvst->channel));
+   // MIDI Filter
+   MIDIFILTER *mf;
+   for (mf = jvst->filters; mf; mf = mf->next) {
+      cur_node = xmlNewChild(plugin_state_node, NULL, "filter", NULL);
+      xmlNewProp(cur_node, "enabled", mf->enabled ? "yes" : "no" );
+      const char *msg_type = NULL;
+      switch(mf->type) {
+         case MM_NOTE_OFF:         msg_type = MF_STR_NOTE_OFF; break;
+         case MM_NOTE_ON:          msg_type = MF_STR_NOTE_ON; break;
+         case MM_AFTERTOUCH:       msg_type = MF_STR_AFTERTOUCH; break;
+         case MM_CONTROL_CHANGE:   msg_type = MF_STR_CONTROL_CHANGE; break;
+         case MM_PROGRAM_CHANGE:   msg_type = MF_STR_PROGRAM_CHANGE; break;
+         case MM_CHANNEL_PRESSURE: msg_type = MF_STR_CHANNEL_PRESSURE; break;
+         case MM_PITCH_BEND:       msg_type = MF_STR_PITCH_BEND; break;
+      }
+      if (msg_type) xmlNewProp(cur_node, "type", msg_type);
+      if (mf->channel) xmlNewProp(cur_node, "channel", int2str(tString, (int) mf->channel));
+      if (mf->value1) xmlNewProp(cur_node, "value1", int2str(tString, (int) mf->value1));
+      if (mf->value2) xmlNewProp(cur_node, "value2", int2str(tString, (int) mf->value2));
+      const char *rule = NULL;
+      switch(mf->rule) {
+         case CHANNEL_REDIRECT: rule = MF_STR_CHANNEL_REDIRECT; break;
+         case DROP_ALL:         rule = MF_STR_DROP_ALL; break;
+         case ACCEPT:           rule = MF_STR_ACCEPT; break;
+      }
+      if (rule) xmlNewProp(cur_node, "rule", rule);
+      if (mf->rvalue) xmlNewProp(cur_node, "rvalue", int2str(tString, (int) mf->rvalue));
+   }
 
    // MIDI Program Change handling type
    cur_node = xmlNewChild(plugin_state_node, NULL, "midi_pc", NULL);
@@ -260,19 +285,19 @@ bool fps_save (JackVST* jvst, const char* filename) {
    if (jvst->volume != -1) {
       int level = jvst_get_volume(jvst);
       cur_node = xmlNewChild(plugin_state_node, NULL, "volume", NULL);
-      xmlNewProp(cur_node, "level", int2str(tString, &level));
+      xmlNewProp(cur_node, "level", int2str(tString, level));
    }
 
    // Bypass/Resume MIDI CC
    if (jvst->want_state_cc >= 0 && jvst->want_state_cc <= 127) {
       cur_node = xmlNewChild(plugin_state_node, NULL, "mode", NULL);
       int cc = (int) jvst->want_state_cc;
-      xmlNewProp(cur_node, "cc", int2str(tString, &cc));
+      xmlNewProp(cur_node, "cc", int2str(tString, cc));
    }
 
    // Current Program
    cur_node = xmlNewChild(plugin_state_node, NULL, "program", NULL);
-   xmlNewProp(cur_node, "number", int2str(tString, (int *) &jvst->fst->current_program));
+   xmlNewProp(cur_node, "number", int2str(tString, (int) jvst->fst->current_program));
 
    // Chunk
    if ( fst->plugin->flags & effFlagsProgramChunks ) {
@@ -289,7 +314,7 @@ bool fps_save (JackVST* jvst, const char* filename) {
 
       char *encoded = g_base64_encode( chunk_data, chunk_size );
       cur_node = xmlNewChild(plugin_state_node, NULL, "chunk", encoded);
-      xmlNewProp(cur_node, "size", int2str(tString, &chunk_size));
+      xmlNewProp(cur_node, "size", int2str(tString, chunk_size));
       g_free( encoded );
    // Params
    } else {
@@ -297,8 +322,8 @@ bool fps_save (JackVST* jvst, const char* filename) {
       for ( paramIndex=0; paramIndex < fst->plugin->numParams; paramIndex++ ) {
          val = fst->plugin->getParameter( fst->plugin, paramIndex );
          cur_node = xmlNewChild(plugin_state_node, NULL, "param", NULL);
-         xmlNewProp(cur_node, "index", int2str(tString, &paramIndex));
-         xmlNewProp(cur_node, "value", float2str(tString, &val));
+         xmlNewProp(cur_node, "index", int2str(tString, paramIndex));
+         xmlNewProp(cur_node, "value", float2str(tString, val));
       }
    }
 
