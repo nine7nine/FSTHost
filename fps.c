@@ -63,8 +63,7 @@ fps_check_this(FST *fst, char *field, char *value) {
 }
 
 static int
-fps_process_node(JackVST* jvst, xmlNode *a_node)
-{
+fps_process_node(JackVST* jvst, xmlNode *a_node) {
     xmlNode *cur_node = NULL;
     FST* fst = jvst->fst;
 
@@ -111,6 +110,50 @@ fps_process_node(JackVST* jvst, xmlNode *a_node)
 	     jvst->channel = channel;
              midi_filter_one_channel( &jvst->filters, channel );
           }
+       // MIDI Filter
+       } else if (strcmp(cur_node->name, "filter") == 0) {
+         const char* prop = NULL;
+         MIDIFILTER mf = {0};
+         mf.enabled = ( strcmp(xmlGetProp(cur_node, "enabled"), "yes") == 0 ) ? true : false;
+	 const char* type = xmlGetProp(cur_node, "rule");
+         if (strcmp(type, MF_STR_NOTE_OFF) == 0) {
+            mf.type = MM_NOTE_OFF;
+         } else if (strcmp(type, MF_STR_NOTE_ON) == 0) {
+            mf.type = MM_NOTE_ON;
+         } else if (strcmp(type, MF_STR_AFTERTOUCH) == 0) {
+            mf.type = MM_AFTERTOUCH;
+         } else if (strcmp(type, MF_STR_CONTROL_CHANGE) == 0) {
+            mf.type = MM_CONTROL_CHANGE;
+         } else if (strcmp(type, MF_STR_PROGRAM_CHANGE) == 0) {
+            mf.type = MM_PROGRAM_CHANGE;
+         } else if (strcmp(type, MF_STR_CHANNEL_PRESSURE) == 0) {
+            mf.type = MM_CHANNEL_PRESSURE;
+         } else if (strcmp(type, MF_STR_PITCH_BEND) == 0) {
+            mf.type = MM_PITCH_BEND;
+         }
+         prop = xmlGetProp(cur_node, "channel");
+	 mf.channel = (prop) ? strtol(prop, NULL, 10) : 0;
+
+         prop = xmlGetProp(cur_node, "value1");
+	 mf.value1 = (prop) ? strtol(prop, NULL, 10) : 0;
+
+         prop = xmlGetProp(cur_node, "value2");
+	 mf.value2 = (prop) ? strtol(prop, NULL, 10) : 0;
+	 const char* rule = xmlGetProp(cur_node, "rule");
+         if (strcmp(rule, MF_STR_CHANNEL_REDIRECT) == 0) {
+           mf.rule = CHANNEL_REDIRECT;
+         } else if (strcmp(rule, MF_STR_DROP_ALL) == 0) {
+           mf.rule = DROP_ALL;
+         } else if (strcmp(rule, MF_STR_ACCEPT) == 0) {
+           mf.rule = ACCEPT;
+         } else {
+           printf("Wrong filter rule\n");
+           continue;
+         }
+         prop = xmlGetProp(cur_node, "rvalue");
+	 mf.rvalue = (prop) ? strtol(prop, NULL, 10) : 0;
+
+         midi_filter_add( &jvst->filters, &mf );
        // MIDI Program Change handling type
        } else if (strcmp(cur_node->name, "midi_pc") == 0) {
           if ( strcmp(xmlGetProp(cur_node, "type"), "plugin") == 0 ) {
@@ -185,6 +228,9 @@ bool fps_load(JackVST* jvst, const char* filename) {
       printf("error: could not parse file %s\n", filename);
       return FALSE;
    }
+
+   /* Cleanup midi filters */
+   midi_filter_cleanup(&jvst->filters);
 
    plugin_state_node = xmlDocGetRootElement(doc);
    success = fps_process_node(jvst, plugin_state_node);
