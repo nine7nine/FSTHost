@@ -7,6 +7,7 @@
 typedef struct _MIDIFILTER MIDIFILTER;
 
 #define MF_STR_NOTE_OFF         "NOTE OFF"
+#define MF_STR_ALL              "ALL"
 #define MF_STR_NOTE_ON          "NOTE ON"
 #define MF_STR_AFTERTOUCH       "AFTERTOUCH"
 #define MF_STR_CONTROL_CHANGE   "CONTROL CHANGE"
@@ -19,6 +20,7 @@ typedef struct _MIDIFILTER MIDIFILTER;
 #define MF_STR_ACCEPT           "ACCEPT"
 
 enum MidiMessageType {
+	MM_ALL = 0,
 	MM_NOTE_OFF = 0x8,
 	MM_NOTE_ON = 0x9,
 	MM_AFTERTOUCH = 0xA,
