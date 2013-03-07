@@ -16,6 +16,7 @@ extern double CPUusage_getCurrentValue();
 
 static short mode_cc = 0;
 static bool quit = FALSE;
+static bool have_fwin = FALSE;
 
 static	GtkWidget* window;
 static	GtkWidget* gtk_socket;
@@ -30,6 +31,7 @@ static  GtkWidget* event_box;
 static  GtkWidget* preset_listbox;
 static	GtkWidget* midi_learn_toggle;
 static	GtkWidget* midi_pc;
+static	GtkWidget* midi_filter;
 static	GtkWidget* load_button;
 static	GtkWidget* save_button;
 static	GtkWidget* sysex_button;
@@ -306,9 +308,142 @@ editor_handler (GtkToggleButton *but, gboolean ptr)
 	}
 }
 
+/*
+struct _MIDIFILTER {
+        struct _MIDIFILTER *next;
+        bool enabled;
+
+        enum MidiMessageType type;
+        uint8_t channel;
+        uint8_t value1;
+        uint8_t value2;
+
+        enum {
+                CHANNEL_REDIRECT,
+                DROP_ALL,
+                ACCEPT
+        } rule;
+        uint8_t rvalue;
+};
+*/
+
+GtkListStore* create_channel_store() {
+	GtkListStore *retval = gtk_list_store_new( 2, G_TYPE_STRING, G_TYPE_INT );
+	unsigned short i;
+	char buf[10];
+	
+	for( i=0; i <= 17; i++ ) {
+		GtkTreeIter new_row_iter;
+
+		if (i == 0) {
+			strcpy( buf, "Omni");
+		} else if (i == 17) {
+			strcpy( buf, "None");
+		} else {
+			sprintf( buf, "Ch %d", i);
+		}
+
+		gtk_list_store_insert( retval, &new_row_iter, i );
+		gtk_list_store_set( retval, &new_row_iter, 0, buf, 1, i, -1 );
+	}
+
+	return retval;
+}
+
+
+
+void store_add(GtkListStore* store, char* text, int value) {
+	gtk_list_store_insert_with_values(store, NULL, -1, 0, text, 1, value, -1 );
+}
+
+GtkListStore* mf_rule_store() {
+	GtkListStore *store = gtk_list_store_new( 2, G_TYPE_STRING, G_TYPE_INT );
+	store_add(store, MF_STR_CHANNEL_REDIRECT, CHANNEL_REDIRECT);
+	store_add(store, MF_STR_DROP_ALL, DROP_ALL);
+	store_add(store, MF_STR_ACCEPT, ACCEPT);
+	return store;
+}
+
+GtkListStore* mf_type_store() {
+	GtkListStore *store = gtk_list_store_new( 2, G_TYPE_STRING, G_TYPE_INT );
+	store_add(store, MF_STR_ALL, MM_ALL);
+	store_add(store, MF_STR_NOTE_OFF, MM_NOTE_OFF);
+	store_add(store, MF_STR_NOTE_ON, MM_NOTE_ON);
+	store_add(store, MF_STR_AFTERTOUCH, MM_AFTERTOUCH);
+	store_add(store, MF_STR_CONTROL_CHANGE, MM_CONTROL_CHANGE);
+	store_add(store, MF_STR_PROGRAM_CHANGE, MM_PROGRAM_CHANGE);
+	store_add(store, MF_STR_CHANNEL_PRESSURE, MM_CHANNEL_PRESSURE);
+	store_add(store, MF_STR_PITCH_BEND, MM_PITCH_BEND);
+	return store;
+}
+
+GtkWidget* add_combo(GtkWidget* hpacker, GtkListStore* store, int active, const char* tooltip) {
+	GtkWidget* combo = gtk_combo_box_new_with_model ( GTK_TREE_MODEL(store) );
+	GtkCellRenderer *renderer = gtk_cell_renderer_text_new ();
+	gtk_cell_layout_pack_start (GTK_CELL_LAYOUT (combo), renderer, TRUE);
+	gtk_cell_layout_set_attributes (GTK_CELL_LAYOUT (combo), renderer, "text", 0, NULL);
+
+//	g_signal_connect( G_OBJECT(channel_listbox), "changed", G_CALLBACK(channel_change), jvst ); 
+	gtk_box_pack_start(GTK_BOX(hpacker), GTK_WIDGET(combo), FALSE, FALSE, 0);
+	gtk_widget_set_tooltip_text( combo, tooltip);
+	gtk_combo_box_set_active(GTK_COMBO_BOX(combo), active);
+
+	return combo;
+}
+
+GtkWidget* add_entry(GtkWidget* hpacker, int value, int len, const char* tooltip) {
+	char buf[4];
+	snprintf(buf, sizeof buf, "%d", value);
+
+	GtkWidget *entry = gtk_entry_new();
+	gtk_box_pack_start(GTK_BOX(hpacker), entry, FALSE, FALSE, 0);
+	gtk_entry_set_text(GTK_ENTRY(entry), buf);
+	gtk_widget_set_tooltip_text( entry, tooltip);
+	gtk_entry_set_max_length(GTK_ENTRY(entry), len);
+	return entry;
+}
+
+void filer_addrow(GtkWidget* vpacker, MIDIFILTER *filter) {
+	GtkWidget* hpacker = gtk_hbox_new (FALSE, 7);
+	gtk_box_pack_start(GTK_BOX(vpacker), hpacker, FALSE, FALSE, 0);
+
+	GtkWidget* combo_type = add_combo(hpacker, mf_type_store(), filter->type, "Filter Type");
+	GtkWidget* combo_channel = add_combo(hpacker, create_channel_store(), filter->channel, "MIDI Channel");
+	GtkWidget* entry_value1 = add_entry(hpacker, filter->value1, 3, "Value 1");
+	GtkWidget* entry_value2 = add_entry(hpacker, filter->value2, 3, "Value 2");
+	GtkWidget* combo_rule = add_combo(hpacker, mf_rule_store(), filter->rule, "Filter Rule");
+	GtkWidget* entry_rvalue = add_entry(hpacker, filter->rvalue, 3, "Rule Value");
+}
+
 static gboolean
-destroy_handler (GtkWidget* widget, GdkEventAny* ev, gpointer ptr)
-{
+fwin_destroy_handler (GtkWidget* widget, GdkEventAny* ev, gpointer ptr) {
+	bool* hf = (bool*) ptr;
+	*hf = FALSE;
+	return FALSE;
+}
+
+static gboolean
+midifilter_handler (GtkWidget* widget, JackVST *jvst) {
+	if (have_fwin) return FALSE;
+	have_fwin = TRUE;
+
+	//GtkWidget* fwin = gtk_scrolled_window_new(NULL, NULL);
+	GtkWidget* fwin = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+	gtk_window_set_icon(GTK_WINDOW(fwin), gdk_pixbuf_new_from_xpm_data((const char**) fsthost_xpm));
+	g_signal_connect (G_OBJECT(fwin), "delete_event", G_CALLBACK(fwin_destroy_handler), &have_fwin);
+	GtkWidget* vpacker = gtk_vbox_new (FALSE, 7);
+
+	gtk_container_add (GTK_CONTAINER (fwin), vpacker);
+
+        MIDIFILTER *f;
+        for (f = jvst->filters; f; f = f->next) {
+		filer_addrow(vpacker, f);
+	}
+ 	gtk_widget_show_all (fwin);
+}
+
+static gboolean
+destroy_handler (GtkWidget* widget, GdkEventAny* ev, gpointer ptr) {
 	JackVST* jvst = (JackVST*) ptr;
 
 	printf("GTK destroy_handler\n");
@@ -330,12 +465,10 @@ program_change (GtkComboBox *combo, JackVST *jvst) {
 
 static void
 channel_check(GtkComboBox *combo, JackVST *jvst) {
-	short channel = jvst->channel;
-
-	if (channel == gtk_combo_box_get_active (combo))
+	if (jvst->channel == gtk_combo_box_get_active (combo))
 		return;
 
-	gtk_combo_box_set_active(combo, (channel));
+	gtk_combo_box_set_active(combo, (jvst->channel));
 }
 
 static void
@@ -450,8 +583,7 @@ idle_cb(JackVST *jvst) {
 }
 
 int
-create_preset_store( GtkListStore *store, FST *fst )
-{
+create_preset_store( GtkListStore *store, FST *fst ) {
 	short i;
 	char progName[24];
 
@@ -473,28 +605,6 @@ create_preset_store( GtkListStore *store, FST *fst )
 	}
 
 	return 1;
-}
-GtkListStore * create_channel_store() {
-	GtkListStore *retval = gtk_list_store_new( 2, G_TYPE_STRING, G_TYPE_INT );
-	unsigned short i;
-	char buf[10];
-	
-	for( i=0; i <= 17; i++ ) {
-		GtkTreeIter new_row_iter;
-
-		if (i == 0) {
-			strcpy( buf, "Omni");
-		} else if (i == 17) {
-			strcpy( buf, "None");
-		} else {
-			sprintf( buf, "Ch %d", i);
-		}
-
-		gtk_list_store_insert( retval, &new_row_iter, i );
-		gtk_list_store_set( retval, &new_row_iter, 0, buf, 1, i, -1 );
-	}
-
-	return retval;
 }
 
 // Really ugly auxiliary function for create buttons ;-)
@@ -558,6 +668,8 @@ gtk_gui_start (JackVST* jvst) {
 		jvst, FALSE, hpacker);
 	midi_pc = make_img_button(GTK_STOCK_CONVERT, "Self handling MIDI PC", TRUE, G_CALLBACK(midi_pc_handler),
 		jvst, (jvst->midi_pc > MIDI_PC_PLUG), hpacker);
+	midi_filter = make_img_button(GTK_STOCK_PAGE_SETUP, "MIDI FILTER", FALSE,
+		G_CALLBACK(midifilter_handler), jvst, FALSE, hpacker);
 	//----------------------------------------------------------------------------------
 	if (jvst->volume != -1) {
 		volume_slider = gtk_hscale_new_with_range(0,127,1);

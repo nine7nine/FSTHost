@@ -121,7 +121,12 @@ int fst_load_fxfile ( FST *fst, const char *filename )
 	unsigned short i;
         size_t br;
 
-	FILE * fxfile = fopen( filename, "rb" );
+	FILE *fxfile = fopen( filename, "rb" );
+
+	if (! fxfile) {
+		printf("Can't open file: %s\n", filename);
+		return 0;
+	}
 
 	br = fread ( &fxHeader, sizeof(FXHeader), 1, fxfile );
         fxHeader.fxID = endian_swap( fxHeader.fxID );
