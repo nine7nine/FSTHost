@@ -21,6 +21,7 @@ static bool have_fwin = FALSE;
 static	GtkWidget* window;
 static	GtkWidget* gtk_socket;
 static	GtkWidget* socket_align;
+static	GtkWidget* fvpacker;
 static	GtkWidget* vpacker;
 static	GtkWidget* hpacker;
 static	GtkWidget* bypass_button;
@@ -350,8 +351,6 @@ GtkListStore* create_channel_store() {
 	return retval;
 }
 
-
-
 void store_add(GtkListStore* store, char* text, int value) {
 	gtk_list_store_insert_with_values(store, NULL, -1, 0, text, 1, value, -1 );
 }
@@ -391,28 +390,53 @@ GtkWidget* add_combo(GtkWidget* hpacker, GtkListStore* store, int active, const 
 	return combo;
 }
 
-GtkWidget* add_entry(GtkWidget* hpacker, int value, int len, const char* tooltip) {
+static void
+entry_changed_handler(GtkEntry* entry, gboolean ptr) {
+	uint8_t* value = (uint8_t*) ptr;
+	*value = (uint8_t) strtol(gtk_entry_get_text(entry), NULL, 10);
+}
+
+GtkWidget* add_entry(GtkWidget* hpacker, uint8_t* value, int len, const char* tooltip) {
 	char buf[4];
-	snprintf(buf, sizeof buf, "%d", value);
+	snprintf(buf, sizeof buf, "%d", *value);
 
 	GtkWidget *entry = gtk_entry_new();
 	gtk_box_pack_start(GTK_BOX(hpacker), entry, FALSE, FALSE, 0);
 	gtk_entry_set_text(GTK_ENTRY(entry), buf);
 	gtk_widget_set_tooltip_text( entry, tooltip);
 	gtk_entry_set_max_length(GTK_ENTRY(entry), len);
+	gtk_entry_set_width_chars(GTK_ENTRY(entry), len);
+	g_signal_connect( G_OBJECT(entry), "changed", G_CALLBACK(entry_changed_handler), value);
 	return entry;
 }
 
-void filer_addrow(GtkWidget* vpacker, MIDIFILTER *filter) {
+void filter_addrow(GtkWidget* vpacker, MIDIFILTER *filter) {
 	GtkWidget* hpacker = gtk_hbox_new (FALSE, 7);
-	gtk_box_pack_start(GTK_BOX(vpacker), hpacker, FALSE, FALSE, 0);
+	gtk_box_pack_end(GTK_BOX(vpacker), hpacker, FALSE, FALSE, 0);
+
+	GtkWidget* checkbox_enable = gtk_check_button_new();
+	gtk_widget_set_tooltip_text(checkbox_enable, "Enable");
+	if (filter->enabled) gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(checkbox_enable), TRUE);
+	gtk_box_pack_start(GTK_BOX(hpacker), checkbox_enable, FALSE, FALSE, 0);
 
 	GtkWidget* combo_type = add_combo(hpacker, mf_type_store(), filter->type, "Filter Type");
 	GtkWidget* combo_channel = add_combo(hpacker, create_channel_store(), filter->channel, "MIDI Channel");
-	GtkWidget* entry_value1 = add_entry(hpacker, filter->value1, 3, "Value 1");
-	GtkWidget* entry_value2 = add_entry(hpacker, filter->value2, 3, "Value 2");
+	GtkWidget* entry_value1 = add_entry(hpacker, &filter->value1, 3, "Value 1");
+	GtkWidget* entry_value2 = add_entry(hpacker, &filter->value2, 3, "Value 2");
 	GtkWidget* combo_rule = add_combo(hpacker, mf_rule_store(), filter->rule, "Filter Rule");
-	GtkWidget* entry_rvalue = add_entry(hpacker, filter->rvalue, 3, "Rule Value");
+	GtkWidget* entry_rvalue = add_entry(hpacker, &filter->rvalue, 3, "Rule Value");
+
+//	GtkWidget* button_remove = gtk_button_new_from_stock(GTK_STOCK_DELETE);
+//	gtk_box_pack_start(GTK_BOX(hpacker), button_remove, FALSE, FALSE, 0);
+}
+
+static gboolean
+filter_new_handler( GtkToggleButton *but, gboolean ptr ) {
+	JackVST* jvst = (JackVST*) ptr;
+	MIDIFILTER mf = {0};
+	filter_addrow(fvpacker, &mf);
+	midi_filter_add( &jvst->filters, &mf );
+ 	gtk_widget_show_all (fvpacker);
 }
 
 static gboolean
@@ -431,15 +455,25 @@ midifilter_handler (GtkWidget* widget, JackVST *jvst) {
 	GtkWidget* fwin = gtk_window_new (GTK_WINDOW_TOPLEVEL);
 	gtk_window_set_icon(GTK_WINDOW(fwin), gdk_pixbuf_new_from_xpm_data((const char**) fsthost_xpm));
 	g_signal_connect (G_OBJECT(fwin), "delete_event", G_CALLBACK(fwin_destroy_handler), &have_fwin);
-	GtkWidget* vpacker = gtk_vbox_new (FALSE, 7);
+	GtkWidget* ftoolbar = gtk_toolbar_new();
 
-	gtk_container_add (GTK_CONTAINER (fwin), vpacker);
+	fvpacker = gtk_vbox_new (FALSE, 7);
 
-        MIDIFILTER *f;
-        for (f = jvst->filters; f; f = f->next) {
-		filer_addrow(vpacker, f);
-	}
- 	gtk_widget_show_all (fwin);
+	gtk_container_add (GTK_CONTAINER (fwin), fvpacker);
+
+	MIDIFILTER *f;
+	for (f = jvst->filters; f; f = f->next) filter_addrow(fvpacker, f);
+
+	GtkToolItem* button_new = gtk_tool_button_new_from_stock(GTK_STOCK_ADD);
+	gtk_toolbar_insert(GTK_TOOLBAR(ftoolbar), button_new, 0);
+	gtk_box_pack_start(GTK_BOX(fvpacker), ftoolbar, FALSE, FALSE, 0);
+	gtk_widget_set_tooltip_text(GTK_WIDGET(button_new), "New Filter");
+
+//	GtkWidget* hpacker = gtk_hbox_new (FALSE, 7);
+//	gtk_box_pack_start(GTK_BOX(hpacker), butnew, FALSE, FALSE, 0);
+	g_signal_connect (G_OBJECT(button_new),  "clicked", G_CALLBACK(filter_new_handler), jvst);
+
+	gtk_widget_show_all (fwin);
 }
 
 static gboolean
@@ -522,14 +556,12 @@ idle_cb(JackVST *jvst) {
 					continue;
 
 				fst->plugin->dispatcher(fst->plugin, effGetParamName, paramIndex, 0, paramName, 0 );
-
 				if (show_tooltip) {
-					sprintf(tString, "\nCC %03d => %s",cc, paramName);
+					snprintf(tString, sizeof tString, "\nCC %03d => %s",cc, paramName);
 				} else {
-					sprintf(tString, "CC %03d => %s",cc, paramName);
+					snprintf(tString, sizeof tString, "CC %03d => %s",cc, paramName);
 					show_tooltip = TRUE;
 				}
-
 				strcat(tooltip, tString);
 			}
 
@@ -653,7 +685,6 @@ gtk_gui_start (JackVST* jvst) {
 		jvst, FALSE, hpacker);
 	save_button = make_img_button(GTK_STOCK_SAVE_AS, "Save", FALSE, G_CALLBACK(save_handler),
 		jvst, FALSE, hpacker);
-
 	//----------------------------------------------------------------------------------
 	editor_button = make_img_button(GTK_STOCK_EDIT, "Editor", TRUE, G_CALLBACK(editor_handler),
 		jvst, FALSE, hpacker);
@@ -682,27 +713,15 @@ gtk_gui_start (JackVST* jvst) {
 		gtk_widget_set_tooltip_text(volume_slider, "Volume");
 	}
 	//----------------------------------------------------------------------------------
-	channel_listbox = gtk_combo_box_new_with_model ( GTK_TREE_MODEL(create_channel_store()) );
-	renderer = gtk_cell_renderer_text_new ();
-	gtk_cell_layout_pack_start (GTK_CELL_LAYOUT (channel_listbox), renderer, TRUE);
-	gtk_cell_layout_set_attributes (GTK_CELL_LAYOUT (channel_listbox), renderer, "text", 0, NULL);
+	channel_listbox = add_combo(hpacker, create_channel_store(), 0, "MIDI Channel");
 	channel_check( GTK_COMBO_BOX(channel_listbox), jvst );
 	g_signal_connect( G_OBJECT(channel_listbox), "changed", G_CALLBACK(channel_change), jvst ); 
-	gtk_box_pack_start(GTK_BOX(hpacker), channel_listbox, FALSE, FALSE, 0);
-	gtk_widget_set_tooltip_text(channel_listbox, "MIDI Channel");
 	//----------------------------------------------------------------------------------
-	GtkListStore* store = gtk_list_store_new( 2, G_TYPE_STRING, G_TYPE_INT );
-	preset_listbox = gtk_combo_box_new_with_model( GTK_TREE_MODEL(store) );
-	create_preset_store( store, jvst->fst );
-
-	renderer = gtk_cell_renderer_text_new ();
-	gtk_cell_layout_pack_start (GTK_CELL_LAYOUT (preset_listbox), renderer, TRUE);
-	gtk_cell_layout_set_attributes (GTK_CELL_LAYOUT (preset_listbox), renderer, "text", 0, NULL);
-	gtk_combo_box_set_active( GTK_COMBO_BOX(preset_listbox), jvst->fst->current_program );
+	GtkListStore* preset_store = gtk_list_store_new( 2, G_TYPE_STRING, G_TYPE_INT );
+	create_preset_store( preset_store, jvst->fst );
+	preset_listbox = add_combo(hpacker, preset_store, jvst->fst->current_program, "Plugin Presets");
 	preset_listbox_signal = g_signal_connect( G_OBJECT(preset_listbox), "changed", 
 		G_CALLBACK( program_change ), jvst ); 
-	gtk_box_pack_start(GTK_BOX(hpacker), preset_listbox, FALSE, FALSE, 0);
-	gtk_widget_set_tooltip_text(preset_listbox, "Plugin Presets");
 	//----------------------------------------------------------------------------------
 	cpu_usage = gtk_label_new ("0");
 	gtk_box_pack_start(GTK_BOX(hpacker), cpu_usage, FALSE, FALSE, 0);
