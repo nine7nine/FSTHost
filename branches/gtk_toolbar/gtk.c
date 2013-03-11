@@ -19,6 +19,8 @@
 extern void jvst_lash_idle(JackVST *jvst, bool *quit);
 #endif
 
+#define MAIN_WINDOW_DEFAULT_WIDTH 660
+
 /* from cpuusage.c */
 extern void CPUusage_init();
 extern double CPUusage_getCurrentValue();
@@ -44,6 +46,7 @@ static	GtkWidget* save_button;
 static	GtkWidget* sysex_button;
 static	GtkWidget* volume_slider;
 static	GtkWidget* cpu_usage;
+static	GdkGeometry hints;
 static	gulong preset_listbox_signal;
 static	gulong volume_signal;
 static	gulong bypass_signal;
@@ -279,6 +282,7 @@ static void
 editor_handler (GtkToggleToolButton *but, gboolean ptr)
 {
 	JackVST* jvst = (JackVST*) ptr;
+	hints.min_height = -1;
 
 	if (gtk_toggle_tool_button_get_active (but)) {
 		bool popup = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(editor_checkbox));
@@ -303,6 +307,10 @@ editor_handler (GtkToggleToolButton *but, gboolean ptr)
 
 		gtk_widget_show(socket_align);
 		gtk_widget_show(gtk_socket);
+
+		hints.min_width = -1;
+		gtk_window_set_geometry_hints(GTK_WINDOW (window), NULL, &hints, GDK_HINT_MIN_SIZE);
+		gtk_window_resize(GTK_WINDOW(window), 1, 1);
 	} else if (! jvst->fst->editor_popup) {
 		fst_destroy_editor(jvst->fst);
 	} else {
@@ -312,6 +320,8 @@ editor_handler (GtkToggleToolButton *but, gboolean ptr)
 		gtk_widget_set_size_request(gtk_socket, -1, -1);
 		gtk_widget_destroy(gtk_socket);
 		gtk_widget_destroy(socket_align);
+		hints.min_width = MAIN_WINDOW_DEFAULT_WIDTH;
+		gtk_window_set_geometry_hints(GTK_WINDOW (window), NULL, &hints, GDK_HINT_MIN_SIZE);
 		gtk_window_resize(GTK_WINDOW(window), 1, 1);
 	}
 }
@@ -445,7 +455,7 @@ idle_cb(JackVST *jvst) {
 
 	// Editor button in non-popup mode (not embedded)
 	if (! jvst->fst->editor_popup) {
-		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(editor_button), jvst->fst->window ? TRUE : FALSE);
+		gtk_toggle_tool_button_set_active(GTK_TOGGLE_TOOL_BUTTON(editor_button), jvst->fst->window ? TRUE : FALSE);
 	// If is embedded and want resize window
 	} else if (jvst->fst->window && jvst->want_resize) {
 		jvst->want_resize = FALSE;
@@ -557,6 +567,10 @@ gtk_gui_start (JackVST* jvst) {
 	window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
 	gtk_window_set_title (GTK_WINDOW(window), jvst->client_name);
 	gtk_window_set_resizable (GTK_WINDOW(window), FALSE);
+	hints.min_width = MAIN_WINDOW_DEFAULT_WIDTH;
+	hints.min_height = -1;
+	gtk_window_set_geometry_hints(GTK_WINDOW (window), NULL, &hints, GDK_HINT_MIN_SIZE);
+//	gtk_window_set_default_size (GTK_WINDOW (window), -1, -1);
 
 	gtk_window_set_icon(GTK_WINDOW(window), gdk_pixbuf_new_from_xpm_data((const char**) fsthost_xpm));
 	
