@@ -48,6 +48,12 @@ static Display *the_gtk_display;
 error_handler_t wine_error_handler;
 error_handler_t gtk_error_handler;
 
+struct RemoveFilterData {
+	MIDIFILTER** filters;
+	MIDIFILTER* toRemove;
+	GtkWidget* hpacker;
+};
+
 static void
 learn_handler (GtkToggleButton *but, gboolean ptr)
 {
@@ -92,6 +98,7 @@ midi_pc_handler (GtkToggleButton *but, gboolean ptr) {
 	jvst->midi_pc = 
 		(gtk_toggle_button_get_active (but)) ? MIDI_PC_SELF : MIDI_PC_PLUG;
 }
+
 static void
 save_handler (GtkToggleButton *but, gboolean ptr) {
 	JackVST* jvst = (JackVST*) ptr;
@@ -309,25 +316,6 @@ editor_handler (GtkToggleButton *but, gboolean ptr)
 	}
 }
 
-/*
-struct _MIDIFILTER {
-        struct _MIDIFILTER *next;
-        bool enabled;
-
-        enum MidiMessageType type;
-        uint8_t channel;
-        uint8_t value1;
-        uint8_t value2;
-
-        enum {
-                CHANNEL_REDIRECT,
-                DROP_ALL,
-                ACCEPT
-        } rule;
-        uint8_t rvalue;
-};
-*/
-
 GtkListStore* create_channel_store() {
 	GtkListStore *retval = gtk_list_store_new( 2, G_TYPE_STRING, G_TYPE_INT );
 	unsigned short i;
@@ -376,16 +364,27 @@ GtkListStore* mf_type_store() {
 	return store;
 }
 
-GtkWidget* add_combo(GtkWidget* hpacker, GtkListStore* store, int active, const char* tooltip) {
+static void
+combo_changed_handler(GtkCombo* combo, gboolean ptr) {
+	uint8_t* value = (uint8_t*) ptr;
+	*value = gtk_combo_box_get_active(GTK_COMBO_BOX(combo));
+}
+
+GtkWidget* add_combo_nosig(GtkWidget* hpacker, GtkListStore* store, int active, const char* tooltip) {
 	GtkWidget* combo = gtk_combo_box_new_with_model ( GTK_TREE_MODEL(store) );
 	GtkCellRenderer *renderer = gtk_cell_renderer_text_new ();
 	gtk_cell_layout_pack_start (GTK_CELL_LAYOUT (combo), renderer, TRUE);
 	gtk_cell_layout_set_attributes (GTK_CELL_LAYOUT (combo), renderer, "text", 0, NULL);
-
-//	g_signal_connect( G_OBJECT(channel_listbox), "changed", G_CALLBACK(channel_change), jvst ); 
-	gtk_box_pack_start(GTK_BOX(hpacker), GTK_WIDGET(combo), FALSE, FALSE, 0);
 	gtk_widget_set_tooltip_text( combo, tooltip);
 	gtk_combo_box_set_active(GTK_COMBO_BOX(combo), active);
+	gtk_box_pack_start(GTK_BOX(hpacker), GTK_WIDGET(combo), FALSE, FALSE, 0);
+
+	return combo;
+}
+
+GtkWidget* add_combo(GtkWidget* hpacker, GtkListStore* store, uint8_t* value, const char* tooltip) {
+	GtkWidget* combo = add_combo_nosig(hpacker, store, *value, tooltip);
+	g_signal_connect( G_OBJECT(combo), "changed", G_CALLBACK(combo_changed_handler), value ); 
 
 	return combo;
 }
@@ -410,32 +409,53 @@ GtkWidget* add_entry(GtkWidget* hpacker, uint8_t* value, int len, const char* to
 	return entry;
 }
 
-void filter_addrow(GtkWidget* vpacker, MIDIFILTER *filter) {
+static void
+filter_remove_handler(GtkButton* button, gboolean ptr) {
+	struct RemoveFilterData* rbd = (struct RemoveFilterData*) ptr;
+
+	midi_filter_remove ( rbd->filters, rbd->toRemove );
+	gtk_container_remove(GTK_CONTAINER(fvpacker), rbd->hpacker);
+}
+
+static void
+filter_enable_handler(GtkButton* button, gboolean ptr) {
+	uint8_t* enable = (uint8_t*) ptr;
+	*enable = (uint8_t) ( gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(button)) ? 1 : 0 );
+}
+
+void filter_addrow(GtkWidget* vpacker, MIDIFILTER **filters, MIDIFILTER *filter) {
 	GtkWidget* hpacker = gtk_hbox_new (FALSE, 7);
 	gtk_box_pack_end(GTK_BOX(vpacker), hpacker, FALSE, FALSE, 0);
 
 	GtkWidget* checkbox_enable = gtk_check_button_new();
 	gtk_widget_set_tooltip_text(checkbox_enable, "Enable");
 	if (filter->enabled) gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(checkbox_enable), TRUE);
+	g_signal_connect( G_OBJECT(checkbox_enable), "clicked", G_CALLBACK(filter_enable_handler), &filter->enabled);
 	gtk_box_pack_start(GTK_BOX(hpacker), checkbox_enable, FALSE, FALSE, 0);
 
-	GtkWidget* combo_type = add_combo(hpacker, mf_type_store(), filter->type, "Filter Type");
-	GtkWidget* combo_channel = add_combo(hpacker, create_channel_store(), filter->channel, "MIDI Channel");
+	GtkWidget* combo_type = add_combo(hpacker, mf_type_store(), (uint8_t*) &filter->type, "Filter Type");
+	GtkWidget* combo_channel = add_combo(hpacker, create_channel_store(), &filter->channel, "MIDI Channel");
 	GtkWidget* entry_value1 = add_entry(hpacker, &filter->value1, 3, "Value 1");
 	GtkWidget* entry_value2 = add_entry(hpacker, &filter->value2, 3, "Value 2");
-	GtkWidget* combo_rule = add_combo(hpacker, mf_rule_store(), filter->rule, "Filter Rule");
+	GtkWidget* combo_rule = add_combo(hpacker, mf_rule_store(), (uint8_t*) &filter->rule, "Filter Rule");
 	GtkWidget* entry_rvalue = add_entry(hpacker, &filter->rvalue, 3, "Rule Value");
 
-//	GtkWidget* button_remove = gtk_button_new_from_stock(GTK_STOCK_DELETE);
-//	gtk_box_pack_start(GTK_BOX(hpacker), button_remove, FALSE, FALSE, 0);
+	GtkWidget* button_remove = gtk_button_new_from_stock(GTK_STOCK_DELETE);
+	struct RemoveFilterData* rbd = malloc( sizeof (struct RemoveFilterData) );
+	rbd->filters = filters;
+	rbd->toRemove = filter;
+	rbd->hpacker = hpacker;
+	g_signal_connect_data ( G_OBJECT(button_remove), "clicked",
+		G_CALLBACK(filter_remove_handler), rbd, (GClosureNotify) free, 0);
+	gtk_box_pack_start(GTK_BOX(hpacker), button_remove, FALSE, FALSE, 0);
 }
 
 static gboolean
 filter_new_handler( GtkToggleButton *but, gboolean ptr ) {
 	JackVST* jvst = (JackVST*) ptr;
 	MIDIFILTER mf = {0};
-	filter_addrow(fvpacker, &mf);
-	midi_filter_add( &jvst->filters, &mf );
+	MIDIFILTER* nmf = midi_filter_add( &jvst->filters, &mf );
+	filter_addrow(fvpacker, &jvst->filters, nmf);
  	gtk_widget_show_all (fvpacker);
 }
 
@@ -462,7 +482,7 @@ midifilter_handler (GtkWidget* widget, JackVST *jvst) {
 	gtk_container_add (GTK_CONTAINER (fwin), fvpacker);
 
 	MIDIFILTER *f;
-	for (f = jvst->filters; f; f = f->next) filter_addrow(fvpacker, f);
+	for (f = jvst->filters; f; f = f->next) filter_addrow(fvpacker, &jvst->filters, f);
 
 	GtkToolItem* button_new = gtk_tool_button_new_from_stock(GTK_STOCK_ADD);
 	gtk_toolbar_insert(GTK_TOOLBAR(ftoolbar), button_new, 0);
@@ -713,13 +733,13 @@ gtk_gui_start (JackVST* jvst) {
 		gtk_widget_set_tooltip_text(volume_slider, "Volume");
 	}
 	//----------------------------------------------------------------------------------
-	channel_listbox = add_combo(hpacker, create_channel_store(), 0, "MIDI Channel");
+	channel_listbox = add_combo_nosig(hpacker, create_channel_store(), 0, "MIDI Channel");
 	channel_check( GTK_COMBO_BOX(channel_listbox), jvst );
 	g_signal_connect( G_OBJECT(channel_listbox), "changed", G_CALLBACK(channel_change), jvst ); 
 	//----------------------------------------------------------------------------------
 	GtkListStore* preset_store = gtk_list_store_new( 2, G_TYPE_STRING, G_TYPE_INT );
 	create_preset_store( preset_store, jvst->fst );
-	preset_listbox = add_combo(hpacker, preset_store, jvst->fst->current_program, "Plugin Presets");
+	preset_listbox = add_combo_nosig(hpacker, preset_store, jvst->fst->current_program, "Plugin Presets");
 	preset_listbox_signal = g_signal_connect( G_OBJECT(preset_listbox), "changed", 
 		G_CALLBACK( program_change ), jvst ); 
 	//----------------------------------------------------------------------------------
