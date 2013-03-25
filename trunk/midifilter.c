@@ -27,7 +27,9 @@ MIDIFILTER* midi_filter_add( MIDIFILTER **filters, MIDIFILTER *new ) {
 
 void midi_filter_remove ( MIDIFILTER **filters, MIDIFILTER *toRemove ) {
 	MIDIFILTER *f, *prev;
+	MF_DEBUG("F0: %p\n", *filters);
 	for (f = *filters, prev = NULL; f; prev = f, f = f->next) {
+		MF_DEBUG("F: %p\n", f);
 		if ( f == toRemove ) {
 			if (prev) {
 				prev->next = f->next;
@@ -38,6 +40,7 @@ void midi_filter_remove ( MIDIFILTER **filters, MIDIFILTER *toRemove ) {
 			return;
 		}
 	}
+	MF_DEBUG("FilterRemove: can't find %p\n", toRemove);
 }
 
 void midi_filter_cleanup( MIDIFILTER **filters ) {
@@ -90,7 +93,7 @@ bool midi_filter_check( MIDIFILTER **filters, uint8_t* data, size_t size ) {
 	return ret;
 }
 
-/* Shorcut for our old ComoboBox .. and example how to use filters */
+/* Shortcut for our old ComoboBox .. and example how to use filters */
 void midi_filter_one_channel( MIDIFILTER **filters, uint8_t channel) {
 	midi_filter_cleanup( filters );
         if (! channel) return;
