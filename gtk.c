@@ -277,8 +277,7 @@ configure_handler (GtkWidget* widget, GdkEventConfigure* ev, GtkSocket *sock) {
 }
 
 static void
-editor_handler (GtkToggleButton *but, gboolean ptr)
-{
+editor_handler (GtkToggleButton *but, gboolean ptr) {
 	JackVST* jvst = (JackVST*) ptr;
 
 	if (gtk_toggle_button_get_active (but)) {
@@ -415,6 +414,8 @@ filter_remove_handler(GtkButton* button, gboolean ptr) {
 
 	midi_filter_remove ( rbd->filters, rbd->toRemove );
 	gtk_container_remove(GTK_CONTAINER(fvpacker), rbd->hpacker);
+	GtkWidget* mywin = gtk_widget_get_toplevel (fvpacker);
+	gtk_window_resize(GTK_WINDOW(mywin), 400, 1);
 }
 
 static void
@@ -435,8 +436,8 @@ void filter_addrow(GtkWidget* vpacker, MIDIFILTER **filters, MIDIFILTER *filter)
 
 	GtkWidget* combo_type = add_combo(hpacker, mf_type_store(), (uint8_t*) &filter->type, "Filter Type");
 	GtkWidget* combo_channel = add_combo(hpacker, create_channel_store(), &filter->channel, "MIDI Channel");
-	GtkWidget* entry_value1 = add_entry(hpacker, &filter->value1, 3, "Value 1");
-	GtkWidget* entry_value2 = add_entry(hpacker, &filter->value2, 3, "Value 2");
+//	GtkWidget* entry_value1 = add_entry(hpacker, &filter->value1, 3, "Value 1");
+//	GtkWidget* entry_value2 = add_entry(hpacker, &filter->value2, 3, "Value 2");
 	GtkWidget* combo_rule = add_combo(hpacker, mf_rule_store(), (uint8_t*) &filter->rule, "Filter Rule");
 	GtkWidget* entry_rvalue = add_entry(hpacker, &filter->rvalue, 3, "Rule Value");
 
@@ -471,8 +472,9 @@ midifilter_handler (GtkWidget* widget, JackVST *jvst) {
 	if (have_fwin) return FALSE;
 	have_fwin = TRUE;
 
-	//GtkWidget* fwin = gtk_scrolled_window_new(NULL, NULL);
 	GtkWidget* fwin = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+	gtk_window_set_default_size (GTK_WINDOW (fwin), 400, -1);
+//	gtk_widget_set_size_request (fwin, 400, -1);
 	gtk_window_set_icon(GTK_WINDOW(fwin), gdk_pixbuf_new_from_xpm_data((const char**) fsthost_xpm));
 	g_signal_connect (G_OBJECT(fwin), "delete_event", G_CALLBACK(fwin_destroy_handler), &have_fwin);
 	GtkWidget* ftoolbar = gtk_toolbar_new();
@@ -488,9 +490,6 @@ midifilter_handler (GtkWidget* widget, JackVST *jvst) {
 	gtk_toolbar_insert(GTK_TOOLBAR(ftoolbar), button_new, 0);
 	gtk_box_pack_start(GTK_BOX(fvpacker), ftoolbar, FALSE, FALSE, 0);
 	gtk_widget_set_tooltip_text(GTK_WIDGET(button_new), "New Filter");
-
-//	GtkWidget* hpacker = gtk_hbox_new (FALSE, 7);
-//	gtk_box_pack_start(GTK_BOX(hpacker), butnew, FALSE, FALSE, 0);
 	g_signal_connect (G_OBJECT(button_new),  "clicked", G_CALLBACK(filter_new_handler), jvst);
 
 	gtk_widget_show_all (fwin);
