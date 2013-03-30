@@ -100,8 +100,7 @@ void jvst_destroy(JackVST* jvst) {
 	free(jvst);
 }
 
-static void
-sysex_makeASCII(uint8_t* ascii_midi_dest, char* name, size_t size_dest) {
+static void sysex_makeASCII(uint8_t* ascii_midi_dest, char* name, size_t size_dest) {
 	size_t i;
 	for (i=0; i < strlen(name) && i < size_dest - 1; i++)
 		if ( isprint( toascii( name[i]) ) )
@@ -110,13 +109,11 @@ sysex_makeASCII(uint8_t* ascii_midi_dest, char* name, size_t size_dest) {
 }
 
 // Prepare data for RT thread and wait for send
-void
-jvst_send_sysex(JackVST* jvst, enum SysExWant sysex_want) {
+void jvst_send_sysex(JackVST* jvst, enum SysExWant sysex_want) {
 	/* Do not send anything if we are not connected */
 	if (! jack_port_connected ( jvst->midi_outport  ) ) return;
 
 	pthread_mutex_lock (&jvst->sysex_lock);
-	short g = 0;
 
 	switch(sysex_want) {
 	case SYSEX_WANT_DUMP: ;
@@ -136,6 +133,7 @@ jvst_send_sysex(JackVST* jvst, enum SysExWant sysex_want) {
 	/* Set once on start */
 	case SYSEX_WANT_IDENT_REPLY:
 		if (jvst->sysex_ident_reply.model[1] == 0) {
+			short g = 0;
 			printf("Random ID:");
 			for(g=0; g < sizeof(jvst->sysex_ident_reply.version); g++) {
 				jvst->sysex_ident_reply.version[g] = rand() % 128;
@@ -144,6 +142,7 @@ jvst_send_sysex(JackVST* jvst, enum SysExWant sysex_want) {
 			putchar('\n');
 		}
 		break;
+	case SYSEX_WANT_NO: break; /* because of gcc warning */
 	}
 
 	jvst->sysex_want = sysex_want;
@@ -152,8 +151,7 @@ jvst_send_sysex(JackVST* jvst, enum SysExWant sysex_want) {
 	printf("SysEx Dumped (%d)\n", sysex_want);
 }
 
-void
-jvst_bypass(JackVST* jvst, bool bypass) {
+void jvst_bypass(JackVST* jvst, bool bypass) {
 	jvst->want_state = WANT_STATE_NO;
 	if (bypass & !jvst->bypassed) {
 		jvst->bypassed = TRUE;
@@ -164,8 +162,7 @@ jvst_bypass(JackVST* jvst, bool bypass) {
 	}
 }
 
-static void
-jvst_queue_sysex(JackVST* jvst, jack_midi_data_t* data, size_t size) {
+static void jvst_queue_sysex(JackVST* jvst, jack_midi_data_t* data, size_t size) {
 	jack_ringbuffer_t* rb = jvst->sysex_ringbuffer;
 	if (jack_ringbuffer_write_space(rb) < size + sizeof(size)) {
 		fst_error("No space in SysexInput buffer");
@@ -178,8 +175,7 @@ jvst_queue_sysex(JackVST* jvst, jack_midi_data_t* data, size_t size) {
 }
 
 /* Process Sysex messages in non-realtime thread */
-static void
-jvst_parse_sysex_input(JackVST* jvst, jack_midi_data_t* data, size_t size) {
+static void jvst_parse_sysex_input(JackVST* jvst, jack_midi_data_t* data, size_t size) {
 	switch(data[1]) {
 	case SYSEX_MYID:
 		// Our sysex
@@ -261,8 +257,7 @@ jvst_parse_sysex_input(JackVST* jvst, jack_midi_data_t* data, size_t size) {
 	}
 }
 
-static void
-jvst_sysex_handler(JackVST* jvst) {
+static void jvst_sysex_handler(JackVST* jvst) {
 	jack_ringbuffer_t* rb = jvst->sysex_ringbuffer;
 	/* Send our queued messages */
 	while (jack_ringbuffer_read_space(rb)) {
@@ -278,8 +273,7 @@ jvst_sysex_handler(JackVST* jvst) {
         }
 }
 
-bool
-jvst_load_state (JackVST* jvst, const char * filename) {
+bool jvst_load_state (JackVST* jvst, const char * filename) {
 	bool success;
 	char* file_ext = strrchr(filename, '.');
 
@@ -303,8 +297,7 @@ jvst_load_state (JackVST* jvst, const char * filename) {
 	return success;
 }
 
-bool
-jvst_save_state (JackVST* jvst, const char * filename) {
+bool jvst_save_state (JackVST* jvst, const char * filename) {
 	bool ret = FALSE;
 	char* file_ext = strrchr(filename, '.');
 
@@ -321,8 +314,7 @@ jvst_save_state (JackVST* jvst, const char * filename) {
 	return ret;
 }
 
-static void
-jvst_quit(JackVST* jvst) {
+static void jvst_quit(JackVST* jvst) {
 	if (jvst->with_editor == WITH_EDITOR_NO) {
 		g_main_loop_quit(glib_main_loop);
 
@@ -336,8 +328,7 @@ jvst_quit(JackVST* jvst) {
 	}
 }
 
-static void
-signal_handler(int signum) {
+static void signal_handler(int signum) {
 	JackVST *jvst;
 
 	jvst = jvst_first;
@@ -354,8 +345,7 @@ signal_handler(int signum) {
 	}
 }
 
-static DWORD WINAPI
-wine_thread_aux( LPVOID arg ) {
+static DWORD WINAPI wine_thread_aux( LPVOID arg ) {
         printf("Audio Thread W32ID: %d | LWP: %d\n", GetCurrentThreadId (), (int) syscall (SYS_gettid));
 
 	the_thread_id = pthread_self();
@@ -377,8 +367,7 @@ wine_pthread_create (pthread_t* thread_id, const pthread_attr_t* attr, void *(*f
 	return 0;
 }
 
-static inline void
-process_midi_output(JackVST* jvst, jack_nframes_t nframes) {
+static inline void process_midi_output(JackVST* jvst, jack_nframes_t nframes) {
 	// Do not process anything if MIDI OUT port is not connected
 	if ( ! jack_port_connected ( jvst->midi_outport ) ) return;
 
@@ -458,8 +447,7 @@ send_sysex:
 	pthread_mutex_unlock(&jvst->sysex_lock);
 }
 
-static inline void
-process_midi_input(JackVST* jvst, jack_nframes_t nframes) {
+static inline void process_midi_input(JackVST* jvst, jack_nframes_t nframes) {
 	// Do not process anything if MIDI IN port is not connected
 	if ( ! jack_port_connected ( jvst->midi_inport ) ) return;
 
@@ -569,8 +557,7 @@ process_midi_input(JackVST* jvst, jack_nframes_t nframes) {
 }
 
 // This function is used in audiomaster.c
-void
-queue_midi_message(JackVST* jvst, int status, int d1, int d2, jack_nframes_t delta ) {
+void queue_midi_message(JackVST* jvst, int status, int d1, int d2, jack_nframes_t delta ) {
 	jack_ringbuffer_t* ringbuffer;
 	int	written;
 	short	statusHi = (status >> 4) & 0xF;
@@ -613,8 +600,7 @@ queue_midi_message(JackVST* jvst, int status, int d1, int d2, jack_nframes_t del
 	}
 }
 
-static int
-process_callback( jack_nframes_t nframes, void* data) {
+static int process_callback( jack_nframes_t nframes, void* data) {
 	short i, o;
 	JackVST* jvst = (JackVST*) data;
 	struct AEffect* plugin = jvst->fst->plugin;
@@ -666,8 +652,7 @@ midi_out:
 	return 0;      
 }
 
-static bool
-session_callback( JackVST* jvst ) {
+static bool session_callback( JackVST* jvst ) {
 	printf("session callback\n");
 
 	jack_session_event_t *event = jvst->session_event;
@@ -697,8 +682,7 @@ session_callback( JackVST* jvst ) {
 	return FALSE;
 }
 
-static void
-session_callback_aux( jack_session_event_t *event, void* arg ) {
+static void session_callback_aux( jack_session_event_t *event, void* arg ) {
 	JackVST* jvst = (JackVST*) arg;
 
         jvst->session_event = event;
@@ -706,8 +690,7 @@ session_callback_aux( jack_session_event_t *event, void* arg ) {
         g_idle_add( (GSourceFunc) session_callback, jvst );
 }
 
-static void
-jvst_connect(JackVST *jvst, const char *audio_to) {
+static void jvst_connect(JackVST *jvst, const char *audio_to) {
 	unsigned short i,j;
 	const char *pname;
 	const char **jports;
@@ -727,8 +710,7 @@ jvst_connect(JackVST *jvst, const char *audio_to) {
 	jack_free(jports);
 }
 
-static void
-jvst_connect_midi_to_physical(JackVST* jvst) {
+static void jvst_connect_midi_to_physical(JackVST* jvst) {
 	int i;
 	const char **jports;
 
@@ -746,15 +728,13 @@ jvst_connect_midi_to_physical(JackVST* jvst) {
         jack_free(jports);
 }
 
-static int
-graph_order_callback( void *arg ) {
+static int graph_order_callback( void *arg ) {
 	JackVST* jvst = arg;
 	jvst->graph_order_change = TRUE;
 	return 0;
 }
 
-static bool
-jvst_idle(JackVST* jvst) {
+static bool jvst_idle(JackVST* jvst) {
 	const char **jports;
 	jack_port_t* port;
 	unsigned short i;

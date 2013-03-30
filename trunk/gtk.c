@@ -170,9 +170,34 @@ save_handler (GtkToggleButton *but, gboolean ptr) {
 	gtk_widget_destroy (dialog);
 }
 
+static int
+create_preset_store( GtkListStore* store, FST *fst ) {
+	short i;
+	char progName[24];
+
+	for( i = 0; i < fst->plugin->numPrograms; i++ ) {
+		GtkTreeIter new_row_iter;
+
+		if ( fst->vst_version >= 2 ) {
+			fst_get_program_name(fst, i, progName, sizeof(progName));
+		} else {
+			/* FIXME:
+			So what ? nasty plugin want that we iterate around all presets ?
+			no way - we don't have time for this
+			*/
+			sprintf ( progName, "preset %d", i );
+		}
+
+		gtk_list_store_insert( store, &new_row_iter, i );
+		gtk_list_store_set( store, &new_row_iter, 0, progName, 1, i, -1 );
+	}
+
+	return 1;
+}
+
+
 static void
-load_handler (GtkToggleButton *but, gboolean ptr)
-{
+load_handler (GtkToggleButton *but, gboolean ptr) {
 	JackVST* jvst = (JackVST*) ptr;
 
 	GtkWidget *dialog;
@@ -224,9 +249,9 @@ load_handler (GtkToggleButton *but, gboolean ptr)
 
 	// update preset combo
 	g_signal_handler_block (preset_listbox, preset_listbox_signal);
-	GtkTreeModel *store = gtk_combo_box_get_model( GTK_COMBO_BOX (preset_listbox ));
-	gtk_list_store_clear( GTK_LIST_STORE( store ) );
-	create_preset_store( store, jvst->fst );
+	GtkListStore *store = GTK_LIST_STORE(gtk_combo_box_get_model(GTK_COMBO_BOX(preset_listbox)));
+	gtk_list_store_clear(store);
+	create_preset_store(store, jvst->fst );
         g_signal_handler_unblock (preset_listbox, preset_listbox_signal);
 
 	// Update MIDI PC button
@@ -293,7 +318,7 @@ editor_handler (GtkToggleButton *but, gboolean ptr) {
 		gtk_box_pack_start (GTK_BOX(vpacker), socket_align, TRUE, FALSE, 0);
 
 		gtk_widget_set_size_request(gtk_socket, jvst->fst->width, jvst->fst->height);
-		gtk_socket_add_id (GTK_SOCKET (gtk_socket), jvst->fst->xid);
+		gtk_socket_add_id (GTK_SOCKET (gtk_socket), (GdkNativeWindow) jvst->fst->xid);
 		gtk_socket_signal = g_signal_connect (G_OBJECT(window), "configure-event",
 			G_CALLBACK(configure_handler), gtk_socket);
 
@@ -313,7 +338,7 @@ editor_handler (GtkToggleButton *but, gboolean ptr) {
 	}
 }
 
-GtkListStore* create_channel_store() {
+static GtkListStore* create_channel_store() {
 	GtkListStore *retval = gtk_list_store_new( 2, G_TYPE_STRING, G_TYPE_INT );
 	unsigned short i;
 	char buf[10];
@@ -629,31 +654,6 @@ idle_cb(JackVST *jvst) {
 	jvst_lash_idle(jvst, &quit);
 #endif
 	return TRUE;
-}
-
-int
-create_preset_store( GtkListStore *store, FST *fst ) {
-	short i;
-	char progName[24];
-
-	for( i = 0; i < fst->plugin->numPrograms; i++ ) {
-		GtkTreeIter new_row_iter;
-
-		if ( fst->vst_version >= 2 ) {
-			fst_get_program_name(fst, i, progName, sizeof(progName));
-		} else {
-			/* FIXME:
-			So what ? nasty plugin want that we iterate around all presets ?
-			no way - we don't have time for this
-			*/
-			sprintf ( progName, "preset %d", i );
-		}
-
-		gtk_list_store_insert( store, &new_row_iter, i );
-		gtk_list_store_set( store, &new_row_iter, 0, progName, 1, i, -1 );
-	}
-
-	return 1;
 }
 
 // Really ugly auxiliary function for create buttons ;-)
