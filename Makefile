@@ -18,7 +18,7 @@ PKG_CONFIG_MODULES    += lash-1.0
 endif
 
 CEXTRA                := $(shell pkg-config --cflags $(PKG_CONFIG_MODULES)) 
-CEXTRA                += -fno-pic -fno-PIC -m32 -g -Wno-multichar -O2 -frounding-math -fsignaling-nans -mfpmath=sse -msse2
+CEXTRA                += -fno-pic -fno-PIC -m32 -g -Wall -Wno-multichar -O2 -frounding-math -fsignaling-nans -mfpmath=sse -msse2
 ifneq (,$(findstring lash-1.0,$(PKG_CONFIG_MODULES)))
 CEXTRA                += -DHAVE_LASH
 endif

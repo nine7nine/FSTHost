@@ -28,6 +28,7 @@ static void fx_load_chunk ( FST *fst, FILE *fxfile, enum FxFileType chunkType )
 	size_t br;
 
 	br = fread (&chunkSize, sizeof(size_t), 1, fxfile);
+	if (br != sizeof(size_t)) return; // This should never happend
 	chunkSize = endian_swap(chunkSize);
 	printf("Chunk size: %d\n", chunkSize);
 
@@ -45,11 +46,10 @@ static void fx_load_chunk ( FST *fst, FILE *fxfile, enum FxFileType chunkType )
 
 	chunk = malloc ( chunkSize );
 	br = fread (chunk, 1, chunkSize, fxfile);
-
-	printf("SetChunk type : %d\n", chunkType);
-
-
-	fst_call_dispatcher(fst, effSetChunk, chunkType, chunkSize, chunk, 0);
+	if (br == chunkSize) {
+		printf("SetChunk type : %d\n", chunkType);
+		fst_call_dispatcher(fst, effSetChunk, chunkType, chunkSize, chunk, 0);
+	}
 	free(chunk);
 }
 
@@ -59,6 +59,7 @@ static void fx_load_current_program( FST *fst, FILE *fxfile)
 	size_t br;
 
 	br = fread ( &currentProgram, sizeof(currentProgram), 1, fxfile );
+	if (br != sizeof(currentProgram)) return;
 	currentProgram = endian_swap( currentProgram );
 	fst_program_change(fst, (short) currentProgram);
 }
@@ -68,7 +69,8 @@ static void fx_load_program ( FST *fst, FILE *fxfile, short programNumber )
 {
 	FXHeader fxHeader;
 	char prgName[28];
-	unsigned short i, isChunk;
+	unsigned short i;
+	bool isChunk;
         size_t br;
 
 	// if we in Bank
@@ -93,9 +95,13 @@ static void fx_load_program ( FST *fst, FILE *fxfile, short programNumber )
 		isChunk=FALSE;
 	} else if (programNumber == -2) {
 		isChunk=TRUE;
+	} else {
+		printf("programNumber - wrong set to %d\n", programNumber);
+		return;
 	}
 
 	br = fread ( &prgName, sizeof(prgName), 1, fxfile);
+	if (br != sizeof prgName) return; // This should never happen
 //	prgName = endian_swap(prgName);
 	fst_call_dispatcher(fst, effSetProgramName, 0, 0, prgName, 0);
 
@@ -129,6 +135,11 @@ int fst_load_fxfile ( FST *fst, const char *filename )
 	}
 
 	br = fread ( &fxHeader, sizeof(FXHeader), 1, fxfile );
+	if (br != sizeof(FXHeader)) {
+		printf("FX File is corupted - can not load header\n");
+		fclose(fxfile);
+		return 0; // This should never happend
+	}
         fxHeader.fxID = endian_swap( fxHeader.fxID );
 	fxHeader.numPrograms = endian_swap( fxHeader.numPrograms );
 	fxHeader.chunkMagic = endian_swap( fxHeader.chunkMagic );
@@ -193,7 +204,7 @@ int fst_load_fxfile ( FST *fst, const char *filename )
 	return 1;
 }
 
-static int fx_save_params ( FST *fst, FILE *fxfile )
+static void fx_save_params ( FST *fst, FILE *fxfile )
 {
 	float Params[fst->plugin->numParams];
 	unsigned short i;

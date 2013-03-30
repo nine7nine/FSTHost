@@ -142,11 +142,16 @@ struct _FXHeader {
         unsigned int numPrograms;
 };
 
+void fst_error (const char *fmt, ...);
+
 FSTHandle* fst_load (const char * );
 bool fst_unload (FSTHandle*);
 
 void fst_event_loop();
 bool fst_event_callback();
+
+void fst_suspend (FST *fst);
+void fst_resume (FST *fst);
 
 FST* fst_open (FSTHandle*, audioMasterCallback amc, void* userptr);
 void fst_close (FST*);
