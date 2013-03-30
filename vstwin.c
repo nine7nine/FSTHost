@@ -183,8 +183,8 @@ fst_create_editor (FST* fst) {
 	}
 	
 
-	fst->xid = (int) GetPropA (window, "__wine_x11_whole_window");
-	printf("And xid = %x\n", fst->xid );
+	fst->xid = GetPropA (window, "__wine_x11_whole_window");
+	printf("And xid = %p\n", fst->xid );
 
 	return TRUE;
 }

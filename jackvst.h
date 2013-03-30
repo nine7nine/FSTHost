@@ -93,16 +93,16 @@ struct _JackVST {
 
 void jvst_send_sysex(JackVST* jvst, enum SysExWant);
 void jvst_bypass(JackVST* jvst, bool bypass);
+bool jvst_load_state(JackVST* jvst, const char * filename);
+bool jvst_save_state(JackVST* jvst, const char * filename);
 
 static inline void
-jvst_set_volume(JackVST* jvst, short volume)
-{
+jvst_set_volume(JackVST* jvst, short volume) {
 	if (jvst->volume != -1) jvst->volume = powf(volume / 63.0f, 2);
 }
 
 static unsigned short
-jvst_get_volume(JackVST* jvst)
-{
+jvst_get_volume(JackVST* jvst) {
 	if (jvst->volume == -1) return 0;
 
 	short ret = roundf(sqrtf(jvst->volume) * 63.0f);

@@ -105,7 +105,7 @@ struct _FST
 
 	bool			editor_popup;
 	void*			window; /* win32 HWND */
-	int			xid;    /* X11 XWindow */
+	void*			xid;    /* X11 XWindow */
 	int			width;
 	int			height;
 	bool			wantResize;
@@ -161,6 +161,7 @@ void fst_program_change (FST *fst, short want_program);
 bool fst_get_program_name (FST *fst, short program, char* name, size_t size);
 
 bool fst_run_editor (FST*, bool popup);
+bool fst_show_editor (FST *fst);
 void fst_destroy_editor (FST*);
 
 //extern FSTInfo *fst_get_info (char *dllpathname);
