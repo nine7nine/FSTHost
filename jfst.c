@@ -67,39 +67,6 @@ static sem_t sema;
 GMainLoop* glib_main_loop;
 JackVST *jvst_first;
 
-static void jvst_log(const char *msg) { fprintf(stderr, "JACK: %s", msg); }
-
-JackVST* jvst_new() {
-	JackVST* jvst = calloc (1, sizeof (JackVST));
-	short i;
-
-        pthread_mutex_init (&jvst->sysex_lock, NULL);
-        pthread_cond_init (&jvst->sysex_sent, NULL);
-	jvst->with_editor = WITH_EDITOR_SHOW;
-	jvst->tempo = -1; // -1 here mean get it from Jack
-        /* Local Keyboard MIDI CC message (122) is probably not used by any VST */
-	jvst->want_state_cc = 122;
-	jvst->midi_learn = FALSE;
-	jvst->midi_learn_CC = -1;
-	jvst->midi_learn_PARAM = -1;
-	for(i=0; i<128;++i) jvst->midi_map[i] = -1;
-	jvst->midi_pc = MIDI_PC_PLUG; // mean that plugin take care of Program Change
-
-	// Little trick (const enrties)
-	SysExIdentReply sxir = SYSEX_IDENT_REPLY;
-	memcpy(&jvst->sysex_ident_reply, &sxir, sizeof(SysExIdentReply));
-
-	SysExDumpV1 sxd = SYSEX_DUMP;
-	memcpy(&jvst->sysex_dump, &sxd, sizeof(SysExDumpV1));
-
-	return jvst;
-}
-
-void jvst_destroy(JackVST* jvst) {
-	midi_filter_cleanup( &jvst->filters );
-	free(jvst);
-}
-
 static void sysex_makeASCII(uint8_t* ascii_midi_dest, char* name, size_t size_dest) {
 	size_t i;
 	for (i=0; i < strlen(name) && i < size_dest - 1; i++)
@@ -149,17 +116,6 @@ void jvst_send_sysex(JackVST* jvst, enum SysExWant sysex_want) {
 	pthread_cond_wait (&jvst->sysex_sent, &jvst->sysex_lock);
 	pthread_mutex_unlock (&jvst->sysex_lock);
 	printf("SysEx Dumped (%d)\n", sysex_want);
-}
-
-void jvst_bypass(JackVST* jvst, bool bypass) {
-	jvst->want_state = WANT_STATE_NO;
-	if (bypass & !jvst->bypassed) {
-		jvst->bypassed = TRUE;
-		fst_suspend(jvst->fst);
-	} else if (!bypass & jvst->bypassed) {
-		fst_resume(jvst->fst);
-		jvst->bypassed = FALSE;
-	}
 }
 
 static void jvst_queue_sysex(JackVST* jvst, jack_midi_data_t* data, size_t size) {
@@ -271,47 +227,6 @@ static void jvst_sysex_handler(JackVST* jvst) {
 
 		jvst_parse_sysex_input(jvst, (jack_midi_data_t *) &tmpbuf, size);
         }
-}
-
-bool jvst_load_state (JackVST* jvst, const char * filename) {
-	bool success;
-	char* file_ext = strrchr(filename, '.');
-
-	if (strcasecmp(file_ext, ".fps") == 0) {
-		success = fps_load(jvst, filename);
-	} else if ( (strcasecmp(file_ext, ".fxp") == 0) || 
-	            (strcasecmp(file_ext, ".fxb") == 0) )
-	{
-		success = fst_load_fxfile(jvst->fst, filename);
-	} else {
-		printf("Unkown file type\n");
-		success = FALSE;
-	}
-
-	if (success) {
-		printf("File %s loaded\n", filename);
-	} else {
-		printf("Unable to load file %s\n", filename);
-	}
-
-	return success;
-}
-
-bool jvst_save_state (JackVST* jvst, const char * filename) {
-	bool ret = FALSE;
-	char* file_ext = strrchr(filename, '.');
-
-	if (strcasecmp(file_ext, ".fxp") == 0) {
-		ret = fst_save_fxfile(jvst->fst, filename, FXPROGRAM);
-	} else if (strcasecmp(file_ext, ".fxb") == 0) {
-		ret = fst_save_fxfile(jvst->fst, filename, FXBANK);
-	} else if (strcasecmp(file_ext, ".fps") == 0) {
-		ret = fps_save(jvst, filename);
-	} else {
-		printf("Unkown file type\n");
-	}
-
-	return ret;
 }
 
 static void jvst_quit(JackVST* jvst) {
