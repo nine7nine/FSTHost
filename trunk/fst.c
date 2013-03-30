@@ -3,9 +3,7 @@
 
 #include "fst.h"
 
-void 
-fst_error (const char *fmt, ...)
-{
+void fst_error (const char *fmt, ...) {
 	va_list ap;
 	char buffer[512];
 
@@ -15,9 +13,7 @@ fst_error (const char *fmt, ...)
 	va_end (ap);
 }
 
-void 
-default_fst_error_callback (const char *desc)
-{
+void default_fst_error_callback (const char *desc) {
 	fprintf(stderr, "%s\n", desc);
 }
 

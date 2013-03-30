@@ -54,5 +54,6 @@ MIDIFILTER* midi_filter_add( MIDIFILTER **filters, MIDIFILTER *new );
 bool midi_filter_check( MIDIFILTER **filters, uint8_t* data, size_t size );
 void midi_filter_remove ( MIDIFILTER **filters, MIDIFILTER *toRemove );
 void midi_filter_one_channel( MIDIFILTER **filters, uint8_t channel);
+void midi_filter_cleanup( MIDIFILTER **filters );
 
 #endif /* __midifilter_h__ */

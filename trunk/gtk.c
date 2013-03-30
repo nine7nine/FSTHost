@@ -28,7 +28,6 @@ static	GtkWidget* bypass_button;
 static	GtkWidget* editor_button;
 static	GtkWidget* editor_checkbox;
 static	GtkWidget* channel_listbox;
-static  GtkWidget* event_box;
 static  GtkWidget* preset_listbox;
 static	GtkWidget* midi_learn_toggle;
 static	GtkWidget* midi_pc;
@@ -40,7 +39,6 @@ static	GtkWidget* volume_slider;
 static	GtkWidget* cpu_usage;
 static	gulong preset_listbox_signal;
 static	gulong volume_signal;
-static	gulong bypass_signal;
 static	gulong gtk_socket_signal;
 
 typedef int (*error_handler_t)( Display *, XErrorEvent *);
@@ -241,7 +239,7 @@ configure_handler (GtkWidget* widget, GdkEventConfigure* ev, GtkSocket *sock) {
 	gint x, y;
 	GdkWindow *w;
 
-	g_return_if_fail (sock->plug_window != NULL);
+	if (sock->plug_window != NULL) return FALSE;
 
 	w = sock->plug_window;
 	event.xconfigure.type = ConfigureNotify;
@@ -451,7 +449,7 @@ void filter_addrow(GtkWidget* vpacker, MIDIFILTER **filters, MIDIFILTER *filter)
 	gtk_box_pack_start(GTK_BOX(hpacker), button_remove, FALSE, FALSE, 0);
 }
 
-static gboolean
+static void
 filter_new_handler( GtkToggleButton *but, gboolean ptr ) {
 	JackVST* jvst = (JackVST*) ptr;
 	MIDIFILTER mf = {0};
@@ -467,9 +465,9 @@ fwin_destroy_handler (GtkWidget* widget, GdkEventAny* ev, gpointer ptr) {
 	return FALSE;
 }
 
-static gboolean
+static void
 midifilter_handler (GtkWidget* widget, JackVST *jvst) {
-	if (have_fwin) return FALSE;
+	if (have_fwin) return;
 	have_fwin = TRUE;
 
 	GtkWidget* fwin = gtk_window_new (GTK_WINDOW_TOPLEVEL);
@@ -687,8 +685,6 @@ gtk_gui_start (JackVST* jvst) {
 	// notice the order of the functions.
 	// you can only add an id to an anchored widget.
 
-	GtkCellRenderer *renderer;
-	
 	window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
 	gtk_window_set_title (GTK_WINDOW(window), jvst->client_name);
 	gtk_window_set_resizable (GTK_WINDOW(window), FALSE);
@@ -775,8 +771,7 @@ gtk_gui_start (JackVST* jvst) {
 	return TRUE;
 }
 
-int
-fst_xerror_handler( Display *disp, XErrorEvent *ev ) {
+int fst_xerror_handler( Display *disp, XErrorEvent *ev ) {
 	int error_code = (int) ev->error_code;
 	char error_text[256];
 
@@ -791,11 +786,12 @@ fst_xerror_handler( Display *disp, XErrorEvent *ev ) {
 	}
 }
 
-void
-gtk_gui_init(int *argc, char **argv[]) {
+void gtk_gui_init(int *argc, char **argv[]) {
 	wine_error_handler = XSetErrorHandler( NULL );
 	gtk_init (argc, argv);
 	the_gtk_display = gdk_x11_display_get_xdisplay( gdk_display_get_default() );
 	gtk_error_handler = XSetErrorHandler( fst_xerror_handler );
 	CPUusage_init();
 }
+
+void gtk_gui_quit() { gtk_main_quit(); }

@@ -26,6 +26,7 @@
 #include <sys/syscall.h>
 
 #include "jackvst.h"
+#include <jack/thread.h>
 
 #define VERSION "1.5.0"
 #define APPNAME "fsthost"
@@ -41,6 +42,7 @@ extern long jack_host_callback (struct AEffect*, int32_t, int32_t, intptr_t, voi
 /* gtk.c */
 extern void gtk_gui_init (int* argc, char** argv[]);
 extern int gtk_gui_start (JackVST * jvst);
+extern void gtk_gui_quit();
 
 /* lash.c */
 #ifdef HAVE_LASH
@@ -65,7 +67,7 @@ static sem_t sema;
 GMainLoop* glib_main_loop;
 JackVST *jvst_first;
 
-static void jvst_log(const char *msg) { fprintf(stderr, "JACK: ", msg); }
+static void jvst_log(const char *msg) { fprintf(stderr, "JACK: %s", msg); }
 
 JackVST* jvst_new() {
 	JackVST* jvst = calloc (1, sizeof (JackVST));
@@ -330,7 +332,7 @@ jvst_quit(JackVST* jvst) {
 		printf("Close plugin\n");
 		fst_close(jvst->fst);
 	} else {
-		gtk_main_quit();
+		gtk_gui_quit();
 	}
 }
 
@@ -446,6 +448,7 @@ send_sysex:
 		sysex_data = (jack_midi_data_t*) &jvst->sysex_dump;
 		sysex_size = sizeof(SysExDumpV1);
 		break;
+	default: return; // error - skip processing for now
 	}
 	if ( jack_midi_event_write(port_buffer, t, sysex_data, sysex_size) )
 		fst_error("SysEx error: jack_midi_event_write failed.");
@@ -703,18 +706,17 @@ session_callback_aux( jack_session_event_t *event, void* arg ) {
         g_idle_add( (GSourceFunc) session_callback, jvst );
 }
 
-static int
+static void
 jvst_connect(JackVST *jvst, const char *audio_to) {
 	unsigned short i,j;
 	const char *pname;
 	const char **jports;
-	jack_port_t* port;
 
 	// Connect audio port
 	jports = jack_get_ports(jvst->client, audio_to, JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput);
 	if (!jports) {
 		printf("Can't find any ports for %s\n", audio_to);
-		return 0;
+		return;
 	}
 
 	for (i=0, j=0; jports[i] && j < jvst->numOuts; i++, j++) {
@@ -872,7 +874,6 @@ static void usage(char* appname) {
 int WINAPI
 WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	HANDLE*		h_thread;
-	LPWSTR*		szArgList;
 	int		argc = -1;
 	char**		argv = NULL;
 	char*		menv;

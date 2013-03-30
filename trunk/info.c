@@ -7,35 +7,31 @@
 
 static bool need_save = FALSE;
 
-static char *
-int2str(char *str, int integer) {
-   sprintf(str, "%d", integer);
+static xmlChar *
+int2str(xmlChar *str, int buf_len, int integer) {
+   xmlStrPrintf(str, buf_len, BAD_CAST "%d", integer);
    return str;
 }
 
-static char *
-bool2str(char *str, bool boolean) {
-   if (boolean) {
-   	sprintf(str, "TRUE");
-   } else {
-   	sprintf(str, "FALSE");
-   }
+static xmlChar *
+bool2str(xmlChar *str, int buf_len, bool boolean) {
+   xmlStrPrintf(str, buf_len, BAD_CAST ( (boolean) ? "TRUE" : "FALSE" ));
    return str;
 }
 
 static bool
 fst_exists(char *path, xmlNode *xml_rn) {
 	xmlNode* fst_node;
-	xmlChar fullpath[PATH_MAX];
+	char fullpath[PATH_MAX];
 
 	if (! realpath(path,fullpath))
 		return 10;
 
 	for (fst_node = xml_rn->children; fst_node; fst_node = fst_node->next) {
-		if (strcmp(fst_node->name, "fst"))
+		if (xmlStrcmp(fst_node->name, BAD_CAST "fst"))
 			continue;
 
-		if (! strcmp(xmlGetProp(fst_node, "path"), fullpath)) {
+		if (! xmlStrcmp(xmlGetProp(fst_node, BAD_CAST "path"), BAD_CAST fullpath)) {
 			printf("%s already exists\n", path);
 			return TRUE;
 		}
@@ -58,29 +54,29 @@ static void fst_add2db(FST* fst, xmlNode *xml_rn) {
 	xmlNode* fst_node;
 	xmlChar tmpstr[32];
 
-	fst_node = xmlNewChild(xml_rn, NULL,"fst", NULL);
+	fst_node = xmlNewChild(xml_rn, NULL,BAD_CAST "fst", NULL);
 
-	xmlNewProp(fst_node,"path",fst->handle->path);
+	xmlNewProp(fst_node,BAD_CAST "path",BAD_CAST fst->handle->path);
 
 	if ( fst_call_dispatcher( fst, effGetEffectName, 0, 0, tmpstr, 0 ) ) {
-		xmlNewChild(fst_node, NULL,"name",tmpstr);
+		xmlNewChild(fst_node, NULL,BAD_CAST "name",tmpstr);
 	} else {
-		xmlNewChild(fst_node, NULL,"name",fst->handle->name);
+		xmlNewChild(fst_node, NULL,BAD_CAST "name",BAD_CAST fst->handle->name);
 	}
 
-	xmlNewChild(fst_node, NULL,"uniqueID", int2str(tmpstr,fst->plugin->uniqueID));
-	xmlNewChild(fst_node, NULL,"version", int2str(tmpstr,fst->plugin->version));
-	xmlNewChild(fst_node, NULL,"vst_version", int2str(tmpstr,fst->vst_version));
-	xmlNewChild(fst_node, NULL, "isSynth", bool2str(tmpstr,&fst->isSynth));
-	xmlNewChild(fst_node, NULL, "canReceiveVstEvents", bool2str(tmpstr,fst->canReceiveVstEvents));
-	xmlNewChild(fst_node, NULL, "canReceiveVstMidiEvent", bool2str(tmpstr,fst->canReceiveVstMidiEvent));
-	xmlNewChild(fst_node, NULL, "canSendVstEvents", bool2str(tmpstr,fst->canSendVstEvents));
-	xmlNewChild(fst_node, NULL, "canSendVstMidiEvent", bool2str(tmpstr,fst->canSendVstMidiEvent));
-	xmlNewChild(fst_node, NULL, "numInputs", int2str(tmpstr,fst->plugin->numInputs));
-	xmlNewChild(fst_node, NULL, "numOutputs", int2str(tmpstr,fst->plugin->numOutputs));
-	xmlNewChild(fst_node, NULL, "numParams", int2str(tmpstr,fst->plugin->numParams));
-	xmlNewChild(fst_node, NULL, "hasEditor", 
-		bool2str(tmpstr,fst->plugin->flags & effFlagsHasEditor ? TRUE : FALSE));
+	xmlNewChild(fst_node, NULL,BAD_CAST "uniqueID", int2str(tmpstr,sizeof tmpstr,fst->plugin->uniqueID));
+	xmlNewChild(fst_node, NULL,BAD_CAST "version", int2str(tmpstr,sizeof tmpstr,fst->plugin->version));
+	xmlNewChild(fst_node, NULL,BAD_CAST "vst_version", int2str(tmpstr,sizeof tmpstr,fst->vst_version));
+	xmlNewChild(fst_node, NULL,BAD_CAST "isSynth", bool2str(tmpstr,sizeof tmpstr,&fst->isSynth));
+	xmlNewChild(fst_node, NULL,BAD_CAST "canReceiveVstEvents", bool2str(tmpstr,sizeof tmpstr,fst->canReceiveVstEvents));
+	xmlNewChild(fst_node, NULL,BAD_CAST "canReceiveVstMidiEvent", bool2str(tmpstr,sizeof tmpstr,fst->canReceiveVstMidiEvent));
+	xmlNewChild(fst_node, NULL,BAD_CAST "canSendVstEvents", bool2str(tmpstr,sizeof tmpstr,fst->canSendVstEvents));
+	xmlNewChild(fst_node, NULL,BAD_CAST "canSendVstMidiEvent", bool2str(tmpstr,sizeof tmpstr,fst->canSendVstMidiEvent));
+	xmlNewChild(fst_node, NULL,BAD_CAST "numInputs", int2str(tmpstr,sizeof tmpstr,fst->plugin->numInputs));
+	xmlNewChild(fst_node, NULL,BAD_CAST "numOutputs", int2str(tmpstr,sizeof tmpstr,fst->plugin->numOutputs));
+	xmlNewChild(fst_node, NULL,BAD_CAST "numParams", int2str(tmpstr,sizeof tmpstr,fst->plugin->numParams));
+	xmlNewChild(fst_node, NULL,BAD_CAST "hasEditor", 
+		bool2str(tmpstr,sizeof tmpstr, fst->plugin->flags & effFlagsHasEditor ? TRUE : FALSE));
 
 	/* TODO: Category need some changes in vestige (additional enum)
 	if( (info->Category = read_string( fp )) == NULL ) goto error;
@@ -160,8 +156,8 @@ int fst_info(const char *dbpath, const char *fst_path) {
 		xml_rn = xmlDocGetRootElement(xml_db);
 	} else {
 		printf("Could not open/parse file %s. Create new one.\n", dbpath);
-		xml_db = xmlNewDoc("1.0");
-		xml_rn = xmlNewDocRawNode(xml_db, NULL, "fst_database", NULL);
+		xml_db = xmlNewDoc(BAD_CAST "1.0");
+		xml_rn = xmlNewDocRawNode(xml_db, NULL, BAD_CAST "fst_database", NULL);
 		xmlDocSetRootElement(xml_db, xml_rn);
 	}
 

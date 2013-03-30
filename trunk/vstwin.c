@@ -224,7 +224,7 @@ fst_resume (FST *fst) {
 } 
 
 bool fst_run_editor (FST* fst, bool popup) {
-	if (fst->window) return;
+	if (fst->window) return FALSE;
 
 	if ( ! WindowClassRegistered && ! register_window_class() )
 		return FALSE;
