@@ -602,19 +602,17 @@ static void session_callback_aux( jack_session_event_t *event, void* arg ) {
 }
 
 static void jvst_connect(JackVST *jvst, const char *audio_to) {
-	unsigned short i,j;
-	const char *pname;
-	const char **jports;
-
 	// Connect audio port
-	jports = jack_get_ports(jvst->client, audio_to, JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput);
+	const char **jports = jack_get_ports(jvst->client, audio_to, JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput);
 	if (!jports) {
 		printf("Can't find any ports for %s\n", audio_to);
 		return;
 	}
 
-	for (i=0, j=0; jports[i] && j < jvst->numOuts; i++, j++) {
-		pname = jack_port_name(jvst->outports[j]);
+	unsigned short i;
+	const char *pname;
+	for (i=0; jports[i] && i < jvst->numOuts; i++) {
+		pname = jack_port_name(jvst->outports[i]);
 		jack_connect(jvst->client, pname, jports[i]);
 		printf("Connect: %s -> %s\n", pname, jports[i]);
 	}
@@ -622,12 +620,10 @@ static void jvst_connect(JackVST *jvst, const char *audio_to) {
 }
 
 static void jvst_connect_midi_to_physical(JackVST* jvst) {
-	int i;
-	const char **jports;
-
-        jports = jack_get_ports(jvst->client, NULL, JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput|JackPortIsPhysical);
+	const char **jports = jack_get_ports(jvst->client, NULL, JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput|JackPortIsPhysical);
         if (!jports) return;
 
+	unsigned short i;
 	const char *pname = jack_port_name(jvst->midi_inport);
         for (i=0; jports[i]; i++) {
 		if (jack_port_connected_to(jvst->midi_inport, jports[i]))
