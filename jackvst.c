@@ -1,5 +1,9 @@
 #include <jackvst.h>
 
+/* fps.c */
+bool fps_save(JackVST* jvst, const char* filename);
+bool fps_load(JackVST* jvst, const char* filename);
+
 JackVST* jvst_new() {
 	JackVST* jvst = calloc (1, sizeof (JackVST));
 	short i;
