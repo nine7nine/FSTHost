@@ -40,16 +40,6 @@ fst_exists(char *path, xmlNode *xml_rn) {
 	return FALSE;
 }
 
-// most simple one :) could be sufficient.... 
-intptr_t
-simple_master_callback( struct AEffect *fx, long opcode, long index, long value, void *ptr, float opt ) {
-	if ( opcode == audioMasterVersion ) {
-		return 2;
-	} else {
-		return 0;
-	}
-}
-
 static void fst_add2db(FST* fst, xmlNode *xml_rn) {
 	xmlNode* fst_node;
 	xmlChar tmpstr[32];

@@ -175,4 +175,7 @@ int fst_save_fxfile (FST * fst, const char * filename, enum FxFileType fileType)
 /* Support for XML Database (info.c) */
 int fst_info(const char *dbpath, const char *fst_path);
 
+/* Simple master callback - from fst.c */
+intptr_t simple_master_callback( struct AEffect *fx, int32_t opcode, int32_t index, intptr_t value, void *ptr, float opt );
+
 #endif /* __fst_fst_h__ */

@@ -1,15 +1,5 @@
 #include "fst.h"
 
-// most simple one :) could be sufficient.... 
-intptr_t
-simple_master_callback( struct AEffect *fx, long opcode, long index, long value, void *ptr, float opt ) {
-	if ( opcode == audioMasterVersion ) {
-		return 2;
-	} else {
-		return 0;
-	}
-}
-
 static void fst_showinfo(FST* fst) {
 	char tmpstr[64];
 	if ( fst_call_dispatcher( fst, effGetEffectName, 0, 0, tmpstr, 0 ) ) {
