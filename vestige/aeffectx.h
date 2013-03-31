@@ -294,6 +294,10 @@ typedef struct AEffect
 	int32_t version;
 	// processReplacing 50-53
 	void (* processReplacing)( struct AEffect * , float **, float **, int32_t );
+	// processReplacing 54-57
+	void(* processDoubleReplacing) (struct AEffect *, double**, double**, int32_t);
+	// future ?
+	char future[56];
 } AEffect;
 
 typedef struct VstPatchChunkInfo
