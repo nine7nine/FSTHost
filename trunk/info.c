@@ -86,7 +86,7 @@ static void fst_get_info(char* path, xmlNode *xml_rn) {
 		}
 
 		printf( "Revive plugin: %s\n", handle->name);
-		fst = fst_open(handle, (audioMasterCallback) simple_master_callback, NULL);
+		fst = fst_open(handle, &simple_master_callback, NULL);
 		if (! fst) {
 			fst_error ("can't instantiate plugin %s", handle->name);
 			return;

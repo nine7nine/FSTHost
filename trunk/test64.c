@@ -43,7 +43,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	}
 
 	printf( "Revive plugin: %s\n", handle->name);
-	fst = fst_open(handle, (audioMasterCallback) simple_master_callback, NULL);
+	fst = fst_open(handle, &simple_master_callback, NULL);
 	if (! fst) {
 		fst_error ("can't instantiate plugin %s", handle->name);
 		return 1;

@@ -37,7 +37,7 @@
 #define MIDI_EVENT_MAX 16 /* Max counts of events in one process */
 
 /* audiomaster.c */
-extern long jack_host_callback (struct AEffect*, int32_t, int32_t, intptr_t, void *, float );
+extern intptr_t jack_host_callback (struct AEffect*, int32_t, int32_t, intptr_t, void *, float );
 
 /* gtk.c */
 extern void gtk_gui_init (int* argc, char** argv[]);
@@ -48,10 +48,6 @@ extern void gtk_gui_quit();
 #ifdef HAVE_LASH
 extern void jvst_lash_init(JackVST *jvst, int* argc, char** argv[]);
 #endif
-
-/* fps.c */
-bool fps_save(JackVST* jvst, const char* filename);
-bool fps_load(JackVST* jvst, const char* filename);
 
 /* Structures & Prototypes for midi output and associated queue */
 struct MidiMessage {
@@ -888,7 +884,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	if (!jvst->client_name) jvst->client_name = jvst->handle->name;
 
 	printf( "Revive plugin: %s\n", jvst->client_name);
-	if ((jvst->fst = fst_open (jvst->handle, (audioMasterCallback) jack_host_callback, jvst)) == NULL) {
+	if ((jvst->fst = fst_open (jvst->handle, &jack_host_callback, jvst)) == NULL) {
 		fst_error ("can't instantiate plugin %s", plug_path);
 		return 1;
 	}
