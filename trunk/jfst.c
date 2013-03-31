@@ -278,7 +278,7 @@ wine_pthread_create (pthread_t* thread_id, const pthread_attr_t* attr, void *(*f
 	return 0;
 }
 
-static inline void process_midi_output(JackVST* jvst, jack_nframes_t nframes) {
+inline void process_midi_output(JackVST* jvst, jack_nframes_t nframes) {
 	// Do not process anything if MIDI OUT port is not connected
 	if ( ! jack_port_connected ( jvst->midi_outport ) ) return;
 
@@ -358,7 +358,7 @@ send_sysex:
 	pthread_mutex_unlock(&jvst->sysex_lock);
 }
 
-static inline void process_midi_input(JackVST* jvst, jack_nframes_t nframes) {
+inline void process_midi_input(JackVST* jvst, jack_nframes_t nframes) {
 	// Do not process anything if MIDI IN port is not connected
 	if ( ! jack_port_connected ( jvst->midi_inport ) ) return;
 
@@ -641,26 +641,57 @@ static int graph_order_callback( void *arg ) {
 	return 0;
 }
 
-static bool jvst_idle(JackVST* jvst) {
-	const char **jports;
-	jack_port_t* port;
+inline void jvst_sysex_notify(JackVST* jvst) {
+	// Wait until program change
+	if (jvst->fst->want_program != -1) return;
+
+	SysExDumpV1* d = &jvst->sysex_dump;
+	if ( d->program != jvst->fst->current_program ||
+		d->channel != jvst->channel ||
+		d->state   != ( (jvst->bypassed) ? SYSEX_STATE_NOACTIVE : SYSEX_STATE_ACTIVE ) ||
+		d->volume  != jvst_get_volume(jvst)
+	) jvst_send_sysex(jvst, SYSEX_WANT_DUMP);
+}
+
+inline void jvst_connect_to_ctrl_app(JackVST* jvst) {
+	const char **jports = jack_get_ports(jvst->client, CTRLAPP, JACK_DEFAULT_MIDI_TYPE, 0);
+	if (!jports) return;
+
 	unsigned short i;
+	const char *src, *dst;
+	jack_port_t* port;
+	for (i=0; jports[i]; i++) {
+		// Skip mine port
+		port = jack_port_by_name(jvst->client, jports[i]);
+		if ( jack_port_is_mine(jvst->client, port) ) continue;
+
+		if (jack_port_flags(port) & JackPortIsInput) {
+			port = jvst->midi_outport;
+			src = jack_port_name(port);
+			dst = jports[i];
+		} else if (jack_port_flags(port) & JackPortIsOutput) {
+			port = jvst->midi_inport;
+			src = jports[i];
+			dst = jack_port_name(port);
+		} else { continue; }
+
+		if ( jack_port_connected_to(port, jports[i]) ) continue;
+		printf("Connect to: %s\n", jports[i]);
+		jack_connect(jvst->client, src, dst);
+		jvst->sysex_want_notify = true; /* Now we are connected to CTRL APP */
+	}
+        jack_free(jports);
+}
+
+static bool jvst_idle(JackVST* jvst) {
+	// Handle SysEx Input
+	jvst_sysex_handler(jvst);
 
 	// Check state
-	if (jvst->want_state == WANT_STATE_BYPASS) {
-		jvst_bypass(jvst,TRUE);
-	} else if (jvst->want_state == WANT_STATE_RESUME) {
-		jvst_bypass(jvst,FALSE);
-	}
-
-	// Send notify if something change
-	if (jvst->sysex_want_notify && jvst->fst->want_program == -1) {
-		SysExDumpV1* d = &jvst->sysex_dump;
-		if ( d->program != jvst->fst->current_program ||
-		     d->channel != jvst->channel ||
-		     d->state   != ( (jvst->bypassed) ? SYSEX_STATE_NOACTIVE : SYSEX_STATE_ACTIVE ) ||
-		     d->volume  != jvst_get_volume(jvst)
-		) jvst_send_sysex(jvst, SYSEX_WANT_DUMP);
+	switch(jvst->want_state) {
+	case WANT_STATE_BYPASS: jvst_bypass(jvst,TRUE); break;
+	case WANT_STATE_RESUME: jvst_bypass(jvst,FALSE); break;
+	case WANT_STATE_NO: break; /* Fix GCC warning ;-) */
 	}
 
 	// Self Program change support
@@ -669,39 +700,14 @@ static bool jvst_idle(JackVST* jvst) {
 		jvst->midi_pc = MIDI_PC_SELF;
 	}
 
-	// Handle SysEx Input
-	jvst_sysex_handler(jvst);
-
 	// Connect MIDI ports to control app if Graph order change
-	if (! jvst->graph_order_change) return TRUE;
-	jvst->graph_order_change = FALSE;
-
-	jports = jack_get_ports(jvst->client, CTRLAPP, JACK_DEFAULT_MIDI_TYPE, 0);
-	if (!jports) return TRUE;
-
-	for (i=0; jports[i]; i++) {
-		port = jack_port_by_name(jvst->client, jports[i]);
-
-		// Skip mine
-		if ( jack_port_is_mine(jvst->client, port) ) continue;
-
-		if (jack_port_flags(port) & JackPortIsInput) {
-			if ( jack_port_connected_to(jvst->midi_outport, jports[i]) )
-				continue;
-
-			printf("Connect to: %s\n", jports[i]);
-			jack_connect(jvst->client, jack_port_name(jvst->midi_outport), jports[i]);
-			jvst->sysex_want_notify = true; /* Now we are connected to CTRL APP */
-		} else if (jack_port_flags(port) & JackPortIsOutput) {
-			if ( jack_port_connected_to(jvst->midi_inport, jports[i]) )
-				continue;
-
-			printf("Connect to: %s\n", jports[i]);
-			jack_connect(jvst->client, jports[i], jack_port_name(jvst->midi_inport));
-			jvst->sysex_want_notify = true; /* Now we are connected to CTRL APP */
-		}
+	if (! jvst->graph_order_change) {
+		jvst->graph_order_change = FALSE;
+		jvst_connect_to_ctrl_app(jvst);
 	}
-        jack_free(jports);
+
+	// Send notify if we want notify and something change
+	if (jvst->sysex_want_notify) jvst_sysex_notify(jvst);
 
 	return TRUE;
 }
