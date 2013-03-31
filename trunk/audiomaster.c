@@ -39,7 +39,7 @@
 
 extern void queue_midi_message(JackVST* jvst, int status, int d1, int d2, jack_nframes_t delta );
 
-long
+intptr_t
 jack_host_callback (struct AEffect* effect, int32_t  opcode, int32_t  index, intptr_t value, void* ptr, float opt)
 {
 	static struct VstTimeInfo _timeInfo;

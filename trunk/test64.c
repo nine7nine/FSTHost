@@ -1,7 +1,7 @@
 #include "fst.h"
 
 // most simple one :) could be sufficient.... 
-static long
+intptr_t
 simple_master_callback( struct AEffect *fx, long opcode, long index, long value, void *ptr, float opt ) {
 	if ( opcode == audioMasterVersion ) {
 		return 2;
