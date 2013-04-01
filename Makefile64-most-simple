@@ -5,11 +5,10 @@ DLLS                  =
 EXES                  = test64
 
 CEXTRA                =
-CEXTRA                += -fPIC -g -Wall -Wno-multichar -O2 -frounding-math -fsignaling-nans -mfpmath=sse -msse2
+CEXTRA                += -fPIC -m64 -g -Wall -Wno-multichar 
 CXXEXTRA              = -mno-cygwin
 RCEXTRA               =
 INCLUDE_PATH          = -I. -I/usr/include -I/usr/include -I/usr/include/wine -I/usr/include/wine/windows
-INCLUDE_PATH          += -I/usr/local/include/wine -I/usr/local/include/wine/windows
 DLL_PATH              =
 LIBRARY_PATH          = 
 LIBRARIES             := -m64
@@ -20,11 +19,11 @@ BIN_INST_PATH         =
 
 ### test64.exe sources and settings
 test64_MODULE        = test64
-test64_C_SRCS        = fst.c vstwin.c test64.c
+test64_C_SRCS        = test64-most-simple.c
 test64_LDFLAGS       = -m64
 test64_DLL_PATH      =
 test64_DLLS          = 
-test64_LIBRARY_PATH  = -lpthread
+test64_LIBRARY_PATH  = 
 test64_LIBRARIES     =
 test64_OBJS          = $(test64_C_SRCS:.c=.o)
 
