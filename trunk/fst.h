@@ -67,13 +67,6 @@ struct _FSTHandle
     int plugincnt;
 };
 
-struct ERect {
-    short top;
-    short left;
-    short bottom;
-    short right;
-};
-
 struct FSTDispatcher {
 	int	opcode;
 	int	index;
@@ -176,6 +169,6 @@ int fst_save_fxfile (FST * fst, const char * filename, enum FxFileType fileType)
 int fst_info(const char *dbpath, const char *fst_path);
 
 /* Simple master callback - from fst.c */
-intptr_t simple_master_callback( struct AEffect *fx, int32_t opcode, int32_t index, intptr_t value, void *ptr, float opt );
+intptr_t VSTCALLBACK simple_master_callback( struct AEffect *fx, int32_t opcode, int32_t index, intptr_t value, void *ptr, float opt );
 
 #endif /* __fst_fst_h__ */

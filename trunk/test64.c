@@ -1,3 +1,4 @@
+#include <unistd.h>
 #include "fst.h"
 
 static void fst_showinfo(FST* fst) {
@@ -47,6 +48,17 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	if (! fst) {
 		fst_error ("can't instantiate plugin %s", handle->name);
 		return 1;
+	}
+
+	fst_resume(fst);
+
+	fst_run_editor(fst, false);
+
+	fst_error("Wait 5s ..");
+	int t;
+	for (t=0; t < 10; t++) {
+		fst_event_callback();
+		sleep(1);
 	}
 
 	fst_showinfo(fst);

@@ -20,8 +20,6 @@
 #include <stdio.h>
 #include <math.h>
 
-#include <vestige/aeffectx.h>
-
 #include "jackvst.h"
 
 /* The following audioMaster opcode handlings are copied
@@ -39,7 +37,7 @@
 
 extern void queue_midi_message(JackVST* jvst, int status, int d1, int d2, jack_nframes_t delta );
 
-intptr_t
+intptr_t VSTCALLBACK
 jack_host_callback (struct AEffect* effect, int32_t  opcode, int32_t  index, intptr_t value, void* ptr, float opt)
 {
 	static struct VstTimeInfo _timeInfo;
