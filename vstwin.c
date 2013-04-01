@@ -11,7 +11,7 @@ static bool WindowClassRegistered = FALSE;
 
 static FST* 
 fst_new () {
-	FST* fst = (FST*) calloc (1, sizeof (FST));
+	FST* fst = calloc (1, sizeof (FST));
 
 	pthread_mutex_init (&fst->lock, NULL);
 	pthread_mutex_init (&fst->event_call_lock, NULL);
@@ -26,8 +26,7 @@ fst_new () {
 
 /* Plugin "canDo" helper function to neaten up plugin feature detection calls */
 static bool
-fst_canDo(FST* fst, char* feature)
-{
+fst_canDo(FST* fst, char* feature) {
 	bool can;
 	can = (fst->plugin->dispatcher(fst->plugin, effCanDo, 0, 0, (void*)feature, 0.0f) > 0);
 	printf("Plugin can %-20s : %s\n", feature, ((can) ? "Yes" : "No"));
@@ -471,30 +470,29 @@ fst_unload (FSTHandle* fhandle) {
 
 FST*
 fst_open (FSTHandle* fhandle, audioMasterCallback amc, void* userptr) {
-	FST* fst = fst_new ();
-
 	if( fhandle == NULL ) {
 	    fst_error( "the handle was NULL\n" );
 	    return NULL;
 	}
 
-	if ((fst->plugin = fhandle->main_entry (amc)) == NULL)  {
+	struct AEffect* plugin = fhandle->main_entry (amc);
+	if (plugin == NULL)  {
 		fst_error ("%s could not be instantiated\n", fhandle->name);
-		free (fst);
 		return NULL;
 	}
 
+	if (plugin->magic != kEffectMagic) {
+		fst_error ("%s is not a VST plugin\n", fhandle->name);
+		return NULL;
+	}
+
+	FST* fst = fst_new ();
+	fst->plugin = plugin;
 	fst->handle = fhandle;
 	fst->plugin->resvd1 = userptr;
 
-	if (fst->plugin->magic != kEffectMagic) {
-		fst_error ("%s is not a VST plugin\n", fhandle->name);
-		free (fst);
-		return NULL;
-	}
-
 	// Open Plugin
-	fst->plugin->dispatcher (fst->plugin, effOpen, 0, 0, NULL, 0.0f);
+	plugin->dispatcher (plugin, effOpen, 0, 0, NULL, 0.0f);
 	fst->vst_version = fst->plugin->dispatcher (fst->plugin, effGetVstVersion, 0, 0, NULL, 0.0f);
 
 	if (fst->vst_version >= 2) {
