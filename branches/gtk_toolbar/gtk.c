@@ -593,10 +593,6 @@ gtk_gui_start (JackVST* jvst) {
 	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(editor_checkbox), TRUE);
 	add_widget2toolbar( editor_checkbox, GTK_TOOLBAR(toolbar) );
 	//----------------------------------------------------------------------------------
-	midi_learn_toggle = make_img_button(GTK_STOCK_DND, "MIDI Learn", TRUE, G_CALLBACK(learn_handler),
-		jvst, FALSE, toolbar, midi_learn_xpm);
-	sysex_button = make_img_button(GTK_STOCK_EXECUTE, "Send SysEx", FALSE, G_CALLBACK(sysex_handler),
-		jvst, FALSE, toolbar, sysex_xpm);
 	midi_pc = make_img_button(GTK_STOCK_CONVERT, "Self handling MIDI PC", TRUE, G_CALLBACK(midi_pc_handler),
 		jvst, (jvst->midi_pc > MIDI_PC_PLUG), toolbar, midi_pc_xpm);
 	//----------------------------------------------------------------------------------
@@ -632,6 +628,11 @@ gtk_gui_start (JackVST* jvst) {
 		G_CALLBACK( program_change ), jvst ); 
 	gtk_widget_set_tooltip_text(preset_listbox, "Plugin Presets");
 	add_widget2toolbar( preset_listbox, GTK_TOOLBAR(toolbar) );
+	//----------------------------------------------------------------------------------
+	midi_learn_toggle = make_img_button(GTK_STOCK_DND, "MIDI Learn", TRUE, G_CALLBACK(learn_handler),
+		jvst, FALSE, toolbar, midi_learn_xpm);
+	sysex_button = make_img_button(GTK_STOCK_EXECUTE, "Send SysEx", FALSE, G_CALLBACK(sysex_handler),
+		jvst, FALSE, toolbar, sysex_xpm);
 	//----------------------------------------------------------------------------------
 	cpu_usage = gtk_label_new ("0");
 	gtk_widget_set_tooltip_text(cpu_usage, "CPU Usage");
