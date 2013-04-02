@@ -27,6 +27,8 @@
 #ifndef _AEFFECTX_H
 #define _AEFFECTX_H
 
+#define VSTCALLBACK __cdecl
+
 #define CCONST(a, b, c, d)( ( ( (int) a ) << 24 ) | ( ( (int) b ) << 16 ) | ( ( (int) c ) << 8 ) | ( ( (int) d ) << 0 ) )
 
 #define audioMasterAutomate 0
@@ -254,19 +256,18 @@ typedef struct VstTimeInfo
 
 } VstTimeInfo;
 
-typedef struct AEffect
-{
+typedef struct AEffect {
 	// Never use c++!!!
 	// 00-03
 	int32_t magic;
 	// dispatcher 04-07
-	intptr_t (* dispatcher) (struct AEffect *, int32_t, int32_t, intptr_t, void *, float);
+	intptr_t (VSTCALLBACK *dispatcher) (struct AEffect *, int32_t, int32_t, intptr_t, void *, float);
 	// process, quite sure 08-0b
-	void (* process)( struct AEffect * , float **, float **, int32_t );
+	void (VSTCALLBACK *process)( struct AEffect * , float **, float **, int32_t );
 	// setParameter 0c-0f
-	void (* setParameter)( struct AEffect * , int32_t, float );
+	void (VSTCALLBACK *setParameter)( struct AEffect * , int32_t, float );
 	// getParameter 10-13
-	float (* getParameter)( struct AEffect * , int32_t );
+	float (VSTCALLBACK *getParameter)( struct AEffect * , int32_t );
 	// programs 14-17
 	int32_t numPrograms;
 	// Params 18-1b
@@ -293,7 +294,11 @@ typedef struct AEffect
 	// version 4c-4f
 	int32_t version;
 	// processReplacing 50-53
-	void (* processReplacing)( struct AEffect * , float **, float **, int32_t );
+	void (VSTCALLBACK *processReplacing)( struct AEffect * , float **, float **, int32_t );
+	// processReplacing 54-57
+	void(VSTCALLBACK *processDoubleReplacing) (struct AEffect *, double**, double**, int32_t);
+	// future ?
+	char future[56];
 } AEffect;
 
 typedef struct VstPatchChunkInfo
@@ -305,11 +310,6 @@ typedef struct VstPatchChunkInfo
 	char future[48];              // Reserved for future use
 } VstPatchChunkInfo;
 
-//typedef long int (* audioMasterCallback)( AEffect * , long int , long int , long int , void * , float );
-
-typedef intptr_t (* audioMasterCallback) ( AEffect *, int32_t, int32_t, intptr_t, void *, float );
-//typedef long int (* audioMasterCallback) ( AEffect *, int32_t, int32_t, intptr_t, void *, float );
-// we don't use it, may be noise
-#define VSTCALLBACK
+typedef intptr_t (VSTCALLBACK *audioMasterCallback) ( AEffect *, int32_t, int32_t, intptr_t, void *, float );
 
 #endif

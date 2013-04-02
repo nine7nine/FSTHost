@@ -20,8 +20,6 @@
 #include <stdio.h>
 #include <math.h>
 
-#include <vestige/aeffectx.h>
-
 #include "jackvst.h"
 
 /* The following audioMaster opcode handlings are copied
