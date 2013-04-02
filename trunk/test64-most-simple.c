@@ -7,7 +7,7 @@
 typedef struct AEffect * (*main_entry_t)(audioMasterCallback);
 
 // most simple one :) could be sufficient.... 
-intptr_t
+intptr_t VSTCALLBACK
 simple_master_callback( struct AEffect *fx, int32_t opcode, int32_t index, intptr_t value, void *ptr, float opt ) {
         if ( opcode == audioMasterVersion ) return 2;
         return 0;
