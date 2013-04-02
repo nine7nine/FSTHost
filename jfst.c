@@ -93,19 +93,18 @@ void jvst_send_sysex(JackVST* jvst, enum SysExWant sysex_want) {
 		sysex_makeASCII(sxd->program_name, progName, 24);
 		sysex_makeASCII(sxd->plugin_name, jvst->client_name, 24);
 		break;
-	/* Set once on start */
+	/* Set once on start - but for ID:0 we have special procedure */
 	case SYSEX_WANT_IDENT_REPLY:
-		if (jvst->sysex_ident_reply.model[1] == 0) {
-			short g = 0;
-			printf("Random ID:");
-			for(g=0; g < sizeof(jvst->sysex_ident_reply.version); g++) {
-				jvst->sysex_ident_reply.version[g] = rand() % 128;
-				printf(" %X", jvst->sysex_ident_reply.version[g]);
-			}
-			putchar('\n');
+		if (jvst->sysex_ident_reply.model[1] != 0) break;
+		short g;
+		printf("Random ID:");
+		for(g=0; g < sizeof(jvst->sysex_ident_reply.version); g++) {
+			jvst->sysex_ident_reply.version[g] = rand() % 128;
+			printf(" %02X", jvst->sysex_ident_reply.version[g]);
 		}
+		putchar('\n');
 		break;
-	case SYSEX_WANT_NO: break; /* because of gcc warning */
+	case SYSEX_WANT_NO:; /* because of GCC warning */
 	}
 
 	jvst->sysex_want = sysex_want;
@@ -172,6 +171,11 @@ static void jvst_parse_sysex_input(JackVST* jvst, jack_midi_data_t* data, size_t
 			case SYSEX_TYPE_OFFER: ;
 				SysExIdOffer* sysex_id_offer = (SysExIdOffer*) data;
 				printf("ID OFFER - %X - ", sysex_id_offer->uuid);
+				printf("RndID:");
+				short g = 0;
+				while ( g < sizeof(sysex_id_offer->rnid) ) printf(" %02X", sysex_id_offer->rnid[g++]);
+				printf(" - ");
+
 				if (jvst->sysex_ident_reply.model[1] > 0) {
 					printf("UNEXPECTED\n");
 				} else if (memcmp(sysex_id_offer->rnid, jvst->sysex_ident_reply.version, 
@@ -691,7 +695,7 @@ static bool jvst_idle(JackVST* jvst) {
 	switch(jvst->want_state) {
 	case WANT_STATE_BYPASS: jvst_bypass(jvst,TRUE); break;
 	case WANT_STATE_RESUME: jvst_bypass(jvst,FALSE); break;
-	case WANT_STATE_NO: break; /* Fix GCC warning ;-) */
+	case WANT_STATE_NO:; /* because of GCC warning */
 	}
 
 	// Self Program change support
@@ -700,8 +704,8 @@ static bool jvst_idle(JackVST* jvst) {
 		jvst->midi_pc = MIDI_PC_SELF;
 	}
 
-	// Connect MIDI ports to control app if Graph order change
-	if (! jvst->graph_order_change) {
+	// Attempt to connect MIDI ports to control app if Graph order change
+	if (jvst->graph_order_change) {
 		jvst->graph_order_change = FALSE;
 		jvst_connect_to_ctrl_app(jvst);
 	}
