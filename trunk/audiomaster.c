@@ -38,7 +38,7 @@
 extern void queue_midi_message(JackVST* jvst, int status, int d1, int d2, jack_nframes_t delta );
 
 intptr_t VSTCALLBACK
-jack_host_callback (struct AEffect* effect, int32_t  opcode, int32_t  index, intptr_t value, void* ptr, float opt)
+jack_host_callback (struct AEffect* effect, int32_t opcode, int32_t index, intptr_t value, void* ptr, float opt)
 {
 	static struct VstTimeInfo _timeInfo;
 	JackVST* jackvst = effect ? ((JackVST*) effect->resvd1) : NULL;
