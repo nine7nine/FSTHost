@@ -53,7 +53,7 @@ struct RemoveFilterData {
 };
 
 static void
-learn_handler (GtkToggleButton *but, gboolean ptr)
+learn_handler (GtkToggleButton *but, gpointer ptr)
 {
 	JackVST* jvst = (JackVST*) ptr;
 	
@@ -68,7 +68,7 @@ learn_handler (GtkToggleButton *but, gboolean ptr)
 }
 
 static void
-bypass_handler (GtkToggleButton *but, gboolean ptr)
+bypass_handler (GtkToggleButton *but, gpointer ptr)
 {
 	JackVST* jvst = (JackVST*) ptr;
 
@@ -76,7 +76,7 @@ bypass_handler (GtkToggleButton *but, gboolean ptr)
 }
 
 static void
-volume_handler (GtkVScale *slider, gboolean ptr)
+volume_handler (GtkVScale *slider, gpointer ptr)
 {
 	JackVST* jvst = (JackVST*) ptr;
 
@@ -85,20 +85,20 @@ volume_handler (GtkVScale *slider, gboolean ptr)
 }
 
 static void
-sysex_handler (GtkToggleButton *but, gboolean ptr) {
+sysex_handler (GtkToggleButton *but, gpointer ptr) {
 	JackVST* jvst = (JackVST*) ptr;
 	jvst_send_sysex(jvst, SYSEX_WANT_DUMP);
 }
 
 static void
-midi_pc_handler (GtkToggleButton *but, gboolean ptr) {
+midi_pc_handler (GtkToggleButton *but, gpointer ptr) {
 	JackVST* jvst = (JackVST*) ptr;
 	jvst->midi_pc = 
 		(gtk_toggle_button_get_active (but)) ? MIDI_PC_SELF : MIDI_PC_PLUG;
 }
 
 static void
-save_handler (GtkToggleButton *but, gboolean ptr) {
+save_handler (GtkToggleButton *but, gpointer ptr) {
 	JackVST* jvst = (JackVST*) ptr;
 
 	GtkWidget *dialog;
@@ -197,7 +197,7 @@ create_preset_store( GtkListStore* store, FST *fst ) {
 
 
 static void
-load_handler (GtkToggleButton *but, gboolean ptr) {
+load_handler (GtkToggleButton *but, gpointer ptr) {
 	JackVST* jvst = (JackVST*) ptr;
 
 	GtkWidget *dialog;
@@ -300,7 +300,7 @@ configure_handler (GtkWidget* widget, GdkEventConfigure* ev, GtkSocket *sock) {
 }
 
 static void
-editor_handler (GtkToggleButton *but, gboolean ptr) {
+editor_handler (GtkToggleButton *but, gpointer ptr) {
 	JackVST* jvst = (JackVST*) ptr;
 
 	if (gtk_toggle_button_get_active (but)) {
@@ -387,7 +387,7 @@ GtkListStore* mf_type_store() {
 }
 
 static void
-combo_changed_handler(GtkCombo* combo, gboolean ptr) {
+combo_changed_handler(GtkCombo* combo, gpointer ptr) {
 	uint8_t* value = (uint8_t*) ptr;
 	*value = gtk_combo_box_get_active(GTK_COMBO_BOX(combo));
 }
@@ -412,7 +412,7 @@ GtkWidget* add_combo(GtkWidget* hpacker, GtkListStore* store, uint8_t* value, co
 }
 
 static void
-entry_changed_handler(GtkEntry* entry, gboolean ptr) {
+entry_changed_handler(GtkEntry* entry, gpointer ptr) {
 	uint8_t* value = (uint8_t*) ptr;
 	*value = (uint8_t) strtol(gtk_entry_get_text(entry), NULL, 10);
 }
@@ -432,7 +432,7 @@ GtkWidget* add_entry(GtkWidget* hpacker, uint8_t* value, int len, const char* to
 }
 
 static void
-filter_remove_handler(GtkButton* button, gboolean ptr) {
+filter_remove_handler(GtkButton* button, gpointer ptr) {
 	struct RemoveFilterData* rbd = (struct RemoveFilterData*) ptr;
 
 	midi_filter_remove ( rbd->filters, rbd->toRemove );
@@ -442,7 +442,7 @@ filter_remove_handler(GtkButton* button, gboolean ptr) {
 }
 
 static void
-filter_enable_handler(GtkButton* button, gboolean ptr) {
+filter_enable_handler(GtkButton* button, gpointer ptr) {
 	uint8_t* enable = (uint8_t*) ptr;
 	*enable = (uint8_t) ( gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(button)) ? 1 : 0 );
 }
@@ -475,7 +475,7 @@ void filter_addrow(GtkWidget* vpacker, MIDIFILTER **filters, MIDIFILTER *filter)
 }
 
 static void
-filter_new_handler( GtkToggleButton *but, gboolean ptr ) {
+filter_new_handler( GtkToggleButton *but, gpointer ptr ) {
 	JackVST* jvst = (JackVST*) ptr;
 	MIDIFILTER mf = {0};
 	MIDIFILTER* nmf = midi_filter_add( &jvst->filters, &mf );

@@ -886,7 +886,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	if (!jvst->client_name) jvst->client_name = jvst->handle->name;
 
 	printf( "Revive plugin: %s\n", jvst->client_name);
-	if ((jvst->fst = fst_open (jvst->handle, &jack_host_callback, jvst)) == NULL) {
+	if ((jvst->fst = fst_open (jvst->handle, (audioMasterCallback) &jack_host_callback, jvst)) == NULL) {
 		fst_error ("can't instantiate plugin %s", plug_path);
 		return 1;
 	}

@@ -30,7 +30,7 @@ static void fx_load_chunk ( FST *fst, FILE *fxfile, enum FxFileType chunkType )
 	br = fread (&chunkSize, sizeof(size_t), 1, fxfile);
 	if (br != sizeof(size_t)) return; // This should never happend
 	chunkSize = endian_swap(chunkSize);
-	printf("Chunk size: %d\n", chunkSize);
+	printf("Chunk size: %zu\n", chunkSize);
 
 	// FIXME: are we should call this also for regular bank ? if not then why there is numElements ?
 	VstPatchChunkInfo chunkInfo;
@@ -271,7 +271,7 @@ int fst_save_fxfile ( FST *fst, const char *filename, enum FxFileType fileType )
 	if (isChunk) {
 		printf("Getting chunk ...");
 		chunkSize = fst_call_dispatcher( fst, effGetChunk, chunkType, 0, &chunk, 0 );
-		printf("%d B -  DONE\n", chunkSize);
+		printf("%zu B -  DONE\n", chunkSize);
 		fxHeader.byteSize += chunkSize + sizeof(int);
 	} else {
 		fxHeader.byteSize += (isBank) ? fst->plugin->numPrograms * programSize : paramSize;
