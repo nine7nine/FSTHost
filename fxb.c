@@ -28,7 +28,7 @@ static void fx_load_chunk ( FST *fst, FILE *fxfile, enum FxFileType chunkType )
 	size_t br;
 
 	br = fread (&chunkSize, sizeof(size_t), 1, fxfile);
-	if (br != sizeof(size_t)) return; // This should never happend
+	if (br != 1) return; // This should never happend
 	chunkSize = endian_swap(chunkSize);
 	printf("Chunk size: %zu\n", chunkSize);
 
@@ -49,6 +49,8 @@ static void fx_load_chunk ( FST *fst, FILE *fxfile, enum FxFileType chunkType )
 	if (br == chunkSize) {
 		printf("SetChunk type : %d\n", chunkType);
 		fst_call_dispatcher(fst, effSetChunk, chunkType, chunkSize, chunk, 0);
+	} else {
+		printf("Error while read chunk (got: %zu, want: %zu)\n", br, chunkSize);
 	}
 	free(chunk);
 }
@@ -59,7 +61,7 @@ static void fx_load_current_program( FST *fst, FILE *fxfile)
 	size_t br;
 
 	br = fread ( &currentProgram, sizeof(currentProgram), 1, fxfile );
-	if (br != sizeof(currentProgram)) return;
+	if (br != 1) return;
 	currentProgram = endian_swap( currentProgram );
 	fst_program_change(fst, (short) currentProgram);
 }
@@ -101,7 +103,7 @@ static void fx_load_program ( FST *fst, FILE *fxfile, short programNumber )
 	}
 
 	br = fread ( &prgName, sizeof(prgName), 1, fxfile);
-	if (br != sizeof prgName) return; // This should never happen
+	if (br != 1) return; // This should never happen
 //	prgName = endian_swap(prgName);
 	fst_call_dispatcher(fst, effSetProgramName, 0, 0, prgName, 0);
 
@@ -135,8 +137,8 @@ int fst_load_fxfile ( FST *fst, const char *filename )
 	}
 
 	br = fread ( &fxHeader, sizeof(FXHeader), 1, fxfile );
-	if (br != sizeof(FXHeader)) {
-		printf("FX File is corupted - can not load header\n");
+	if (br != 1) {
+		printf("FX File is corupted - can not load header. Loaded only: %zu\n", br);
 		fclose(fxfile);
 		return 0; // This should never happend
 	}
