@@ -22,6 +22,7 @@
 #define SYSEX_TYPE_DUMP  0
 #define SYSEX_TYPE_RQST  1
 #define SYSEX_TYPE_OFFER 2
+#define SYSEX_AUTO_ID 0
 
 #define SYSEX_IDENT_REQUEST {SYSEX_BEGIN,SYSEX_NON_REALTIME,0x7F,SYSEX_GENERAL_INFORMATION,SYSEX_IDENTITY_REQUEST,SYSEX_END}
 typedef struct {
@@ -34,7 +35,7 @@ typedef struct {
 } SysExIdentRqst;
 
 #define SYSEX_IDENT_REPLY {SYSEX_BEGIN,SYSEX_NON_REALTIME,0x7F,SYSEX_GENERAL_INFORMATION,SYSEX_IDENTITY_REPLY,\
-   SYSEX_MYID,{0},{0},SYSEX_VERSION,SYSEX_END}
+   SYSEX_MYID,{0},{SYSEX_AUTO_ID,0},{SYSEX_VERSION,0,0,0},SYSEX_END}
 typedef struct {
 	const uint8_t begin;
 	const uint8_t type;
@@ -43,7 +44,7 @@ typedef struct {
 	const uint8_t ir;
 	const uint8_t id;
 	const uint8_t family[2];
-	uint8_t model[2]; // Here we set sysex_uuid as [1]
+	uint8_t model[2]; // Here we set sysex_uuid as [0]
 	uint8_t version[4]; // Here we set sysex_random_id for all elements
 	const uint8_t end;
 } SysExIdentReply;
