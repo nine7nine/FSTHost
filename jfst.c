@@ -71,6 +71,17 @@ static void sysex_makeASCII(uint8_t* ascii_midi_dest, char* name, size_t size_de
 	memset(ascii_midi_dest + i, 0, size_dest - i - 1); /* Set rest to 0 */
 }
 
+static void jvst_generate_random_id(JackVST* jvst) {
+	short g;
+	srand(GetTickCount()); /* Init ramdom generator */
+	printf("Random SysEx ID:");
+	for(g=0; g < sizeof(jvst->sysex_ident_reply.version); g++) {
+		jvst->sysex_ident_reply.version[g] = rand() % 128;
+		printf(" %02X", jvst->sysex_ident_reply.version[g]);
+	}
+	putchar('\n');
+}
+
 // Prepare data for RT thread and wait for send
 void jvst_send_sysex(JackVST* jvst, enum SysExWant sysex_want) {
 	/* Do not send anything if we are not connected */
@@ -78,8 +89,8 @@ void jvst_send_sysex(JackVST* jvst, enum SysExWant sysex_want) {
 
 	pthread_mutex_lock (&jvst->sysex_lock);
 
-	switch(sysex_want) {
-	case SYSEX_WANT_DUMP: ;
+	uint8_t id;
+	if (sysex_want == SYSEX_WANT_DUMP) {
 		char progName[24];
 		SysExDumpV1* sxd = &jvst->sysex_dump;
 		fst_get_program_name(jvst->fst, jvst->fst->current_program, progName, sizeof(progName));
@@ -92,25 +103,16 @@ void jvst_send_sysex(JackVST* jvst, enum SysExWant sysex_want) {
 		sxd->state = (jvst->bypassed) ? SYSEX_STATE_NOACTIVE : SYSEX_STATE_ACTIVE;
 		sysex_makeASCII(sxd->program_name, progName, 24);
 		sysex_makeASCII(sxd->plugin_name, jvst->client_name, 24);
-		break;
-	/* Set once on start - but for ID:0 we have special procedure */
-	case SYSEX_WANT_IDENT_REPLY:
-		if (jvst->sysex_ident_reply.model[1] != 0) break;
-		short g;
-		printf("Random ID:");
-		for(g=0; g < sizeof(jvst->sysex_ident_reply.version); g++) {
-			jvst->sysex_ident_reply.version[g] = rand() % 128;
-			printf(" %02X", jvst->sysex_ident_reply.version[g]);
-		}
-		putchar('\n');
-		break;
-	case SYSEX_WANT_NO:; /* because of GCC warning */
+		id = sxd->uuid;
+	} else {
+		/* Assume WANT_IDENT_REPLY */
+		id = jvst->sysex_ident_reply.model[0];
 	}
 
 	jvst->sysex_want = sysex_want;
 	pthread_cond_wait (&jvst->sysex_sent, &jvst->sysex_lock);
 	pthread_mutex_unlock (&jvst->sysex_lock);
-	printf("SysEx Dumped (%d)\n", sysex_want);
+	printf("SysEx Dumped (type: %d ID: %d)\n", sysex_want, id);
 }
 
 static void jvst_queue_sysex(JackVST* jvst, jack_midi_data_t* data, size_t size) {
@@ -163,9 +165,7 @@ static void jvst_parse_sysex_input(JackVST* jvst, jack_midi_data_t* data, size_t
 				} else {
 					printf("Not to Us\n");
 				}
-				/* If we got DumpRequest then it mean that there is FHControl,
-					so we wanna notify
-				*/
+				/* If we got DumpRequest then it mean that there is FHControl, so we wanna notify */
 				jvst->sysex_want_notify = true;
 				break;
 			case SYSEX_TYPE_OFFER: ;
@@ -176,13 +176,13 @@ static void jvst_parse_sysex_input(JackVST* jvst, jack_midi_data_t* data, size_t
 				while ( g < sizeof(sysex_id_offer->rnid) ) printf(" %02X", sysex_id_offer->rnid[g++]);
 				printf(" - ");
 
-				if (jvst->sysex_ident_reply.model[1] > 0) {
+				if (jvst->sysex_ident_reply.model[0] != SYSEX_AUTO_ID) {
 					printf("UNEXPECTED\n");
 				} else if (memcmp(sysex_id_offer->rnid, jvst->sysex_ident_reply.version, 
 				     sizeof(jvst->sysex_ident_reply.version)*sizeof(uint8_t)) == 0)
 				{
 					printf("OK\n");
-					jvst->sysex_ident_reply.model[1] =
+					jvst->sysex_ident_reply.model[0] =
 					jvst->sysex_dump.uuid = sysex_id_offer->uuid;
 					jvst_send_sysex(jvst, SYSEX_WANT_IDENT_REPLY);
 				} else {
@@ -648,6 +648,8 @@ static int graph_order_callback( void *arg ) {
 inline void jvst_sysex_notify(JackVST* jvst) {
 	// Wait until program change
 	if (jvst->fst->want_program != -1) return;
+	// Do not notify if have not set SysEx UUID
+	if (jvst->sysex_ident_reply.model[0] != SYSEX_AUTO_ID) return;
 
 	SysExDumpV1* d = &jvst->sysex_dump;
 	if ( d->program != jvst->fst->current_program ||
@@ -661,6 +663,7 @@ inline void jvst_connect_to_ctrl_app(JackVST* jvst) {
 	const char **jports = jack_get_ports(jvst->client, CTRLAPP, JACK_DEFAULT_MIDI_TYPE, 0);
 	if (!jports) return;
 
+	bool done = false;
 	unsigned short i;
 	const char *src, *dst;
 	jack_port_t* port;
@@ -678,13 +681,17 @@ inline void jvst_connect_to_ctrl_app(JackVST* jvst) {
 			src = jports[i];
 			dst = jack_port_name(port);
 		} else { continue; }
-
+		/* Already connected ? */
 		if ( jack_port_connected_to(port, jports[i]) ) continue;
 		printf("Connect to: %s\n", jports[i]);
 		jack_connect(jvst->client, src, dst);
-		jvst->sysex_want_notify = true; /* Now we are connected to CTRL APP */
+		done = true;
 	}
         jack_free(jports);
+
+	/* Now we are connected to CTRL APP - send announce */
+	if (done && jvst->sysex_ident_reply.model[0] == SYSEX_AUTO_ID)
+		jvst_send_sysex(jvst, SYSEX_WANT_IDENT_REPLY);
 }
 
 static bool jvst_idle(JackVST* jvst) {
@@ -855,7 +862,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 				jvst->uuid = optarg;
 				break;
 			case 'U':
-				jvst->sysex_ident_reply.model[1] =
+				jvst->sysex_ident_reply.model[0] =
 				jvst->sysex_dump.uuid = strtol(optarg, NULL, 10);
 				break;
 			case 'V':
@@ -1054,8 +1061,8 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	if (connect_to) jvst_connect(jvst, connect_to);
 	if (connect_midi_to_physical) jvst_connect_midi_to_physical(jvst);
 
-	// Initialize random generator - usefull for SysEx ID negotiation
-	srand(GetTickCount());
+	// Generate random SysEx ID
+	jvst_generate_random_id(jvst);
 
 	g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 100,
 		(GSourceFunc) fst_event_callback, NULL, NULL);

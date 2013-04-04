@@ -26,7 +26,6 @@ endif
 CXXEXTRA              = -mno-cygwin
 RCEXTRA               =
 INCLUDE_PATH          = -I. -I/usr/include -I/usr/include -I/usr/include/wine -I/usr/include/wine/windows
-INCLUDE_PATH          += -I/usr/local/include/wine -I/usr/local/include/wine/windows
 DLL_PATH              =
 LIBRARY_PATH          = -L/usr/lib/i386-linux-gnu/wine 
 LIBRARIES             := -m32
