@@ -115,6 +115,9 @@ struct _FST
 	bool			canSendVstEvents;
 	bool			canSendVstMidiEvent;
 
+	/* This is needed only audioMasterGetTime - but we don't know how long plugin want to use it */
+	struct VstTimeInfo	timeInfo;
+
 	pthread_mutex_t		lock;
 	pthread_mutex_t		event_call_lock;
 	pthread_cond_t		event_called;
