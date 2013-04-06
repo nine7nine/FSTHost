@@ -28,6 +28,7 @@
 */
 
 //#define DEBUG_CALLBACKS
+//#define DEBUG_TIME
 
 #ifdef DEBUG_CALLBACKS
 #define SHOW_CALLBACK fst_error
@@ -37,17 +38,33 @@
 
 extern void queue_midi_message(JackVST* jvst, int status, int d1, int d2, jack_nframes_t delta );
 
+#ifdef DEBUG_TIME
+#define SHOW_TIME show_time_flags
+static void show_time_flags(intptr_t value) {
+	char msg[512] = "";
+	if (value & kVstNanosValid) strncat(msg, " kVstNanosValid", sizeof(msg) - 1);
+	if (value & kVstPpqPosValid) strncat(msg, " kVstPpqPosValid", sizeof(msg) - 1);
+	if (value & kVstTempoValid) strncat(msg, " kVstTempoValid", sizeof(msg) - 1);
+	if (value & kVstBarsValid) strncat(msg, " kVstBarsValid", sizeof(msg) - 1);
+	if (value & kVstCyclePosValid) strncat(msg, " kVstCyclePosVali", sizeof(msg) - 1);
+	if (value & kVstTimeSigValid) strncat(msg, " kVstTimeSigValid", sizeof(msg) - 1);
+	if (value & kVstSmpteValid) strncat(msg, " kVstSmpteValid", sizeof(msg) - 1);
+	if (value & kVstClockValid) strncat(msg, " kVstClockValid", sizeof(msg) - 1);
+	msg[511] = '\0';
+	fst_error("amc time:%s\n", msg);
+}
+#else
+#define SHOW_TIME(...)
+#endif
+
 intptr_t VSTCALLBACK
 jack_host_callback (struct AEffect* effect, int32_t opcode, int32_t index, intptr_t value, void* ptr, float opt)
 {
-	static struct VstTimeInfo _timeInfo;
 	JackVST* jackvst = effect ? ((JackVST*) effect->resvd1) : NULL;
-	jack_position_t jack_pos;
-	jack_transport_state_t tstate;
 
 	//SHOW_CALLBACK ("am callback, opcode = %d", opcode);
 	
-	switch(opcode){
+	switch(opcode) {
 
 	case audioMasterAutomate:
 		SHOW_CALLBACK ("amc: audioMasterAutomate\n");
@@ -89,71 +106,66 @@ jack_host_callback (struct AEffect* effect, int32_t opcode, int32_t index, intpt
 		return 0;
 
 	case audioMasterGetTime:
-		//SHOW_CALLBACK ("amc: audioMasterGetTime\n");
+		SHOW_CALLBACK ("amc: audioMasterGetTime\n");
+		SHOW_TIME(value);
 		// returns const VstTimeInfo* (or 0 if not supported)
 		// <value> should contain a mask indicating which fields are required
 		// (see valid masks above), as some items may require extensive
 		// conversions
 		if (! jackvst) return 0;
+		struct VstTimeInfo* timeInfo = &jackvst->fst->timeInfo;
 
-		//printf( "get time value=%d\n", value );
-		// Clear VstTimeInfo structure
-		memset(&_timeInfo, 0, sizeof(_timeInfo));
-
-		// Query JackTransport
-		tstate = jack_transport_query (jackvst->client, &jack_pos);
-		
-		// Are we play ?
-		if (tstate == JackTransportRolling)
-			_timeInfo.flags |= kVstTransportPlaying;
 		// We always say that something was changed (are we lie ?)
-		_timeInfo.flags |= kVstTransportChanged;
+		timeInfo->flags = ( kVstTransportChanged | kVstTempoValid | kVstPpqPosValid );
+		// Query JackTransport
+		jack_position_t jack_pos;
+		jack_transport_state_t tstate = jack_transport_query (jackvst->client, &jack_pos);
+		// Are we play ?
+		if (tstate == JackTransportRolling) timeInfo->flags |= kVstTransportPlaying;
 		// samplePos - always valid
-		_timeInfo.samplePos = jack_pos.frame;
-
-		// This can help us in some calls
-		double dPos = _timeInfo.samplePos / _timeInfo.sampleRate;
-
+		timeInfo->samplePos = jack_pos.frame;
 		// sampleRate - always valid
-		_timeInfo.sampleRate = jack_pos.frame_rate;
+		timeInfo->sampleRate = jack_pos.frame_rate;
 		// nanoSeconds - valid when kVstNanosValid is set
 		if (value & kVstNanosValid) {
-			_timeInfo.nanoSeconds = dPos * 1000.0;
-			_timeInfo.flags |= kVstPpqPosValid;
+			timeInfo->nanoSeconds = jack_pos.usecs * 1000;
+			timeInfo->flags |= kVstPpqPosValid;
 		}
 		// tempo - valid when kVstTempoValid is set
 		// ... but we always set tempo ;-)
-		_timeInfo.tempo = (jackvst->tempo == -1) ? 
+		timeInfo->tempo = (jackvst->tempo == -1) ? 
 			( (jack_pos.beats_per_minute) ? jack_pos.beats_per_minute : 120 ) :
 			jackvst->tempo;
-
-		_timeInfo.flags |= kVstTempoValid;
 		// ppqPos - valid when kVstPpqPosValid is set
-		// FIXME: are this really correct ?
-		if (value & kVstPpqPosValid) {
-			_timeInfo.ppqPos = dPos * _timeInfo.tempo / 60.0;
-			_timeInfo.flags = kVstPpqPosValid;
+		// ... but we always compute it - could be needed later
+		double ppq = timeInfo->sampleRate * 60 / timeInfo->tempo;
+		timeInfo->ppqPos = timeInfo->samplePos / ppq;
+		if (jack_pos.valid & JackPositionBBT) {
+			// barStartPos - valid when kVstBarsValid is set
+			if (value & kVstBarsValid) {
+				timeInfo->barStartPos = timeInfo->ppqPos - jack_pos.beat + 1;
+				timeInfo->flags |= kVstBarsValid;
+			}
+			// timeSigNumerator & timeSigDenominator - valid when kVstTimeSigValid is set
+			if (value & kVstTimeSigValid) {
+				timeInfo->timeSigNumerator = (int32_t) floor (jack_pos.beats_per_bar);
+				timeInfo->timeSigDenominator = (int32_t) floor (jack_pos.beat_type);
+				timeInfo->flags |= kVstTimeSigValid;
+			}
 		}
-		// barStartPos - valid when kVstBarsValid is set
-		// FIXME: are this really correct ?
-		if (value & kVstBarsValid) {
-			_timeInfo.barStartPos = 0;
-			_timeInfo.flags = kVstBarsValid;
-		}
+#ifdef DEBUG_TIME
+		fst_error("amc ppq: %g\n", ppq);
+		fst_error("amc ppqPos: %g\n", timeInfo->ppqPos);
+		fst_error("amc barStartPos: %g\n", timeInfo->barStartPos);
+		fst_error("amc answer flags: %d\n", timeInfo->flags);
+#endif
 		// cycleStartPos & cycleEndPos - valid when kVstCyclePosValid is set
 		// FIXME: not supported yet (acctually do we need this ?) 
-		// timeSigNumerator & timeSigDenominator - valid when kVstTimeSigValid is set
-		if ((value & kVstTimeSigValid) && (jack_pos.valid & JackPositionBBT)) {
-			_timeInfo.timeSigNumerator = (long) floor (jack_pos.beats_per_bar);
-			_timeInfo.timeSigDenominator = (long) floor (jack_pos.beat_type);
-			_timeInfo.flags |= kVstTimeSigValid;
-		}
 		// smpteOffset && smpteFrameRate - valid when kVstSmpteValid is set
 		// FIXME: not supported yet (acctually do we need this ?) 
 		// samplesToNextClock - valid when kVstClockValid is set
-		// FIXME: not supported yet (acctually do we need this ?) 
-
-		return (long)&_timeInfo;
+		// FIXME: not supported yet (acctually do we need this ?)
+		return (intptr_t) timeInfo;
 	case audioMasterProcessEvents:
 		SHOW_CALLBACK ("amc: audioMasterProcessEvents\n");
 		// VstEvents* in <ptr>
@@ -179,12 +191,19 @@ jack_host_callback (struct AEffect* effect, int32_t opcode, int32_t index, intpt
 
 	case audioMasterTempoAt:
 		SHOW_CALLBACK ("amc: audioMasterTempoAt\n");
-		memset(&_timeInfo, 0, sizeof(_timeInfo));
-		if (! jackvst) return 0;
+		intptr_t ret = 120;
+		if (jackvst) {
+			if (jackvst->tempo != -1) {
+				ret = jackvst->tempo;
+			} else {
+				jack_position_t jack_pos;
+				jack_transport_query (jackvst->client, &jack_pos);
+				if (jack_pos.beats_per_minute) ret = (intptr_t) jack_pos.beats_per_minute;
+			}
+		}
 		
-		tstate = jack_transport_query (jackvst->client, &jack_pos);
 		// returns tempo (in bpm * 10000) at sample frame location passed in <value>
-		return jack_pos.beats_per_minute * 10000.0;
+		return ret * 10000;
 	case audioMasterGetNumAutomatableParameters:
 		SHOW_CALLBACK ("amc: audioMasterGetNumAutomatableParameters\n");
 		return 0;
