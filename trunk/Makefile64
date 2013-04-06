@@ -98,7 +98,7 @@ clean:: $(SUBDIRS:%=%/__clean__) $(EXTRASUBDIRS:%=%/__clean__)
 install: $(fsthost64_MODULE)
 	install -Dm 0644 fsthost64.so $(DESTDIR)$(LIB_INST_PATH)/fsthost64.so
 	install -Dm 0755 fsthost64 $(DESTDIR)$(BIN_INST_PATH)/fsthost64
-	install -Dm 0755 fsthost64_menu $(DESTDIR)$(BIN_INST_PATH)/fsthost64_menu
+	install -Dm 0755 fsthost_menu $(DESTDIR)$(BIN_INST_PATH)/fsthost_menu
 
 $(SUBDIRS:%=%/__clean__): dummy
 	cd `dirname $@` && $(MAKE) clean
