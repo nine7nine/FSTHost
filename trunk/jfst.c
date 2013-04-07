@@ -29,11 +29,12 @@
 #include <jack/thread.h>
 
 #define VERSION "1.5.0"
-#define APPNAME "fsthost"
 #define CTRLAPP "FHControl"
 #ifdef __x86_64__
+#define APPNAME "fsthost64"
 #define ARCH "64bit"
 #else
+#define APPNAME "fsthost32"
 #define ARCH "32bit"
 #endif
 

@@ -23,7 +23,6 @@ void (*fst_error_callback)(const char *desc) = &default_fst_error_callback;
 intptr_t VSTCALLBACK
 simple_master_callback( struct AEffect *fx, int32_t opcode, int32_t index, intptr_t value, void *ptr, float opt )
 {
-	printf("AMC: %d\n", opcode);
 	if ( opcode == audioMasterVersion ) return 2;
 	return 0;
 }
