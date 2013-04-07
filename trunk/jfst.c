@@ -1030,7 +1030,9 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	}
 
 	// Handling SIGINT for clean quit
-	struct sigaction sa = {0};
+	struct sigaction sa;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = 0;
 	sa.sa_handler = &signal_handler;
 	sigaction(SIGINT, &sa, NULL);
 

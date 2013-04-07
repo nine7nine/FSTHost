@@ -55,7 +55,7 @@ struct _FSTInfo
 };
 */
 
-typedef struct AEffect * (*main_entry_t)(audioMasterCallback);
+typedef struct WINAPI AEffect* (*main_entry_t)(audioMasterCallback);
 
 struct _FSTHandle
 {
