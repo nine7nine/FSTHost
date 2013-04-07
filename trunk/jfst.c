@@ -31,6 +31,11 @@
 #define VERSION "1.5.0"
 #define APPNAME "fsthost"
 #define CTRLAPP "FHControl"
+#ifdef __x86_64__
+#define ARCH "64bit"
+#else
+#define ARCH "32bit"
+#endif
 
 #define RINGBUFFER_SIZE 16 * sizeof(struct MidiMessage)
 #define SYSEX_RINGBUFFER_SIZE 16 * SYSEX_MAX_SIZE
@@ -796,7 +801,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	int		sample_rate = 0;
 	long		block_size = 0;
 
-	printf("FSTHost Version: %s\n", VERSION);
+	printf("FSTHost Version: %s (%s)\n", VERSION, ARCH);
 
 	JackVST*	jvst = jvst_new();
 	jvst_first = jvst;
