@@ -4,7 +4,7 @@
 #include <unistd.h>
 #include "vestige/aeffectx.h"
 
-typedef struct AEffect * (*main_entry_t)(audioMasterCallback);
+typedef struct WINAPI AEffect* (*main_entry_t)(audioMasterCallback);
 
 // most simple one :) could be sufficient.... 
 intptr_t VSTCALLBACK

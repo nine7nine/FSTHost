@@ -318,7 +318,7 @@ editor_handler (GtkToggleButton *but, gpointer ptr) {
 		gtk_box_pack_start (GTK_BOX(vpacker), socket_align, TRUE, FALSE, 0);
 
 		gtk_widget_set_size_request(gtk_socket, jvst->fst->width, jvst->fst->height);
-		gtk_socket_add_id (GTK_SOCKET (gtk_socket), (GdkNativeWindow) jvst->fst->xid);
+		gtk_socket_add_id (GTK_SOCKET (gtk_socket), GDK_GPOINTER_TO_NATIVE_WINDOW (jvst->fst->xid) );
 		gtk_socket_signal = g_signal_connect (G_OBJECT(window), "configure-event",
 			G_CALLBACK(configure_handler), gtk_socket);
 
