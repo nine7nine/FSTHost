@@ -5,31 +5,25 @@ Whats This ?
 This is official fork of FST, well what is fst ?
 This is a linux vst host. Runs as a jack client.
 Uses jack midi input.
-Only works for GUI plugins currently.
 
 Supports load/save state to LASH, JackSessions, FXP/FXP files, FPS (XML files)
 Supports JackTransport.
-
-Known BUGs
----------------
-If you experience WineBUG like RenderBadPicture, please update this ticket:
-http://bugs.winehq.org/show_bug.cgi?id=6673
-
-workaround:
-export WINEDEBUG=synchronous
+Supports for LADIsh (Level 1 or Leve 2,JackSession)
 
 Getting Started
 ---------------
 
-1) ensure you have the necessary build dependencies:
+1) ensure you have the necessary build dependencies (devel packages):
+  wine
+  glib-2.0
+  gtk+-2.0
+  jack
+  libxml-2.0
+  lash-1.0
 
-   gtk-devel
-   jack-devel
-   libxml2
-   lash-devel (optional)
 
 2) Type 'make'. If everything works correctly this should create an
-   executable file called 'fsthost'.
+   executable file called 'fsthost32' and optionaly 'fsthost64'
 
 3) On 64bit it may fail with a link error, when it cant find a 32bit lash
    but the 64bit stuff is in place. 
@@ -38,12 +32,25 @@ Getting Started
 
 4) To run your vst plugins:
    
-   ./fsthost /path/to/someplugin.dll
+      ./fsthost32 /path/to/someplugin.dll
+   or
+      ./fsthost64 /path/to/someplugin.dll
 
    and set up the inputs and outputs, eg. using qjackctl's
    'Connections' window.
 
 5) To install type 'make install'
+
+XML Database and simple plugin menu
+-----
+
+You build XML Database, and update it later by such command
+fsthost -d ~/fsthost.xml ~/VST
+
+Where ~/fsthost.xml is path to database and ~/VST is path which will be
+scanned recursivelly for search plugins. You can use later this database
+by some GUI app. Default simple script which use zenity or dialog is provided
+as fsthost_menu.
 
 Stuff
 -----
@@ -57,6 +64,18 @@ will come tomorrow. i had my beer now and its 5:15
 i should be in a club. but i go to bed now.
 just press midi learn, move a plugin control and your midi
 control.
+
+Known BUGs
+---------------
+
+If you experience WineBUG like RenderBadPicture, please update this ticket:
+http://bugs.winehq.org/show_bug.cgi?id=6673
+
+workaround:
+export WINEDEBUG=synchronous
+
+You can try also this one below - but I see no difference
+export GDK_NATIVE_WINDOWS=1
 
 License
 -------
