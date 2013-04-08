@@ -402,14 +402,18 @@ inline void process_midi_input(JackVST* jvst, jack_nframes_t nframes) {
 			continue;
 		}
 
-		/* MIDI FILTERS */
-		if ( ! midi_filter_check( &jvst->filters, (uint8_t*) jackevent.buffer, jackevent.size ) ) continue;
+		/* Copy this MIDI event beacuse Jack gives same buffer to all clients and we cannot work on this data */
+		jack_midi_data_t buf[jackevent.size];
+		memcpy(&buf, jackevent.buffer, jackevent.size);
 
-		switch ( jackevent.buffer[0] & 0xF0) {
-		case 0xB0: ;
+		/* MIDI FILTERS */
+		if ( ! midi_filter_check( &jvst->filters, (uint8_t*) &buf, jackevent.size ) ) continue;
+
+		switch ( buf[0] & 0xF0 ) {
+		case MM_CONTROL_CHANGE: ;
 			// CC assigments
-			short CC = jackevent.buffer[1];
-			short VALUE = jackevent.buffer[2];
+			uint8_t CC = buf[1];
+			uint8_t VALUE = buf[2];
 
 			// Want Mode
 			if (CC == jvst->want_state_cc) {
@@ -436,19 +440,17 @@ inline void process_midi_input(JackVST* jvst, jack_nframes_t nframes) {
 				jvst->midi_learn_CC = CC;
 			// handle mapped MIDI CC
 			} else if ( jvst->midi_map[CC] != -1 ) {
-				int parameter = jvst->midi_map[CC];
+				int32_t parameter = jvst->midi_map[CC];
 				float value = 1.0/127.0 * (float) VALUE;
 				plugin->setParameter( plugin, parameter, value );
 			}
 			break;
-		case 0xC0:
+		case MM_PROGRAM_CHANGE:
 			// Self Program Change
-			if (jvst->midi_pc != MIDI_PC_PLUG) {
-				jvst->midi_pc = jackevent.buffer[1];
-				// OFC don't forward this message to plugin
-				continue;
-			}
-			break;
+			if (jvst->midi_pc != MIDI_PC_SELF) break;
+			jvst->midi_pc = buf[1];
+			// OFC don't forward this message to plugin
+			continue;
 		}
 
 		// ... wanna play ?
@@ -465,7 +467,7 @@ inline void process_midi_input(JackVST* jvst, jack_nframes_t nframes) {
 
 		for (j=0; j < 3; j++) { /* event_array[3] remain 0 (according to VST Spec) */
 			jvst->event_array[stuffed_events].midiData[j] = 
-				(j < jackevent.size) ? jackevent.buffer[j] : 0;
+				(j < jackevent.size) ? buf[j] : 0;
 		}
 		++stuffed_events;
 	}

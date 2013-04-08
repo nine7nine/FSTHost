@@ -59,7 +59,7 @@ struct _JackVST {
     float           volume; /* where 0.0 mean silence */
     bool            graph_order_change;
 
-    int             midi_map[128];
+    int32_t         midi_map[128];
     bool            midi_learn;
     short           midi_learn_CC;
     int             midi_learn_PARAM;
