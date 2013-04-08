@@ -286,10 +286,12 @@ jack_host_callback (struct AEffect* effect, int32_t opcode, int32_t index, intpt
 		SHOW_CALLBACK ("amc: audioMasterGetAutomationState\n");
 		// returns 0: not supported, 1: off, 2:read, 3:write, 4:read/write
 		// offline
-		return 0;
+		return 4;
 
 	case audioMasterOfflineStart:
 		SHOW_CALLBACK ("amc: audioMasterOfflineStart\n");
+		return 0;
+
 	case audioMasterOfflineRead:
 		SHOW_CALLBACK ("amc: audioMasterOfflineRead\n");
 		// ptr points to offline structure, see below. return 0: error, 1 ok
@@ -302,6 +304,8 @@ jack_host_callback (struct AEffect* effect, int32_t opcode, int32_t index, intpt
 
 	case audioMasterOfflineGetCurrentPass:
 		SHOW_CALLBACK ("amc: audioMasterOfflineGetCurrentPass\n");
+		return 0;
+
 	case audioMasterOfflineGetCurrentMetaPass:
 		SHOW_CALLBACK ("amc: audioMasterOfflineGetCurrentMetaPass\n");
 		return 0;
@@ -319,13 +323,13 @@ jack_host_callback (struct AEffect* effect, int32_t opcode, int32_t index, intpt
 	case audioMasterGetVendorString:
 		SHOW_CALLBACK ("amc: audioMasterGetVendorString\n");
 		// fills <ptr> with a string identifying the vendor (max 64 char)
-		strcpy ((char*) ptr, "LAD");
+		strcpy ((char*) ptr, "Xj");
 		return 0;
 
 	case audioMasterGetProductString:
 		SHOW_CALLBACK ("amc: audioMasterGetProductString\n");
 		// fills <ptr> with a string with product name (max 64 char)
-//		strcpy ((char*) ptr, "FreeST");
+		strcpy ((char*) ptr, "FSTHost");
 		return 0;
 
 	case audioMasterGetVendorVersion:
