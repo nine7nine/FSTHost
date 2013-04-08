@@ -58,7 +58,7 @@ BUILD_OBJS         := $(fsthost32_OBJS)
 # On 64 bit platform build also fsthost64
 ifeq ($(LBITS), 64)
 EXES               += fsthost64
-BUILD_OBJS         := $(fsthost64_OBJS)
+BUILD_OBJS         += $(fsthost64_OBJS)
 endif
 
 ### Tools
