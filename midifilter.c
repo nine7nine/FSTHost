@@ -83,11 +83,9 @@ bool midi_filter_check( MIDIFILTER **filters, uint8_t* data, size_t size ) {
 		case DROP_ALL:
 			MF_DEBUG("FilterOut\n");
 			return false;
-			break;
 		case ACCEPT:
 			MF_DEBUG("Accept\n");
 			return true;
-			break;
 		}
 	}
 	return ret;
