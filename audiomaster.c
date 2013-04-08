@@ -128,8 +128,8 @@ jack_host_callback (struct AEffect* effect, int32_t opcode, int32_t index, intpt
 		timeInfo->sampleRate = jack_pos.frame_rate;
 		// nanoSeconds - valid when kVstNanosValid is set
 		if (value & kVstNanosValid) {
-			timeInfo->nanoSeconds = jack_pos.usecs * 1000;
-			timeInfo->flags |= kVstPpqPosValid;
+			timeInfo->nanoSeconds = jack_pos.usecs / 1000;
+			timeInfo->flags |= kVstNanosValid;
 		}
 		// tempo - valid when kVstTempoValid is set
 		// ... but we always set tempo ;-)
