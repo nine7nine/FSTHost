@@ -3,12 +3,7 @@ SRCDIR                = .
 SUBDIRS               =
 EXES                  = fsthost32
 
-# On 64 bit platform build also fsthost64
 LBITS = $(shell getconf LONG_BIT)
-ifeq ($(LBITS), 64)
-EXES               += fsthost64
-endif
-
 LASH_EXISTS := $(shell if pkg-config --exists lash-1.0; then echo yes; else echo no; fi)
 #LAST_EXISTS := 'no'
 
@@ -57,7 +52,14 @@ endif
 ### fsthost.exe sources and settings
 fsthost32_OBJS     = $(C_SRCS:.c=_32.o)
 fsthost64_OBJS     = $(C_SRCS:.c=_64.o)
-OBJECTS            := $(fsthost32_OBJS) $(fsthost64_OBJS)
+ALL_OBJS           := $(fsthost32_OBJS) $(fsthost64_OBJS)
+BUILD_OBJS         := $(fsthost32_OBJS)
+
+# On 64 bit platform build also fsthost64
+ifeq ($(LBITS), 64)
+EXES               += fsthost64
+BUILD_OBJS         := $(fsthost64_OBJS)
+endif
 
 ### Tools
 CC = gcc
@@ -84,7 +86,7 @@ DEFINCL = $(INCLUDE_PATH) $(DEFINES) $(OPTIONS)
 # Rules for cleaning
 CLEAN_FILES = *.dbg.c y.tab.c y.tab.h lex.yy.c core *.orig *.rej fsthost.exe* \\\#*\\\# *~ *% .\\\#*
 clean:: $(SUBDIRS:%=%/__clean__) $(EXTRASUBDIRS:%=%/__clean__)
-	$(RM) $(CLEAN_FILES) $(OBJECTS) $(EXES:%=%.dbg.o) $(EXES:%=%.so) $(EXES:%.exe=%)
+	$(RM) $(CLEAN_FILES) $(ALL_OBJS) $(EXES:%=%.dbg.o) $(EXES:%=%.so) $(EXES:%.exe=%)
 
 # Rules for install
 install: $(EXES)
@@ -120,5 +122,5 @@ define compile
 		-e '3i export WINE_SRV_RT=$${WINE_SRV_RT:-15}' $@
 endef
 
-$(EXES): $(OBJECTS)
+$(EXES): $(BUILD_OBJS)
 	$(call compile,$(@:fsthost%=%))
