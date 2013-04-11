@@ -693,11 +693,18 @@ static inline void jvst_connect_to_ctrl_app(JackVST* jvst) {
 		if ( jack_port_is_mine(jvst->client, port) ) continue;
 
 		if (jack_port_flags(port) & JackPortIsInput) {
+			/* Do not connect to forward input port */
+			if ( strstr( jports[i], "forward" ) != NULL ) continue;
 			port = jvst->ctrl_outport;
 			src = jack_port_name(port);
 			dst = jports[i];
 		} else if (jack_port_flags(port) & JackPortIsOutput) {
-			port = jvst->ctrl_inport;
+			/* forward_output -> midi_in | output -> ctrl_in */
+			if ( strstr( jports[i], "forward" ) != NULL ) {
+				port = jvst->midi_inport;
+			} else {
+				port = jvst->ctrl_inport;
+			}
 			src = jports[i];
 			dst = jack_port_name(port);
 		} else { continue; }
@@ -735,7 +742,6 @@ static bool jvst_idle(JackVST* jvst) {
 	if (jvst->graph_order_change) {
 		jvst->graph_order_change = FALSE;
 		jvst_connect_to_ctrl_app(jvst);
-		if (jvst->want_midi_physical) jvst_connect_midi_to_physical(jvst);
 	}
 
 	// Send notify if we want notify and something change
@@ -810,6 +816,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	short		opt_numOuts = -1;
 	bool		load_state = FALSE;
 	bool		sigusr1_save_state = FALSE;
+	bool		want_midi_physical = false;
 	const char*	dbinfo_path = NULL;
 	const char*	connect_to = NULL;
 	const char*	plug_path;
@@ -857,7 +864,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 				sigusr1_save_state = TRUE;
 				break;
 			case 'p':
-				jvst->want_midi_physical = TRUE;
+				want_midi_physical = TRUE;
 				break;
 			case 'P':
 				/* mean used but not enabled */
@@ -1094,12 +1101,13 @@ audio_ports:
 
 	// Auto connect on start
 	if (connect_to) jvst_connect(jvst, connect_to);
+	if (want_midi_physical) jvst_connect_midi_to_physical(jvst);
 
 	// Generate random SysEx ID
 	jvst_generate_random_id(jvst);
 
-	g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 100,
-		(GSourceFunc) fst_event_callback, NULL, NULL);
+	// Add FST event callback to Gblib main loop
+	g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 100, (GSourceFunc) fst_event_callback, NULL, NULL);
 
 	// Create GTK or GlibMain thread
 	if (jvst->with_editor != WITH_EDITOR_NO) {
