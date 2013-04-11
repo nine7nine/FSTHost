@@ -4,11 +4,11 @@
 #include <unistd.h>
 #include "vestige/aeffectx.h"
 
-typedef struct AEffect* (VSTCALLBACK *main_entry_t)(audioMasterCallback);
+typedef AEffect* (VSTCALLBACK *main_entry_t)(audioMasterCallback);
 
 // most simple one :) could be sufficient.... 
 intptr_t VSTCALLBACK
-simple_master_callback( struct AEffect *fx, int32_t opcode, int32_t index, intptr_t value, void *ptr, float opt ) {
+simple_master_callback( AEffect *fx, int32_t opcode, int32_t index, intptr_t value, void *ptr, float opt ) {
         if ( opcode == audioMasterVersion ) return 2;
         return 0;
 }
@@ -28,7 +28,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	printf("Main entry: %p\n", main_entry);
 
 	printf( "Revive plugin\n");
-	struct AEffect* plugin = main_entry((audioMasterCallback) simple_master_callback);
+	AEffect* plugin = main_entry((audioMasterCallback) simple_master_callback);
 
 	if (! plugin) {
 		printf ("can't instantiate plugin\n");
