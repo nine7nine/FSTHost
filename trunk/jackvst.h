@@ -53,7 +53,6 @@ struct _JackVST {
     jack_port_t**   outports;
     int             channel; /* 0 Omni, 17 None */
     bool            bypassed;
-    bool            want_midi_physical;
     enum WantState  want_state;
     short           want_state_cc;
     enum WithEditor with_editor;
