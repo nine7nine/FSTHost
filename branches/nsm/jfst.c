@@ -55,6 +55,9 @@ extern void gtk_gui_quit();
 extern void jvst_lash_init(JackVST *jvst, int* argc, char** argv[]);
 #endif
 
+/* nsm.c */
+extern void jvst_nsm_init(const char* client_name, const char* exec_name);
+
 /* Structures & Prototypes for midi output and associated queue */
 struct MidiMessage {
         jack_nframes_t time;
@@ -753,7 +756,7 @@ static bool jvst_idle(JackVST* jvst) {
 static void cmdline2arg(int *argc, char ***pargv, LPSTR cmdline) {
 	LPWSTR*		szArgList;
 	short		i;
-	char**		argv;
+	const char**	argv;
 
 	szArgList = CommandLineToArgvW(GetCommandLineW(), argc);
 	if (!szArgList) {
@@ -770,7 +773,7 @@ static void cmdline2arg(int *argc, char ***pargv, LPSTR cmdline) {
 		WideCharToMultiByte(CP_UNIXCP, 0, szArgList[i], -1, (LPSTR) argv[i], nsize, NULL, NULL);
 	}
 	LocalFree(szArgList);
-	argv[0] = (char*) APPNAME; // Force APP name
+	argv[0] = APPNAME; // Force APP name
 	*pargv = argv;
 }
 
@@ -941,6 +944,8 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
         printf("Main Thread W32ID: %d | LWP: %d | W32 Class: %d | W32 Priority: %d\n",
 		GetCurrentThreadId (), (int) syscall (SYS_gettid), GetPriorityClass (h_thread), GetThreadPriority(h_thread));
 
+	jvst_nsm_init(jvst->client_name, argv[0]);
+
 	jack_set_info_function(jvst_log);
 	jack_set_error_function(jvst_log);
 
@@ -1044,7 +1049,7 @@ audio_ports:
 	jvst->ins = malloc(sizeof(float*) * plugin->numInputs); // float**
 	jvst->outs = malloc (sizeof (float*) * plugin->numOutputs); // float**
 
-	// Register input ports	of allocate swap area
+	// Register input ports	or allocate swap area
 	jack_nframes_t max_buf_size = jack_get_buffer_size (jvst->client);
 	for (i = 0; i < plugin->numInputs; ++i) {
 		if (i < jvst->numIns) {
@@ -1096,8 +1101,7 @@ audio_ports:
 
 	// Init Glib main event loop
 	glib_main_loop = g_main_loop_new(NULL, FALSE);
-	g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 750,
-		(GSourceFunc) jvst_idle, jvst, NULL);
+	g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 750, (GSourceFunc) jvst_idle, jvst, NULL);
 
 	// Auto connect on start
 	if (connect_to) jvst_connect(jvst, connect_to);
