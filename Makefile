@@ -12,6 +12,7 @@ PKG_CONFIG_MODULES := glib-2.0
 PKG_CONFIG_MODULES += gtk+-2.0
 PKG_CONFIG_MODULES += jack
 PKG_CONFIG_MODULES += libxml-2.0
+PKG_CONFIG_MODULES += liblo
 ifeq ($(LASH_EXISTS),yes)
 PKG_CONFIG_MODULES += lash-1.0
 endif
@@ -44,7 +45,7 @@ LDFLAGS32          := -m32 $(LDFLAGS) -L/usr/lib/i386-linux-gnu/wine
 LDFLAGS64          := -m64 $(LDFLAGS)
 
 ### Global source lists
-C_SRCS             = audiomaster.c fst.c gtk.c jackvst.c jfst.c fxb.c fps.c vstwin.c cpuusage.c info.c midifilter.c
+C_SRCS             = audiomaster.c fst.c gtk.c jackvst.c jfst.c fxb.c fps.c vstwin.c cpuusage.c info.c midifilter.c nsm.c
 ifeq ($(LASH_EXISTS),yes)
 C_SRCS             += lash.c
 endif
