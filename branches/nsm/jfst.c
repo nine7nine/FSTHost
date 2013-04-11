@@ -756,7 +756,7 @@ static bool jvst_idle(JackVST* jvst) {
 static void cmdline2arg(int *argc, char ***pargv, LPSTR cmdline) {
 	LPWSTR*		szArgList;
 	short		i;
-	const char**	argv;
+	char**		argv;
 
 	szArgList = CommandLineToArgvW(GetCommandLineW(), argc);
 	if (!szArgList) {
@@ -773,7 +773,7 @@ static void cmdline2arg(int *argc, char ***pargv, LPSTR cmdline) {
 		WideCharToMultiByte(CP_UNIXCP, 0, szArgList[i], -1, (LPSTR) argv[i], nsize, NULL, NULL);
 	}
 	LocalFree(szArgList);
-	argv[0] = APPNAME; // Force APP name
+	argv[0] = (char*) APPNAME; // Force APP name
 	*pargv = argv;
 }
 
