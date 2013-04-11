@@ -181,7 +181,6 @@ typedef struct VstMidiEvent
 	char reserved1;
 	// 1f?
 	char reserved2;
-
 } VstMidiEvent;
 
 typedef struct VstEvent
@@ -197,10 +196,9 @@ typedef struct VstEvents
 	// 04
 	void *reserved;
 	// 08
-	VstEvent * events[];
+	VstEvent* events[2];
 } VstEvents;
 
-/* this struct taken from http://asseca.com/vst-24-specs/efGetParameterProperties.html */
 typedef struct VstParameterProperties
 {
 	float stepFloat;
@@ -215,31 +213,29 @@ typedef struct VstParameterProperties
 	char shortLabel[8];
 } VstParameterProperties;
 
-/* this enum taken from http://asseca.com/vst-24-specs/efGetParameterProperties.html */
 enum VstParameterFlags
 {
-	kVstParameterIsSwitch                = 1 << 0,  /* parameter is a switch (on/off) */
-	kVstParameterUsesIntegerMinMax       = 1 << 1,  /* minInteger, maxInteger valid */
-	kVstParameterUsesFloatStep           = 1 << 2,  /* stepFloat, smallStepFloat, largeStepFloat valid */
-	kVstParameterUsesIntStep             = 1 << 3,  /* stepInteger, largeStepInteger valid */
-	kVstParameterSupportsDisplayIndex    = 1 << 4,  /* displayIndex valid */
-	kVstParameterSupportsDisplayCategory = 1 << 5,  /* category, etc. valid */
+	kVstParameterIsSwitch                = 1 << 0, /* parameter is a switch (on/off) */
+	kVstParameterUsesIntegerMinMax       = 1 << 1, /* minInteger, maxInteger valid */
+	kVstParameterUsesFloatStep           = 1 << 2, /* stepFloat, smallStepFloat, largeStepFloat valid */
+	kVstParameterUsesIntStep             = 1 << 3, /* stepInteger, largeStepInteger valid */
+	kVstParameterSupportsDisplayIndex    = 1 << 4, /* displayIndex valid */
+	kVstParameterSupportsDisplayCategory = 1 << 5, /* category, etc. valid */
 	kVstParameterCanRamp                 = 1 << 6  /* set if parameter value can ramp up/down */
 };
 
-// Thanks for FlakXT for update
 typedef struct VstTimeInfo
 {
 	// 00
 	double samplePos;
 	// 08
 	double sampleRate;
-	// 10 - 18 - update by FalkXT
+	// 10 - 18
 	double nanoSeconds;
 	double ppqPos;
 	// 20
 	double tempo;
-	// 28, 30, 38 - update by FalkXT
+	// 28, 30, 38
 	double barStartPos;
 	double cycleStartPos;
 	double cycleEndPos;
@@ -247,7 +243,7 @@ typedef struct VstTimeInfo
 	int32_t timeSigNumerator;
 	// 44
 	int32_t timeSigDenominator;
-	// 48, 4c, 50 - update by FalkXT
+	// 48, 4c, 50
 	int32_t smpteOffset;
 	int32_t smpteFrameRate;
 	int32_t samplesToNextClock;
@@ -294,9 +290,9 @@ typedef struct AEffect {
 	// version 4c-4f
 	int32_t version;
 	// processReplacing 50-53
-	void (VSTCALLBACK *processReplacing)( struct AEffect * , float **, float **, int32_t );
+	void (VSTCALLBACK *processReplacing)( struct AEffect* , float**, float**, int32_t );
 	// processReplacing 54-57
-	void(VSTCALLBACK *processDoubleReplacing) (struct AEffect *, double**, double**, int32_t);
+	void (VSTCALLBACK *processDoubleReplacing)( struct AEffect*, double**, double**, int32_t );
 	// future ?
 	char future[56];
 } AEffect;

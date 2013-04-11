@@ -464,6 +464,13 @@ void filter_addrow(GtkWidget* vpacker, MIDIFILTER **filters, MIDIFILTER *filter)
 	GtkWidget* combo_rule = add_combo(hpacker, mf_rule_store(), (uint8_t*) &filter->rule, "Filter Rule");
 	GtkWidget* entry_rvalue = add_entry(hpacker, &filter->rvalue, 3, "Rule Value");
 
+	/* Compiler remove this lines - but this suppress warnings ;-) */
+	combo_type = combo_type;
+	combo_channel = combo_channel;
+	combo_rule = combo_rule;
+	entry_rvalue = entry_rvalue;
+	/***************************************************************/
+
 	GtkWidget* button_remove = gtk_button_new_from_stock(GTK_STOCK_DELETE);
 	struct RemoveFilterData* rbd = malloc( sizeof (struct RemoveFilterData) );
 	rbd->filters = filters;

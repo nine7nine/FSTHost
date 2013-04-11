@@ -251,7 +251,7 @@ bool fst_run_editor (FST* fst, bool popup) {
 bool
 fst_get_program_name (FST *fst, short program, char* name, size_t size) {
 	char *m = NULL, *c;
-	struct AEffect* plugin = fst->plugin;
+	AEffect* plugin = fst->plugin;
 
 	if (program == fst->current_program) {
 		plugin->dispatcher(plugin, effGetProgramName, 0, 0, name, 0.0f);
@@ -475,7 +475,7 @@ fst_open (FSTHandle* fhandle, audioMasterCallback amc, void* userptr) {
 	    return NULL;
 	}
 
-	struct AEffect* plugin = fhandle->main_entry (amc);
+	AEffect* plugin = fhandle->main_entry (amc);
 	if (plugin == NULL)  {
 		fst_error ("%s could not be instantiated\n", fhandle->name);
 		return NULL;
@@ -543,7 +543,7 @@ fst_close (FST* fst) {
 
 static inline void
 fst_event_handler(FST* fst) {
-	struct AEffect* plugin = fst->plugin;
+	AEffect* plugin = fst->plugin;
 	struct FSTDispatcher* dp = fst->dispatcher;
 
 	switch (fst->event_call) {

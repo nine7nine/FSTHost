@@ -55,7 +55,7 @@ struct _FSTInfo
 };
 */
 
-typedef struct AEffect* (VSTCALLBACK *main_entry_t)(audioMasterCallback);
+typedef AEffect* (VSTCALLBACK *main_entry_t)(audioMasterCallback);
 
 struct _FSTHandle
 {
@@ -89,7 +89,7 @@ enum EventCall {
 
 struct _FST 
 {
-	struct AEffect*		plugin;
+	AEffect*		plugin;
 	FSTHandle*		handle;
 	struct _FST*		next;
 
@@ -172,6 +172,6 @@ int fst_save_fxfile (FST * fst, const char * filename, enum FxFileType fileType)
 int fst_info(const char *dbpath, const char *fst_path);
 
 /* Simple master callback - from fst.c */
-intptr_t VSTCALLBACK simple_master_callback( struct AEffect *fx, int32_t opcode, int32_t index, intptr_t value, void *ptr, float opt );
+intptr_t VSTCALLBACK simple_master_callback( AEffect *fx, int32_t opcode, int32_t index, intptr_t value, void *ptr, float opt );
 
 #endif /* __fst_fst_h__ */
