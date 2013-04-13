@@ -1,3 +1,4 @@
+#include <string.h>
 #include <libgen.h>
 #include <signal.h>
 #include <stdlib.h>
@@ -386,67 +387,69 @@ fst_event_loop_add_plugin (FST* fst) {
 }
 
 FSTHandle*
-fst_load (const char * path) {
+fst_load (const char *path) {
 	char mypath[PATH_MAX];
-	char *base, *envdup, *vst_path, *last, *fullpath;
-	HMODULE dll = NULL;
-	main_entry_t main_entry;
-	FSTHandle* fhandle;
+	char base[NAME_MAX];
+	size_t mypath_maxchars = sizeof(mypath) -1;
 
-	strcpy(mypath, path);
-	if (strstr (path, ".dll") == NULL)
-		strcat (mypath, ".dll");
+	/* Copy path for later operations */
+	strncpy(mypath, path, mypath_maxchars);
+
+	/* Add externsion if necessary */
+	if (! strstr (path, ".dll")) strncat (mypath, ".dll", mypath_maxchars);
 
 	/* Get basename */
-	last = basename (mypath);
-	base = alloca(strlen(last));
-	strcpy(base, last);
+	strncpy(base, basename(mypath), sizeof(base) - 1);
 
-	// If we got full path
-	dll = LoadLibraryA(mypath);
-
+	// Just try load plugin
+	HMODULE dll = LoadLibraryA(mypath);
+	if ( dll ) goto have_dll;
+	
 	// Try find plugin in VST_PATH
-	if ( !dll && (envdup = getenv("VST_PATH"))) {
-		envdup = strdup (envdup);
-		vst_path = strtok (envdup, ":");
+	char* env = getenv("VST_PATH");
+	if ( env ) {
+		char* vst_path = strtok (env, ":");
 		while (vst_path) {
-			last = vst_path + strlen(vst_path) - 1;
-			if (*last == '/') *last='\0';
+			vst_path = strndup(vst_path, PATH_MAX);
+			char* last = vst_path + strlen(vst_path) - 1;
+			if (*last == '/') *last = '\0';
 
-			sprintf(mypath, "%s/%s", vst_path, base);
+			snprintf(mypath, sizeof(mypath), "%s/%s", vst_path, base);
+			free(vst_path);
 			printf("Search in %s\n", mypath);
 
-			if ( (dll = LoadLibraryA(mypath)) != NULL)
-				break;
+			dll = LoadLibraryA(mypath);
+			if (dll) goto have_dll;
+
 			vst_path = strtok (NULL, ":");
 		}
-		free(envdup);
 	}
 
-	if (! dll) {
-		fst_error("Can't load plugin\n");
-		return NULL;
-	}
+	fst_error("Can't load plugin: %s\n", path);
+	return NULL;
 
+have_dll: ;
+	main_entry_t main_entry;
 	if ( 
 	  (main_entry = (main_entry_t) GetProcAddress (dll, "VSTPluginMain")) == NULL &&
 	  (main_entry = (main_entry_t) GetProcAddress (dll, "main")) == NULL
 	) {
-		FreeLibrary (dll);
 		fst_error("Can't found either main and VSTPluginMain entry\n");
+		FreeLibrary (dll);
 		return NULL;
 	}
 
-	if ( ! (fullpath = realpath(mypath,NULL)) )
-		strdup(mypath);
+	char* fullpath = realpath(mypath,NULL);
+	if (! fullpath) fullpath = strndup(mypath, sizeof(mypath));
 	
+	FSTHandle* fhandle;
 	fhandle = malloc(sizeof(FSTHandle));
 	fhandle->dll = dll;
 	fhandle->main_entry = main_entry;
 	fhandle->path = fullpath;
 	fhandle->name = strndup(base, strrchr(base, '.') - base);
 	fhandle->plugincnt = 0;
-	
+
 	return fhandle;
 }
 
@@ -470,10 +473,11 @@ fst_unload (FSTHandle* fhandle) {
 
 FST*
 fst_open (FSTHandle* fhandle, audioMasterCallback amc, void* userptr) {
-	if( fhandle == NULL ) {
+	if (fhandle == NULL) {
 	    fst_error( "the handle was NULL\n" );
 	    return NULL;
 	}
+	printf("Revive plugin: %s\n", fhandle->name);
 
 	AEffect* plugin = fhandle->main_entry (amc);
 	if (plugin == NULL)  {
@@ -493,7 +497,7 @@ fst_open (FSTHandle* fhandle, audioMasterCallback amc, void* userptr) {
 
 	// Open Plugin
 	plugin->dispatcher (plugin, effOpen, 0, 0, NULL, 0.0f);
-	fst->vst_version = fst->plugin->dispatcher (fst->plugin, effGetVstVersion, 0, 0, NULL, 0.0f);
+	fst->vst_version = plugin->dispatcher (plugin, effGetVstVersion, 0, 0, NULL, 0.0f);
 
 	if (fst->vst_version >= 2) {
 		fst->canReceiveVstEvents = fst_canDo(fst, "receiveVstEvents");
@@ -501,10 +505,19 @@ fst_open (FSTHandle* fhandle, audioMasterCallback amc, void* userptr) {
 		fst->canSendVstEvents = fst_canDo(fst, "sendVstEvents");
 		fst->canSendVstMidiEvent = fst_canDo(fst, "sendVstMidiEvent");
 
-		fst->isSynth = (fst->plugin->flags & effFlagsIsSynth) > 0;
+		fst->isSynth = (plugin->flags & effFlagsIsSynth) > 0;
 		printf("%-31s : %s\n", "Plugin isSynth", fst->isSynth ? "Yes" : "No");
+
+		/* Get plugin name */
+		char tmpstr[32];
+		if ( plugin->dispatcher (plugin, effGetEffectName, 0, 0, tmpstr, 0 ) )
+			fst->name = strndup ( tmpstr, sizeof(tmpstr) );
 	}
 
+	// We always need some name ;-)
+	if (! fst->name) fst->name = strdup ( fst->handle->name );
+
+	// Bind to plugin list
 	++fst->handle->plugincnt;
 	fst_event_loop_add_plugin(fst);
 
@@ -527,6 +540,7 @@ fst_close (FST* fst) {
 		--fst->handle->plugincnt;
 
 		pthread_mutex_unlock (&fst->lock);
+		free(fst->name);
 		free(fst);
 
 		printf("Plugin closed\n");

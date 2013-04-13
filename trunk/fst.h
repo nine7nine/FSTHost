@@ -93,6 +93,7 @@ struct _FST
 	FSTHandle*		handle;
 	struct _FST*		next;
 
+	char*			name;
 	enum EventCall		event_call;
 	struct FSTDispatcher*	dispatcher;
 

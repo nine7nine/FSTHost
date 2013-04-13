@@ -2,13 +2,7 @@
 #include "fst.h"
 
 static void fst_showinfo(FST* fst) {
-	char tmpstr[64];
-	if ( fst_call_dispatcher( fst, effGetEffectName, 0, 0, tmpstr, 0 ) ) {
-		printf("name: %s\n",tmpstr);
-	} else {
-		printf("name: %s\n",fst->handle->name);
-	}
-
+	printf("name: %s\n",fst->name);
 	printf("uniqueID: %d\n", fst->plugin->uniqueID);
 	printf("version %d\n", fst->plugin->version);
 	printf("vst_version: %d\n", fst->vst_version);

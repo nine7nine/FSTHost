@@ -11,6 +11,7 @@ JackVST* jvst_new() {
 	pthread_mutex_init (&jvst->sysex_lock, NULL);
 	pthread_cond_init (&jvst->sysex_sent, NULL);
 	jvst->with_editor = WITH_EDITOR_SHOW;
+	// jvst->volume = 0; initialy volume is set to 0 by calloc
 	jvst->tempo = -1; // -1 here mean get it from Jack
 	/* Local Keyboard MIDI CC message (122) is probably not used by any VST */
 	jvst->want_state_cc = 122;
