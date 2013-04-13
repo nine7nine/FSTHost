@@ -21,15 +21,12 @@ bool2str(xmlChar *str, int buf_len, bool boolean) {
 
 static bool
 fst_exists(char *path, xmlNode *xml_rn) {
-	xmlNode* fst_node;
 	char fullpath[PATH_MAX];
+	if (! realpath(path,fullpath)) return 10;
 
-	if (! realpath(path,fullpath))
-		return 10;
-
+	xmlNode* fst_node;
 	for (fst_node = xml_rn->children; fst_node; fst_node = fst_node->next) {
-		if (xmlStrcmp(fst_node->name, BAD_CAST "fst"))
-			continue;
+		if (xmlStrcmp(fst_node->name, BAD_CAST "fst")) continue;
 
 		if (! xmlStrcmp(xmlGetProp(fst_node, BAD_CAST "path"), BAD_CAST fullpath)) {
 			printf("%s already exists\n", path);
@@ -48,12 +45,7 @@ static void fst_add2db(FST* fst, xmlNode *xml_rn) {
 
 	xmlNewProp(fst_node,BAD_CAST "path",BAD_CAST fst->handle->path);
 
-	if ( fst_call_dispatcher( fst, effGetEffectName, 0, 0, tmpstr, 0 ) ) {
-		xmlNewChild(fst_node, NULL,BAD_CAST "name",tmpstr);
-	} else {
-		xmlNewChild(fst_node, NULL,BAD_CAST "name",BAD_CAST fst->handle->name);
-	}
-
+	xmlNewChild(fst_node, NULL,BAD_CAST "name", BAD_CAST fst->name);
 	xmlNewChild(fst_node, NULL,BAD_CAST "uniqueID", int2str(tmpstr,sizeof tmpstr,fst->plugin->uniqueID));
 	xmlNewChild(fst_node, NULL,BAD_CAST "version", int2str(tmpstr,sizeof tmpstr,fst->plugin->version));
 	xmlNewChild(fst_node, NULL,BAD_CAST "vst_version", int2str(tmpstr,sizeof tmpstr,fst->vst_version));
@@ -74,34 +66,25 @@ static void fst_add2db(FST* fst, xmlNode *xml_rn) {
 }
 
 static void fst_get_info(char* path, xmlNode *xml_rn) {
-	FST*		fst;
-	FSTHandle*	handle;
+	if (fst_exists(path, xml_rn)) return;
 
-	if (! fst_exists(path, xml_rn)) {
-		printf("Load plugin %s\n", path);
-		handle = fst_load(path);
-		if (! handle) {
-			fst_error ("can't load plugin %s", path);
-			return;
-		}
+	printf("Load plugin %s\n", path);
+	FSTHandle* handle = fst_load(path);
+	if (! handle) return;
 
-		printf( "Revive plugin: %s\n", handle->name);
-		fst = fst_open(handle, &simple_master_callback, NULL);
-		if (! fst) {
-			fst_error ("can't instantiate plugin %s", handle->name);
-			return;
-		}
+	// Revive plugin
+	FST* fst = fst_open(handle, &simple_master_callback, NULL);
+	if (! fst) return;
 
-		fst_add2db(fst, xml_rn);
+	fst_add2db(fst, xml_rn);
 
-		printf("Close plugin: %s\n", handle->name);
-		fst_close(fst);
+	printf("Close plugin: %s\n", handle->name);
+	fst_close(fst);
 
-		need_save = TRUE;
+	need_save = TRUE;
 
-		printf("Unload plugin: %s\n", path);
-		fst_unload(handle);
-	}
+	printf("Unload plugin: %s\n", path);
+	fst_unload(handle);
 }
 
 static void scandirectory( const char *dir, xmlNode *xml_rn ) {
@@ -116,8 +99,7 @@ static void scandirectory( const char *dir, xmlNode *xml_rn ) {
 	char fullname[PATH_MAX];
 	while ( (entry = readdir( d )) ) {
 		if (entry->d_type & DT_DIR) {
-			/* Check that the directory is not "d" or d's parent. */
-            
+			/* Do not processing self and our parent */
 			if (! strcmp (entry->d_name, "..") || ! strcmp (entry->d_name, "."))
 				continue;
 

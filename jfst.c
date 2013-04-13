@@ -907,28 +907,14 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	}
 
 	plug_path = argv[optind];
-
 	if (dbinfo_path) return fst_info(dbinfo_path, plug_path);
 
-	menv = getenv("FSTHOST_NOGUI");
-	if (menv && strtol(menv, NULL, 2) == 1) jvst->with_editor = WITH_EDITOR_NO;
-
-	jvst_set_volume(jvst, 63);
-
 	printf( "yo... lets see...\n" );
-	if ((jvst->handle = fst_load (plug_path)) == NULL) {
-		fst_error ("can't load plugin %s", plug_path);
-		return 1;
-	}
+	if ( ! (jvst->handle = fst_load (plug_path)) ) return 1;
 
-	if (!jvst->client_name) jvst->client_name = jvst->handle->name;
+	jvst->fst = fst_open (jvst->handle, (audioMasterCallback) &jack_host_callback, jvst);
+	if (! jvst->fst) return 1;
 
-	printf( "Revive plugin: %s\n", jvst->client_name);
-	if ((jvst->fst = fst_open (jvst->handle, (audioMasterCallback) &jack_host_callback, jvst)) == NULL) {
-		fst_error ("can't instantiate plugin %s", plug_path);
-		return 1;
-	}
-	
 	fst = jvst->fst;
 	plugin = fst->plugin;
 
@@ -941,6 +927,8 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
         printf("Main Thread W32ID: %d | LWP: %d | W32 Class: %d | W32 Priority: %d\n",
 		GetCurrentThreadId (), (int) syscall (SYS_gettid), GetPriorityClass (h_thread), GetThreadPriority(h_thread));
 
+	/* Jack setup */
+	if (!jvst->client_name) jvst->client_name = jvst->handle->name;
 	jack_set_info_function(jvst_log);
 	jack_set_error_function(jvst_log);
 
@@ -1108,6 +1096,10 @@ audio_ports:
 
 	// Add FST event callback to Gblib main loop
 	g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 100, (GSourceFunc) fst_event_callback, NULL, NULL);
+
+	// Handle FSTHOST_NOGUI environment
+	menv = getenv("FSTHOST_NOGUI");
+	if (menv && strtol(menv, NULL, 2) == 1) jvst->with_editor = WITH_EDITOR_NO;
 
 	// Create GTK or GlibMain thread
 	if (jvst->with_editor != WITH_EDITOR_NO) {

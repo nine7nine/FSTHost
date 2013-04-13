@@ -276,6 +276,10 @@ bool fps_save (JackVST* jvst, const char* filename) {
    xmlNode *plugin_state_node = xmlNewDocRawNode(doc, NULL, BAD_CAST "plugin_state", NULL);
    xmlDocSetRootElement(doc, plugin_state_node);
 
+   // File
+   cur_node = xmlNewChild(plugin_state_node, NULL, BAD_CAST "file", NULL);
+   xmlNewProp(cur_node, BAD_CAST "name", BAD_CAST fst->handle->name);
+
    // Check
    fps_add_check(fst, plugin_state_node, effGetProductString, "productString");
    fps_add_check(fst, plugin_state_node, effGetVendorString, "vendorString");
