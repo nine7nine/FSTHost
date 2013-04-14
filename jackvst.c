@@ -47,6 +47,10 @@ void jvst_destroy(JackVST* jvst) {
 	free(jvst);
 }
 
+void jvst_sysex_set_uuid(JackVST* jvst, uint8_t uuid) {
+	jvst->sysex_ident_reply.model[0] = jvst->sysex_dump.uuid = uuid;
+}
+
 void jvst_log(const char *msg) { fprintf(stderr, "JACK: %s", msg); }
 
 void jvst_set_volume(JackVST* jvst, short volume) {
