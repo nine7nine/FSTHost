@@ -183,6 +183,10 @@ fps_process_node(JackVST* jvst, xmlNode *a_node) {
 	  short cc = (short) strtol((const char*) xmlGetProp(cur_node, BAD_CAST "cc"), NULL, 10);
           if (cc >= 0 && cc <= 127)
              jvst->want_state_cc = cc;
+       // SysExDump UUID
+       } else if (xmlStrcmp(cur_node->name, BAD_CAST "sysex") == 0) {
+	  uint8_t uuid = (uint8_t) strtol((const char*) xmlGetProp(cur_node, BAD_CAST "uuid"), NULL, 10);
+          jvst_sysex_set_uuid(jvst, uuid);
        // Current Program
        } else if (xmlStrcmp(cur_node->name, BAD_CAST "program") == 0) {
           short currentProgram = strtol((const char*) xmlGetProp(cur_node, BAD_CAST "number"), NULL, 10);
@@ -358,6 +362,10 @@ bool fps_save (JackVST* jvst, const char* filename) {
       int cc = (int) jvst->want_state_cc;
       xmlNewProp(cur_node, BAD_CAST "cc", int2str(tString, sizeof tString, cc));
    }
+
+   // SysExDump UUID
+   cur_node = xmlNewChild(plugin_state_node, NULL, BAD_CAST "sysex", NULL);
+   xmlNewProp(cur_node, BAD_CAST "uuid", int2str(tString, sizeof tString, jvst->sysex_dump.uuid));
 
    // Current Program
    cur_node = xmlNewChild(plugin_state_node, NULL, BAD_CAST "program", NULL);

@@ -188,8 +188,7 @@ static void jvst_parse_sysex_input(JackVST* jvst, jack_midi_data_t* data, size_t
 				     sizeof(jvst->sysex_ident_reply.version)*sizeof(uint8_t)) == 0)
 				{
 					printf("OK\n");
-					jvst->sysex_ident_reply.model[0] =
-					jvst->sysex_dump.uuid = sysex_id_offer->uuid;
+					jvst_sysex_set_uuid( jvst, sysex_id_offer->uuid );
 					jvst_send_sysex(jvst, SYSEX_WANT_IDENT_REPLY);
 				} else {
 					printf("NOT FOR US\n");
@@ -600,9 +599,8 @@ static bool session_callback( JackVST* jvst ) {
 		event->flags |= JackSessionSaveError;
 	}
 
-	snprintf( retval, sizeof(retval), "%s -U %d -u %s -s \"${SESSION_DIR}state.fps\" \"%s\"",
-		APPNAME, jvst->sysex_dump.uuid, event->client_uuid, jvst->fst->handle->path);
-	event->command_line = strdup( retval );
+	snprintf( retval, sizeof(retval), "%s -u %s -s \"${SESSION_DIR}state.fps\"", APPNAME, event->client_uuid);
+	event->command_line = strndup( retval, sizeof(retval) );
 
 	jack_session_reply(jvst->client, event);
 
@@ -887,8 +885,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 				jvst->uuid = optarg;
 				break;
 			case 'U':
-				jvst->sysex_ident_reply.model[0] =
-				jvst->sysex_dump.uuid = strtol(optarg, NULL, 10);
+				jvst_sysex_set_uuid( jvst, strtol(optarg, NULL, 10) );
 				break;
 			case 'V':
 				jvst->volume = -1;
