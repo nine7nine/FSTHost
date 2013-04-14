@@ -44,6 +44,7 @@ static void fst_add2db(FST* fst, xmlNode *xml_rn) {
 	fst_node = xmlNewChild(xml_rn, NULL,BAD_CAST "fst", NULL);
 
 	xmlNewProp(fst_node,BAD_CAST "path",BAD_CAST fst->handle->path);
+	xmlNewProp(fst_node,BAD_CAST "file",BAD_CAST fst->handle->name);
 
 	xmlNewChild(fst_node, NULL,BAD_CAST "name", BAD_CAST fst->name);
 	xmlNewChild(fst_node, NULL,BAD_CAST "uniqueID", int2str(tmpstr,sizeof tmpstr,fst->plugin->uniqueID));
@@ -68,23 +69,15 @@ static void fst_add2db(FST* fst, xmlNode *xml_rn) {
 static void fst_get_info(char* path, xmlNode *xml_rn) {
 	if (fst_exists(path, xml_rn)) return;
 
-	printf("Load plugin %s\n", path);
-	FSTHandle* handle = fst_load(path);
-	if (! handle) return;
-
-	// Revive plugin
-	FST* fst = fst_open(handle, &simple_master_callback, NULL);
+	// Load and open plugin
+	FST* fst = fst_load_open(path, &simple_master_callback, NULL);
 	if (! fst) return;
 
 	fst_add2db(fst, xml_rn);
 
-	printf("Close plugin: %s\n", handle->name);
 	fst_close(fst);
 
 	need_save = TRUE;
-
-	printf("Unload plugin: %s\n", path);
-	fst_unload(handle);
 }
 
 static void scandirectory( const char *dir, xmlNode *xml_rn ) {
@@ -92,7 +85,7 @@ static void scandirectory( const char *dir, xmlNode *xml_rn ) {
 	DIR *d = opendir(dir);
 
 	if ( !d ) {
-		fst_error("Can't open directory %s\n", dir);
+		fst_error("Can't open directory %s", dir);
 		return;
 	}
 
@@ -117,6 +110,29 @@ static void scandirectory( const char *dir, xmlNode *xml_rn ) {
 	}
 	closedir(d);
 }
+
+/*
+char* fst_info_get_plugin_path(const char* dbpath, const char* filename) {
+	xmlDoc* xml_db = xmlReadFile(dbpath, NULL, 0);
+	if (xml_db) return NULL;
+
+	char* dir = NULL;
+	xmlNode* n;
+	xmlNode* xml_rn = xmlDocGetRootElement(xml_db);
+	for (n = xml_rn; n; n = n->next) {
+		if (xmlStrcmp(fst_node->name, BAD_CAST "fst")) continue;
+
+		xmlChar* file = xmlGetProp(n, BAD_CAST "file");
+		if (xmlStrcmp(file, BAD_CAST filename)) continue;
+
+		dir = (char*) xmlGetProp(n, BAD_CAST "path");
+		break;
+	}
+
+	xmlFreeDoc(xml_db);
+	return (dir) ? strdup (dir) : NULL;
+}
+*/
 
 int fst_info(const char *dbpath, const char *fst_path) {
 	xmlDoc*  xml_db = NULL;

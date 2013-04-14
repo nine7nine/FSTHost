@@ -34,6 +34,17 @@ float2str(xmlChar *str, int buf_len, float floating) {
    return str;
 }
 
+char*
+fps_get_plugin_file( xmlNode *psn ) {
+   xmlNode *n;
+
+   for ( n = psn->children; n; n = n->next) {
+      if (xmlStrcmp(n->name, BAD_CAST "file")) continue;
+      return (char*) xmlGetProp(n, BAD_CAST "path");
+   }
+   return NULL;
+}
+
 static int
 fps_check_this(FST *fst, char *field, char *value) {
    bool success = FALSE;
@@ -64,12 +75,11 @@ fps_check_this(FST *fst, char *field, char *value) {
 
 static int
 fps_process_node(JackVST* jvst, xmlNode *a_node) {
-    xmlNode *cur_node = NULL;
+    xmlNode *cur_node;
     FST* fst = jvst->fst;
 
     for (cur_node = a_node; cur_node; cur_node = cur_node->next) {
-       if (cur_node->type != XML_ELEMENT_NODE)
-           continue;
+       if (cur_node->type != XML_ELEMENT_NODE) continue;
 
        // Check
        if (xmlStrcmp(cur_node->name, BAD_CAST "check") == 0) {
@@ -218,24 +228,26 @@ fps_process_node(JackVST* jvst, xmlNode *a_node) {
 }
 
 bool fps_load(JackVST* jvst, const char* filename) {
-   bool success;
-   xmlDoc *doc = NULL;
-   xmlNode *plugin_state_node = NULL;
+   printf("Try load plugin state file: %s\n", filename);
 
-   printf("Try load: %s\n", filename);
-
-   doc = xmlReadFile(filename, NULL, 0);
-
+   xmlDoc* doc = xmlReadFile(filename, NULL, 0);
    if (doc == NULL) {
       printf("error: could not parse file %s\n", filename);
       return FALSE;
    }
 
+   xmlNode* plugin_state_node = xmlDocGetRootElement(doc);
+
+   /* If plugin is not already loaded  - try load it now */
+   if (! jvst->fst) {
+       char* plug_path = fps_get_plugin_file( plugin_state_node );
+       if (! jvst_load( jvst, plug_path ) ) return FALSE;
+   }
+
    /* Cleanup midi filters */
    midi_filter_cleanup(&jvst->filters);
 
-   plugin_state_node = xmlDocGetRootElement(doc);
-   success = fps_process_node(jvst, plugin_state_node);
+   bool success = fps_process_node(jvst, plugin_state_node);
 
    xmlFreeDoc(doc);
 
@@ -276,9 +288,9 @@ bool fps_save (JackVST* jvst, const char* filename) {
    xmlNode *plugin_state_node = xmlNewDocRawNode(doc, NULL, BAD_CAST "plugin_state", NULL);
    xmlDocSetRootElement(doc, plugin_state_node);
 
-   // File
+   // File path
    cur_node = xmlNewChild(plugin_state_node, NULL, BAD_CAST "file", NULL);
-   xmlNewProp(cur_node, BAD_CAST "name", BAD_CAST fst->handle->name);
+   xmlNewProp(cur_node, BAD_CAST "path", BAD_CAST fst->handle->path);
 
    // Check
    fps_add_check(fst, plugin_state_node, effGetProductString, "productString");
@@ -288,8 +300,7 @@ bool fps_save (JackVST* jvst, const char* filename) {
    // MIDI Map
    for (cc = 0; cc < 128; cc++ ) {
       paramIndex = jvst->midi_map[cc];
-      if( paramIndex < 0 || paramIndex >= fst->plugin->numParams )
-          continue;
+      if ( paramIndex < 0 || paramIndex >= fst->plugin->numParams ) continue;
 
       fst->plugin->dispatcher( fst->plugin, effGetParamName, paramIndex, 0, tString, 0 );
 
