@@ -242,7 +242,6 @@ static void jvst_quit(JackVST* jvst) {
 		printf("Jack Deactivate\n");
 		jack_deactivate(jvst->client);
 
-		printf("Close plugin\n");
 		fst_close(jvst->fst);
 	} else {
 		gtk_gui_quit();
@@ -497,8 +496,8 @@ void queue_midi_message(JackVST* jvst, int status, int d1, int d2, jack_nframes_
 	short	statusLo = status & 0xF;
 	struct  MidiMessage ev;
 
-	/*fst_error("queue_new_message = 0x%hhX, %d, %d\n", status, d1, d2);*/
-	/* fst_error("statusHi = %d, statusLo = %d\n", statusHi, statusLo);*/
+	/*fst_error("queue_new_message = 0x%hhX, %d, %d", status, d1, d2);*/
+	/* fst_error("statusHi = %d, statusLo = %d", statusHi, statusLo);*/
 
 	ev.data[0] = status;
 	if (statusHi == 0xC || statusHi == 0xD) {
@@ -602,7 +601,7 @@ static bool session_callback( JackVST* jvst ) {
 	}
 
 	snprintf( retval, sizeof(retval), "%s -U %d -u %s -s \"${SESSION_DIR}state.fps\" \"%s\"",
-		APPNAME, jvst->sysex_dump.uuid, event->client_uuid, jvst->handle->path);
+		APPNAME, jvst->sysex_dump.uuid, event->client_uuid, jvst->fst->handle->path);
 	event->command_line = strdup( retval );
 
 	jack_session_reply(jvst->client, event);
@@ -819,7 +818,6 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	bool		want_midi_physical = false;
 	const char*	dbinfo_path = NULL;
 	const char*	connect_to = NULL;
-	const char*	plug_path;
 	int		sample_rate = 0;
 	long		block_size = 0;
 
@@ -901,19 +899,20 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 		}
 	}
 
-	if (optind >= argc) {
+	if (optind < argc) {
+		const char* plug_path = argv[optind];
+		if (dbinfo_path) return fst_info(dbinfo_path, plug_path);
+		if ( ! jvst_load( jvst, plug_path ) ) return 1;
+	} else if (! load_state) {
 		usage (argv[0]);
 		return 1;
 	}
 
-	plug_path = argv[optind];
-	if (dbinfo_path) return fst_info(dbinfo_path, plug_path);
-
-	printf( "yo... lets see...\n" );
-	if ( ! (jvst->handle = fst_load (plug_path)) ) return 1;
-
-	jvst->fst = fst_open (jvst->handle, (audioMasterCallback) &jack_host_callback, jvst);
-	if (! jvst->fst) return 1;
+        // load state if requested
+	if ( load_state ) {
+		bool loaded = jvst_load_state (jvst, jvst->default_state_file);
+		if ( ! loaded && ! sigusr1_save_state ) return 1;
+	}
 
 	fst = jvst->fst;
 	plugin = fst->plugin;
@@ -928,7 +927,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 		GetCurrentThreadId (), (int) syscall (SYS_gettid), GetPriorityClass (h_thread), GetThreadPriority(h_thread));
 
 	/* Jack setup */
-	if (!jvst->client_name) jvst->client_name = jvst->handle->name;
+	if (!jvst->client_name) jvst->client_name = jvst->fst->handle->name;
 	jack_set_info_function(jvst_log);
 	jack_set_error_function(jvst_log);
 
@@ -1072,10 +1071,6 @@ audio_ports:
 	jvst_lash_init(jvst, &argc, &argv);
 #endif
 
-        // load state if requested
-	if ( load_state && ! jvst_load_state (jvst, jvst->default_state_file) && ! sigusr1_save_state )
-		return 1;
-
 	// Activate plugin
 	if (! jvst->bypassed) fst_resume(jvst->fst);
 
@@ -1084,8 +1079,7 @@ audio_ports:
 
 	// Init Glib main event loop
 	glib_main_loop = g_main_loop_new(NULL, FALSE);
-	g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 750,
-		(GSourceFunc) jvst_idle, jvst, NULL);
+	g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 750, (GSourceFunc) jvst_idle, jvst, NULL);
 
 	// Auto connect on start
 	if (connect_to) jvst_connect(jvst, connect_to);
@@ -1110,9 +1104,6 @@ audio_ports:
 		printf("GUI Disabled - start GlibMainLoop\n");
 		g_main_loop_run(glib_main_loop);
 	}
-
-	printf("Unload plugin\n");
-	fst_unload(jvst->handle);
 
 	jvst_destroy(jvst);
 

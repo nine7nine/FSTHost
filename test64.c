@@ -26,23 +26,10 @@ static void fst_showinfo(FST* fst) {
 int WINAPI
 WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	FST*		fst;
-	FSTHandle*	handle;
-
 	const char* path = cmdline;
 
-	printf("Load plugin %s\n", path);
-	handle = fst_load(path);
-	if (! handle) {
-		fst_error ("can't load plugin %s", path);
-		return 1;
-	}
-
-	printf( "Revive plugin: %s\n", handle->name);
-	fst = fst_open(handle, &simple_master_callback, NULL);
-	if (! fst) {
-		fst_error ("can't instantiate plugin %s", handle->name);
-		return 1;
-	}
+	fst = fst_open_load(path, &simple_master_callback, NULL);
+	if (! fst) return 1;
 
 	fst_resume(fst);
 
@@ -57,11 +44,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 
 	fst_showinfo(fst);
 
-	printf("Close plugin: %s\n", handle->name);
 	fst_close(fst);
-
-	printf("Unload plugin: %s\n", path);
-	fst_unload(handle);
 
 	return 0;
 }

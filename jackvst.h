@@ -37,7 +37,6 @@ enum SysExWant {
 
 struct _JackVST {
     jack_client_t*  client;
-    FSTHandle*      handle;
     FST*            fst;
     char*           client_name;
     char*           default_state_file;
@@ -94,6 +93,7 @@ struct _JackVST {
 };
 
 JackVST* jvst_new();
+bool jvst_load(JackVST* jvst, const char* path);
 void jvst_log(const char *msg);
 void jvst_destroy(JackVST* jvst);
 void jvst_send_sysex(JackVST* jvst, enum SysExWant);
