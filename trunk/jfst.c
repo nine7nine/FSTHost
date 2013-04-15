@@ -765,8 +765,6 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	bool		want_midi_physical = false;
 	const char*	dbinfo_path = NULL;
 	const char*	connect_to = NULL;
-	int		sample_rate = 0;
-	long		block_size = 0;
 
 	printf("FSTHost Version: %s (%s)\n", VERSION, ARCH);
 
@@ -872,7 +870,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
         printf("Main Thread W32ID: %d | LWP: %d | W32 Class: %d | W32 Priority: %d\n",
 		GetCurrentThreadId (), (int) syscall (SYS_gettid), GetPriorityClass (h_thread), GetThreadPriority(h_thread));
 
-	/* Jack setup */
+	/****************** Jack setup *************************/
 	if (!jvst->client_name) jvst->client_name = jvst->fst->handle->name;
 	jack_set_info_function(jvst_log);
 	jack_set_error_function(jvst_log);
@@ -897,12 +895,12 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	jack_set_graph_order_callback(jvst->client, graph_order_callback, jvst);
 
 	/* set rate and blocksize */
-	sample_rate = (int) jack_get_sample_rate(jvst->client);
-	block_size = jack_get_buffer_size(jvst->client);
-	printf("Sample Rate: %d | Block Size: %ld\n", sample_rate, block_size);
-
+	jack_nframes_t sample_rate = jack_get_sample_rate(jvst->client);
 	plugin->dispatcher (plugin, effSetSampleRate, 0, 0, NULL, (float) sample_rate);
-	plugin->dispatcher (plugin, effSetBlockSize, 0, jack_get_buffer_size (jvst->client), NULL, 0.0f);
+
+	int block_size = jack_get_buffer_size(jvst->client);
+	plugin->dispatcher (plugin, effSetBlockSize, 0, (intptr_t) block_size, NULL, 0.0f);
+	printf("Sample Rate: %d | Block Size: %d\n", sample_rate, block_size);
 
 	/**************** Control MIDI ports ***********************/
 	// Register Control MIDI ports
