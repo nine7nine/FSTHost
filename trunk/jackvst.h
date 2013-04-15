@@ -47,8 +47,8 @@ struct _JackVST {
     FST*            fst;
     char*           client_name;
     char*           default_state_file;
-    short           numIns;
-    short           numOuts;
+    int32_t         numIns;
+    int32_t         numOuts;
     float**         ins;
     float**         outs;
     jack_port_t*    midi_inport;
