@@ -7,6 +7,10 @@ bool fps_load(JackVST* jvst, const char* filename);
 /* audiomaster.c */
 extern intptr_t jack_host_callback (AEffect*, int32_t, int32_t, intptr_t, void *, float );
 
+/* info.c */
+char* fst_info_get_plugin_path(const char* dbpath, const char* filename);
+
+
 JackVST* jvst_new() {
 	JackVST* jvst = calloc (1, sizeof (JackVST));
 	short i;
@@ -35,11 +39,19 @@ JackVST* jvst_new() {
 }
 
 bool jvst_load(JackVST* jvst, const char* path) {
-        printf( "yo... lets see...\n" );
-        jvst->fst = fst_load_open (path, (audioMasterCallback) &jack_host_callback, jvst);
-        if (! jvst->fst) return false;
+	printf( "yo... lets see...\n" );
+	jvst->fst = fst_load_open (path, (audioMasterCallback) &jack_host_callback, jvst);
+	if (jvst->fst) return true;
 
-	return true;
+	if (! jvst->dbinfo_file) return false;
+	char *p = fst_info_get_plugin_path(jvst->dbinfo_file, path);
+	if (!p) return false;
+       
+	jvst->fst = fst_load_open (p, (audioMasterCallback) &jack_host_callback, jvst);
+	free(p);
+	if (jvst->fst) return true;
+
+	return false;
 }
 
 void jvst_destroy(JackVST* jvst) {
