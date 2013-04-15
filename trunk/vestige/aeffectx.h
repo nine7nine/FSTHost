@@ -160,17 +160,17 @@
 typedef struct VstMidiEvent
 {
 	// 00
-	int type;
+	int32_t type;
 	// 04
-	int byteSize;
+	int32_t byteSize;
 	// 08
-	int deltaFrames;
+	int32_t deltaFrames;
 	// 0c?
-	int flags;
+	int32_t flags;
 	// 10?
-	int noteLength;
+	int32_t noteLength;
 	// 14?
-	int noteOffset;
+	int32_t noteOffset;
 	// 18
 	char midiData[4];
 	// 1c?
@@ -192,9 +192,9 @@ typedef struct VstEvent
 typedef struct VstEvents
 {
 	// 00
-	int numEvents;
+	int32_t numEvents;
 	// 04
-	void *reserved;
+	intptr_t reserved;
 	// 08
 	VstEvent* events[2];
 } VstEvents;
@@ -299,11 +299,11 @@ typedef struct AEffect {
 
 typedef struct VstPatchChunkInfo
 {
-	unsigned int version;         // Format Version (should be 1)
-	unsigned int pluginUniqueID;  // UniqueID of the plug-in
-	unsigned int pluginVersion;   // Plug-in Version
-	unsigned int numElements;     // Number of Programs (Bank) or Parameters (Program)
-	char future[48];              // Reserved for future use
+	int32_t version;        // Format Version (should be 1)
+	int32_t pluginUniqueID; // UniqueID of the plug-in
+	int32_t pluginVersion;  // Plug-in Version
+	int32_t numElements;    // Number of Programs (Bank) or Parameters (Program)
+	char future[48];        // Reserved for future use
 } VstPatchChunkInfo;
 
 struct ERect {

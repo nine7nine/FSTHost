@@ -30,9 +30,16 @@ enum WithEditor {
 };
 
 enum SysExWant {
-	SYSEX_WANT_NO          = 0,
-	SYSEX_WANT_IDENT_REPLY = 1,
-	SYSEX_WANT_DUMP        = 2
+   SYSEX_WANT_NO          = 0,
+   SYSEX_WANT_IDENT_REPLY = 1,
+   SYSEX_WANT_DUMP        = 2
+};
+
+/* Structures & Prototypes for midi output and associated queue */
+struct MidiMessage {
+   jack_nframes_t   time;
+   uint8_t          len; /* Length of MIDI message, in bytes. */
+   jack_midi_data_t data[3];
 };
 
 struct _JackVST {
