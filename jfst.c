@@ -60,7 +60,7 @@ static void *the_arg;
 static pthread_t the_thread_id;
 static sem_t sema;
 GMainLoop* glib_main_loop;
-JackVST *jvst_first;
+JackVST *jvst_first = NULL;
 
 static void sysex_makeASCII(uint8_t* ascii_midi_dest, char* name, size_t size_dest) {
 	size_t i;
@@ -725,10 +725,11 @@ static void usage(char* appname) {
 
 	fprintf(stderr, "\nUsage: %s [ options ] <plugin>\n", appname);
 	fprintf(stderr, "  or\n");
-	fprintf(stderr, "Usage: %s -d <xml_db_info> <path_for_add_to_db>\n\n", appname);
+	fprintf(stderr, "Usage: %s -g -d <xml_db_info> <path_for_add_to_db>\n\n", appname);
 	fprintf(stderr, "Options:\n");
 	fprintf(stderr, format, "-b", "Start in bypass mode");
-	fprintf(stderr, format, "-d xml_db_path", "Create/Update XML info DB.");
+	fprintf(stderr, format, "-g", "Create/Update XML info DB.");
+	fprintf(stderr, format, "-d xml_db_path", "Custom path to XML DB");
 	fprintf(stderr, format, "-n", "Disable Editor and GTK GUI");
 	fprintf(stderr, format, "-N", "Notify changes by SysEx");
 	fprintf(stderr, format, "-e", "Hide Editor");
@@ -758,9 +759,9 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	AEffect*	plugin;
 	jack_status_t	status;
 	short		i;
-	short		opt_numIns = -1;
-	short		opt_numOuts = -1;
-	bool		load_state = FALSE;
+	int32_t		opt_numIns = -1;
+	int32_t		opt_numOuts = -1;
+	bool		opt_generate_dbinfo = false;
 	bool		sigusr1_save_state = FALSE;
 	bool		want_midi_physical = false;
 	const char*	dbinfo_path = NULL;
@@ -773,90 +774,56 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 
         // Parse command line options
 	cmdline2arg(&argc, &argv, cmdline);
-	while ( (i = getopt (argc, argv, "bd:es:c:k:i:j:lnNm:pPo:t:u:U:V")) != -1) {
+	while ( (i = getopt (argc, argv, "bd:egs:c:k:i:j:lnNm:pPo:t:u:U:V")) != -1) {
 		switch (i) {
-			case 'b':
-				jvst->bypassed = TRUE;
-				break;
-			case 'd':
-				dbinfo_path = optarg;
-				break;
-			case 'e':
-				jvst->with_editor = WITH_EDITOR_HIDE;
-				break;
-			case 's':
-				load_state = 1;
-                                jvst->default_state_file = optarg;
-				break;
-			case 'c':
-				jvst->client_name = optarg;
-				break;
+			case 'b': jvst->bypassed = TRUE; break;
+			case 'd': dbinfo_path = optarg; break;
+			case 'e': jvst->with_editor = WITH_EDITOR_HIDE; break;
+			case 'g': opt_generate_dbinfo = true; break;
+			case 's': jvst->default_state_file = optarg; break;
+			case 'c': jvst->client_name = optarg; break;
 			case 'k':
 				jvst->channel = strtol(optarg, NULL, 10);
-				if (jvst->channel < 0 || jvst->channel > 17)
-					jvst->channel = 0;
+				if (jvst->channel < 0 || jvst->channel > 17) jvst->channel = 0;
 				midi_filter_one_channel( &jvst->filters, jvst->channel );
 				break;
-			case 'i':
-				opt_numIns = strtol(optarg, NULL, 10);
-				break;
-			case 'j':
-				connect_to = optarg;
-				break;
-			case 'l':
-				sigusr1_save_state = TRUE;
-				break;
-			case 'p':
-				want_midi_physical = TRUE;
-				break;
-			case 'P':
-				/* mean used but not enabled */
-				jvst->midi_pc = MIDI_PC_SELF;
-				break;
-			case 'o':
-				opt_numOuts = strtol(optarg, NULL, 10);
-				break;
-			case 'n':
-				jvst->with_editor = WITH_EDITOR_NO;
-				break;
-			case 'N':
-				jvst->sysex_want_notify = true;
-				break;
-			case 'm':
-				jvst->want_state_cc = strtol(optarg, NULL, 10);
-				break;
-			case 't':
-				jvst->tempo = strtod(optarg, NULL);
-				break;
-			case 'u':
-				jvst->uuid = optarg;
-				break;
-			case 'U':
-				jvst_sysex_set_uuid( jvst, strtol(optarg, NULL, 10) );
-				break;
-			case 'V':
-				jvst->volume = -1;
-				break;
-			default:
-				usage (argv[0]);
-				return 1;
+			case 'i': opt_numIns = strtol(optarg, NULL, 10); break;
+			case 'j': connect_to = optarg; break;
+			case 'l': sigusr1_save_state = TRUE; break;
+			case 'p': want_midi_physical = TRUE; break;
+			case 'P': jvst->midi_pc = MIDI_PC_SELF; break; /* used but not enabled */
+			case 'o': opt_numOuts = strtol(optarg, NULL, 10); break;
+			case 'n': jvst->with_editor = WITH_EDITOR_NO; break;
+			case 'N': jvst->sysex_want_notify = true; break;
+			case 'm': jvst->want_state_cc = strtol(optarg, NULL, 10); break;
+			case 't': jvst->tempo = strtod(optarg, NULL); break;
+			case 'u': jvst->uuid = optarg; break;
+			case 'U': jvst_sysex_set_uuid( jvst, strtol(optarg, NULL, 10) ); break;
+			case 'V': jvst->volume = -1; break;
+			default: usage (argv[0]); return 1;
 		}
 	}
 
 	if (optind < argc) {
-		const char* plug_path = argv[optind];
-		if (dbinfo_path) return fst_info(dbinfo_path, plug_path);
-		if ( ! jvst_load( jvst, plug_path ) ) return 1;
-	} else if (! load_state) {
+		/* We have more arguments than getops options */
+		const char* path = argv[optind];
+		if (opt_generate_dbinfo) {
+			if (! dbinfo_path) return 1;
+			return fst_info(dbinfo_path, path);
+		} else jvst_load( jvst, path );
+	} else if (! jvst->default_state_file) {
 		usage (argv[0]);
 		return 1;
 	}
 
         // load state if requested
-	if ( load_state ) {
+	if ( jvst->default_state_file ) {
 		bool loaded = jvst_load_state (jvst, jvst->default_state_file);
 		if ( ! loaded && ! sigusr1_save_state ) return 1;
 	}
+
+	/* Are we loaded plugin */
+	if (! jvst->fst) return 1;
 
 	fst = jvst->fst;
 	plugin = fst->plugin;
