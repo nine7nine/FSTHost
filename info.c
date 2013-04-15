@@ -1,5 +1,6 @@
 #include <dirent.h>
 
+#include <libgen.h>
 #include <libxml/parser.h>
 #include <libxml/tree.h>
 
@@ -111,28 +112,31 @@ static void scandirectory( const char *dir, xmlNode *xml_rn ) {
 	closedir(d);
 }
 
-/*
 char* fst_info_get_plugin_path(const char* dbpath, const char* filename) {
 	xmlDoc* xml_db = xmlReadFile(dbpath, NULL, 0);
-	if (xml_db) return NULL;
+	if (!xml_db) return NULL;
 
-	char* dir = NULL;
-	xmlNode* n;
+	char* base = basename ( (char*) filename );
+	char* path = NULL;
+	xmlNode* fst_node;
+	xmlNode* file_node;
 	xmlNode* xml_rn = xmlDocGetRootElement(xml_db);
-	for (n = xml_rn; n; n = n->next) {
+	for (fst_node = xml_rn->children; fst_node; fst_node = fst_node->next) {
 		if (xmlStrcmp(fst_node->name, BAD_CAST "fst")) continue;
 
-		xmlChar* file = xmlGetProp(n, BAD_CAST "file");
-		if (xmlStrcmp(file, BAD_CAST filename)) continue;
-
-		dir = (char*) xmlGetProp(n, BAD_CAST "path");
-		break;
+		char* p = (char*) xmlGetProp(file_node, BAD_CAST "path");
+		if (!p) continue;
+		char* pbase = basename (p);
+			
+		if (! strcmp(base, pbase)) {
+			path = p;
+			break;
+		}
 	}
 
 	xmlFreeDoc(xml_db);
-	return (dir) ? strdup (dir) : NULL;
+	return (path) ? strdup (path) : NULL;
 }
-*/
 
 int fst_info(const char *dbpath, const char *fst_path) {
 	xmlDoc*  xml_db = NULL;

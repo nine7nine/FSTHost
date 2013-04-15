@@ -764,7 +764,6 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	bool		opt_generate_dbinfo = false;
 	bool		sigusr1_save_state = FALSE;
 	bool		want_midi_physical = false;
-	const char*	dbinfo_path = NULL;
 	const char*	connect_to = NULL;
 
 	printf("FSTHost Version: %s (%s)\n", VERSION, ARCH);
@@ -777,7 +776,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	while ( (i = getopt (argc, argv, "bd:egs:c:k:i:j:lnNm:pPo:t:u:U:V")) != -1) {
 		switch (i) {
 			case 'b': jvst->bypassed = TRUE; break;
-			case 'd': dbinfo_path = optarg; break;
+			case 'd': jvst->dbinfo_file = optarg; break;
 			case 'e': jvst->with_editor = WITH_EDITOR_HIDE; break;
 			case 'g': opt_generate_dbinfo = true; break;
 			case 's': jvst->default_state_file = optarg; break;
@@ -808,8 +807,8 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 		/* We have more arguments than getops options */
 		const char* path = argv[optind];
 		if (opt_generate_dbinfo) {
-			if (! dbinfo_path) return 1;
-			return fst_info(dbinfo_path, path);
+			if (! jvst->dbinfo_file) return 1;
+			return fst_info(jvst->dbinfo_file, path);
 		} else jvst_load( jvst, path );
 	} else if (! jvst->default_state_file) {
 		usage (argv[0]);
@@ -822,7 +821,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 		if ( ! loaded && ! sigusr1_save_state ) return 1;
 	}
 
-	/* Are we loaded plugin */
+	/* Are we loaded plugini ? */
 	if (! jvst->fst) return 1;
 
 	fst = jvst->fst;

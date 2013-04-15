@@ -47,6 +47,7 @@ struct _JackVST {
     FST*            fst;
     char*           client_name;
     char*           default_state_file;
+    char*           dbinfo_file;
     int32_t         numIns;
     int32_t         numOuts;
     float**         ins;
