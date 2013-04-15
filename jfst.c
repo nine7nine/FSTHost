@@ -55,13 +55,6 @@ extern void gtk_gui_quit();
 extern void jvst_lash_init(JackVST *jvst, int* argc, char** argv[]);
 #endif
 
-/* Structures & Prototypes for midi output and associated queue */
-struct MidiMessage {
-        jack_nframes_t time;
-        int            len; /* Length of MIDI message, in bytes. */
-        unsigned char  data[3];
-};
-
 static void *(*the_function)(void*);
 static void *the_arg;
 static pthread_t the_thread_id;
@@ -485,50 +478,6 @@ static inline void process_midi_input(JackVST* jvst, jack_nframes_t nframes) {
 	if ( stuffed_events == 0 ) return;
 	jvst->events->numEvents = stuffed_events;
 	plugin->dispatcher (plugin, effProcessEvents, 0, 0, jvst->events, 0.0f);
-}
-
-// This function is used in audiomaster.c
-void queue_midi_message(JackVST* jvst, int status, int d1, int d2, jack_nframes_t delta ) {
-	jack_ringbuffer_t* ringbuffer;
-	int	written;
-	short	statusHi = (status >> 4) & 0xF;
-	short	statusLo = status & 0xF;
-	struct  MidiMessage ev;
-
-	/*fst_error("queue_new_message = 0x%hhX, %d, %d", status, d1, d2);*/
-	/* fst_error("statusHi = %d, statusLo = %d", statusHi, statusLo);*/
-
-	ev.data[0] = status;
-	if (statusHi == 0xC || statusHi == 0xD) {
-		ev.len = 2;
-		ev.data[1] = d1;
-	} else if (statusHi == 0xF) {
-		if (statusLo == 0 || statusLo == 2) {
-			ev.len = 3;
-			ev.data[1] = d1;
-			ev.data[2] = d2;
-		} else if (statusLo == 1 || statusLo == 3) {
-			ev.len = 2;
-			ev.data[1] = d1;
-		} else ev.len = 1;
-	} else {
-		ev.len = 3;
-		ev.data[1] = d1;
-		ev.data[2] = d2;
-	}
-
-	ev.time = jack_frame_time(jvst->client) + delta;
-
-	ringbuffer = jvst->ringbuffer;
-	if (jack_ringbuffer_write_space(ringbuffer) < sizeof(ev)) {
-		fst_error("Not enough space in the ringbuffer, NOTE LOST.");
-		return;
-	}
-
-	written = jack_ringbuffer_write(ringbuffer, (char*)&ev, sizeof(ev));
-	if (written != sizeof(ev)) {
-		fst_error("jack_ringbuffer_write failed, NOTE LOST.");
-	}
 }
 
 static int process_callback( jack_nframes_t nframes, void* data) {
