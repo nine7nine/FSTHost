@@ -405,6 +405,8 @@ fst_load (const char *path) {
 	char mypath[PATH_MAX];
 	size_t mypath_maxchars = sizeof(mypath) - 1;
 
+	printf("Load library %s\n", path);
+
 	/* Copy path for later juggling */
 	strncpy(mypath, path, mypath_maxchars);
 
@@ -418,24 +420,24 @@ fst_load (const char *path) {
 	// Try find plugin in VST_PATH
 	char* env = getenv("VST_PATH");
 	if ( env ) {
-		char* vst_path = strtok (env, ":");
-		while (vst_path) {
-			vst_path = strndup(vst_path, PATH_MAX);
-			char* last = vst_path + strlen(vst_path) - 1;
-			if (*last == '/') *last = '\0';
+		char* vpath = strtok (env, ":");
+		while (vpath) {
+			char* last = vpath + strlen(vpath) - 1;
+			if (*last == '/') {
+				snprintf(mypath, sizeof(mypath), "%s%s", vpath, base);
+			} else {
+				snprintf(mypath, sizeof(mypath), "%s/%s", vpath, base);
+			}
 
-			snprintf(mypath, sizeof(mypath), "%s/%s", vst_path, base);
-			free(vst_path);
-			printf("Search in %s\n", mypath);
-
+			printf("Load library %s\n", mypath);
 			dll = LoadLibraryA(mypath);
 			if (dll) goto have_dll;
 
-			vst_path = strtok (NULL, ":");
+			vpath = strtok (NULL, ":");
 		}
 	}
 
-	fst_error("Can't load plugin: %s", path);
+	fst_error("Can't load library: %s", base);
 	return NULL;
 
 have_dll: ;
@@ -535,7 +537,6 @@ fst_open (FSTHandle* fhandle, audioMasterCallback amc, void* userptr) {
 
 FST*
 fst_load_open (const char* path, audioMasterCallback amc, void* userptr) {
-	printf("Load plugin %s\n", path);
 	FSTHandle* handle = fst_load(path);
 	if (! handle) return NULL;
 

@@ -44,8 +44,8 @@ static void fst_add2db(FST* fst, xmlNode *xml_rn) {
 
 	fst_node = xmlNewChild(xml_rn, NULL,BAD_CAST "fst", NULL);
 
-	xmlNewProp(fst_node,BAD_CAST "path",BAD_CAST fst->handle->path);
 	xmlNewProp(fst_node,BAD_CAST "file",BAD_CAST fst->handle->name);
+	xmlNewProp(fst_node,BAD_CAST "path",BAD_CAST fst->handle->path);
 
 	xmlNewChild(fst_node, NULL,BAD_CAST "name", BAD_CAST fst->name);
 	xmlNewChild(fst_node, NULL,BAD_CAST "uniqueID", int2str(tmpstr,sizeof tmpstr,fst->plugin->uniqueID));
@@ -117,23 +117,26 @@ char* fst_info_get_plugin_path(const char* dbpath, const char* filename) {
 	if (!xml_db) return NULL;
 
 	char* base = basename ( (char*) filename );
-	char* path = NULL;
-	xmlNode* fst_node;
-	xmlNode* file_node;
-	xmlNode* xml_rn = xmlDocGetRootElement(xml_db);
-	for (fst_node = xml_rn->children; fst_node; fst_node = fst_node->next) {
-		if (xmlStrcmp(fst_node->name, BAD_CAST "fst")) continue;
+	char* ext = strchr( base, '.' );
+	char* fname = (ext) ? strndup(base, ext - base) : strdup( base );
 
-		char* p = (char*) xmlGetProp(file_node, BAD_CAST "path");
-		if (!p) continue;
-		char* pbase = basename (p);
+	char* path = NULL;
+	xmlNode* n;
+	xmlNode* xml_rn = xmlDocGetRootElement(xml_db);
+	for (n = xml_rn->children; n; n = n->next) {
+		if (xmlStrcmp(n->name, BAD_CAST "fst")) continue;
+
+		char* p = (char*) xmlGetProp(n, BAD_CAST "path");
+		char* f = (char*) xmlGetProp(n, BAD_CAST "file");
+		if (!p || !f) continue;
 			
-		if (! strcmp(base, pbase)) {
+		if (! strcmp(f, fname)) {
 			path = p;
 			break;
 		}
 	}
 
+	free(fname);
 	xmlFreeDoc(xml_db);
 	return (path) ? strdup (path) : NULL;
 }

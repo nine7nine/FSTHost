@@ -28,8 +28,8 @@
 #include "jackvst.h"
 #include <jack/thread.h>
 
-#define VERSION "1.5.0"
 #define CTRLAPP "FHControl"
+#define VERSION "1.5.0"
 #ifdef __x86_64__
 #define APPNAME "fsthost64"
 #define ARCH "64bit"
@@ -725,7 +725,7 @@ static void usage(char* appname) {
 
 	fprintf(stderr, "\nUsage: %s [ options ] <plugin>\n", appname);
 	fprintf(stderr, "  or\n");
-	fprintf(stderr, "Usage: %s -g -d <xml_db_info> <path_for_add_to_db>\n\n", appname);
+	fprintf(stderr, "Usage: %s -g [ -d <xml_db_info> ] <path_for_add_to_db>\n\n", appname);
 	fprintf(stderr, "Options:\n");
 	fprintf(stderr, format, "-b", "Start in bypass mode");
 	fprintf(stderr, format, "-g", "Create/Update XML info DB.");
@@ -770,6 +770,12 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 
 	JackVST*	jvst = jvst_new();
 	jvst_first = jvst;
+
+	const char* henv = getenv("HOME");
+	size_t dbilen = strlen(henv) + strlen(APPNAME);
+	char ddbif[dbilen + 7];
+	snprintf(ddbif, sizeof ddbif, "%s/.%s.xml", henv, APPNAME);
+	jvst->dbinfo_file = ddbif;
 
         // Parse command line options
 	cmdline2arg(&argc, &argv, cmdline);
