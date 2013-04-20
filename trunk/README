@@ -2,13 +2,26 @@
 Whats This ?
 ------------
 
-This is official fork of FST, well what is fst ?
-This is a linux vst host. Runs as a jack client.
-Uses jack midi input.
+This is official successor of FST, well what was fst ?
+Linux VST host with runs as a jack client and with GTK GUI.
 
-Supports load/save state to LASH, JackSessions, FXP/FXP files, FPS (XML files)
-Supports JackTransport.
-Supports for LADIsh (Level 1 or Leve 2,JackSession)
+Supports:
+- 32 and 64 bit plugins
+- load/save state to LASH, JackSessions, FPS files (own XML format)
+- load/save FXB/FXP files
+- Jack Transport
+- Jack MIDI
+- Jack autoconnection
+- LADIsh - L1 or L2 (JackSession)
+- Dump settings via SysEx
+- MIDI CC automation (MIDI learn)
+- bypass/resume state (also via MIDI CC or SysEx)
+- simple midi filters
+- volume control
+- plugins which not handling MIDI Program Change messages
+- easily plugin discovering (-g option)
+
+There is also fsthost_menu - zenity script for help to start plugins.
 
 Getting Started
 ---------------
@@ -20,7 +33,6 @@ Getting Started
   jack
   libxml-2.0
   lash-1.0
-
 
 2) Type 'make'. If everything works correctly this should create an
    executable file called 'fsthost32' and optionaly 'fsthost64'
@@ -85,7 +97,7 @@ file 'COPYING' for details.
 
 Authors / contributors
 ----------------------
-Current maintainer of this fork: Pawel Piatek <xj@wp.pl>
+Current maintainer of FSTHost: Pawel Piatek <xj@wp.pl>
 
 Autors of FST:
 Torben Hohn, Paul Davis, Kjetil S. Matheussen / Notam, Mark Williamson
