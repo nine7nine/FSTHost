@@ -29,7 +29,7 @@
 #include <jack/thread.h>
 
 #define CTRLAPP "FHControl"
-#define VERSION "1.5.0"
+#define VERSION "1.5.1"
 #ifdef __x86_64__
 #define APPNAME "fsthost64"
 #define ARCH "64bit"
@@ -725,7 +725,9 @@ static void usage(char* appname) {
 
 	fprintf(stderr, "\nUsage: %s [ options ] <plugin>\n", appname);
 	fprintf(stderr, "  or\n");
-	fprintf(stderr, "Usage: %s -g [ -d <xml_db_info> ] <path_for_add_to_db>\n\n", appname);
+	fprintf(stderr, "Usage: %s -g [ -d <xml_db_info> ] <path_for_add_to_db>\n", appname);
+	fprintf(stderr, "  or\n");
+	fprintf(stderr, "Usage: %s -s <FPS state file>\n\n", appname);
 	fprintf(stderr, "Options:\n");
 	fprintf(stderr, format, "-b", "Start in bypass mode");
 	fprintf(stderr, format, "-g", "Create/Update XML info DB.");
@@ -738,7 +740,7 @@ static void usage(char* appname) {
 	fprintf(stderr, format, "-k channel", "MIDI Channel (0: all, 17: none)");
 	fprintf(stderr, format, "-i num_in", "Jack number In ports");
 	fprintf(stderr, format, "-j <connect_to>", "Connect Audio Out to <connect_to>");
-	fprintf(stderr, format, "-l", "save state to state_file on SIGUSR1 - require -s");
+	fprintf(stderr, format, "-l", "save state to state_file on SIGUSR1 (require -s)");
 	fprintf(stderr, format, "-m mode_midi_cc", "Bypass/Resume MIDI CC (default: 122)");
 	fprintf(stderr, format, "-p", "Connect MIDI In port to all physical");
 	fprintf(stderr, format, "-P", "Self MIDI Program Change handling");

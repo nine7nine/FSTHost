@@ -16,22 +16,57 @@
 .\" .sp <n>    insert n+1 empty lines
 .\" for manpage-specific macros, see man(7)
 .SH NAME
-fsthost \- JACK-based host to use VST plugins on GNU/Linux.
+fsthost \- JACK-based host to use VST plugins on GNU/Linux with GTK2 interface.
 
 .SH SYNOPSIS
 .B fsthost32
-.RI [ options ] <plugin>
+.RI [ options ]	<plugin>
 
 .SH DESCRIPTION
-This program enables you to use a VST plugins with JACK. 
+This program enables you to use a VST plugins with JACK.
+.P
+Supports:
+.br
+- 32 and 64 bit plugins
+.br
+- load/save state to LASH, JackSessions, FPS files (own XML format)
+.br
+- load/save FXB/FXP files
+.br
+- Jack Transport
+.br
+- Jack MIDI
+.br
+- Jack autoconnection
+.br
+- LADIsh - L1 or L2 (JackSession)
+.br
+- Dump settings via SysEx
+.br
+- MIDI CC automation (MIDI learn)
+.br
+- bypass/resume state (also via MIDI CC or SysEx)
+.br
+- simple midi filters
+.br
+- volume control
+.br
+- plugins which not handling MIDI Program Change messages
+.br
+- easily plugin discovering (-g option)
+.P
+There is also fsthost_menu - a zenity script for help to start plugins.
 
 .SH OPTIONS
 .TP
 .B \-b
 Start in bypass mode
 .TP
+.B \-g
+Create/Update XML info DB.
+.TP
 .B \-d xml_db_path
-Create/Update XML info DB
+Custom path to XML DB
 .TP
 .B \-n
 Disable Editor and GTK GUI
@@ -43,7 +78,7 @@ Notify changes by SysEx
 Hide Editor
 .TP
 .B \-s <state_file>
-Load <state_file>
+Load FPS/FXP/FXB file
 .TP
 .B \-c <client_name>
 Jack Client name
@@ -58,7 +93,7 @@ Jack number In ports
 Connect Audio Out to <connect_to>
 .TP
 .B \-l
-Save state to state_file on SIGUSR1 - require -s
+Save state to state_file on SIGUSR1 (require -s)
 .TP
 .B \-m mode_midi_cc
 Bypass/Resume MIDI CC (default: 122)
@@ -78,7 +113,7 @@ Set fixed Tempo rather than using JackTransport
 .B \-u uuid
 JackSession UUID
 .TP
-.B \-U uuid
+.B \-U SysEx ID
 SysEx ID (1-127). 0 is default (do not use it)
 .TP
 .B \-V
@@ -92,5 +127,5 @@ Disable Volume control / filtering CC7 messages
 .B fsthost
 was written by Pawel Piatek <xj@wp.pl> and others.
 .PP
-This manual page was written by Jof Thibaut <tangostudio@tuxfamily.org>,
+This manual page was originally written by Jof Thibaut <tangostudio@tuxfamily.org>,
 for the Debian project (and may be used by others).
