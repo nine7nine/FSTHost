@@ -1,0 +1,104 @@
+
+Whats This ?
+------------
+
+This is official successor of FST, well what was fst ?
+Linux VST host with runs as a jack client and with GTK GUI.
+
+Supports:
+- 32 and 64 bit plugins
+- load/save state to LASH, JackSessions, FPS files (own XML format)
+- load/save FXB/FXP files
+- Jack Transport
+- Jack MIDI
+- Jack autoconnection
+- LADIsh - L1 or L2 (JackSession)
+- Dump settings via SysEx
+- MIDI CC automation (MIDI learn)
+- bypass/resume state (also via MIDI CC or SysEx)
+- simple midi filters
+- volume control
+- plugins which not handling MIDI Program Change messages
+- easily plugin discovering (-g option)
+
+There is also fsthost_menu - zenity script for help to start plugins.
+
+Getting Started
+---------------
+
+1) ensure you have the necessary build dependencies (devel packages):
+  wine
+  glib-2.0
+  gtk+-2.0
+  jack
+  libxml-2.0
+  lash-1.0
+
+2) Type 'make'. If everything works correctly this should create an
+   executable file called 'fsthost32' and optionaly 'fsthost64'
+
+3) On 64bit it may fail with a link error, when it cant find a 32bit lash
+   but the 64bit stuff is in place. 
+   build yourself a 32bit lash, or:
+   make LASH_EXISTS=no
+
+4) To run your vst plugins:
+   
+      ./fsthost32 /path/to/someplugin.dll
+   or
+      ./fsthost64 /path/to/someplugin.dll
+
+   and set up the inputs and outputs, eg. using qjackctl's
+   'Connections' window.
+
+5) To install type 'make install'
+
+XML Database and simple plugin menu
+-----
+
+You build XML Database, and update it later by such command
+fsthost -d ~/fsthost.xml ~/VST
+
+Where ~/fsthost.xml is path to database and ~/VST is path which will be
+scanned recursivelly for search plugins. You can use later this database
+by some GUI app. Default simple script which use zenity or dialog is provided
+as fsthost_menu.
+
+Stuff
+-----
+
+With LASH you can save and restore the state of the plugin.
+in order to promote lash i pushed other methods of load/save
+pretty much down in my priority list.
+
+There is a first version of midi learn, load/save of midimap
+will come tomorrow. i had my beer now and its 5:15
+i should be in a club. but i go to bed now.
+just press midi learn, move a plugin control and your midi
+control.
+
+Known BUGs
+---------------
+
+If you experience WineBUG like RenderBadPicture, please update this ticket:
+http://bugs.winehq.org/show_bug.cgi?id=6673
+
+workaround:
+export WINEDEBUG=synchronous
+
+You can try also this one below - but I see no difference
+export GDK_NATIVE_WINDOWS=1
+
+License
+-------
+
+fsthost is licenced under the GNU General Public License version 2. See
+file 'COPYING' for details.
+
+Authors / contributors
+----------------------
+Current maintainer of FSTHost: Pawel Piatek <xj@wp.pl>
+
+Autors of FST:
+Torben Hohn, Paul Davis, Kjetil S. Matheussen / Notam, Mark Williamson
+Joe Button, Nedko Arnaudov

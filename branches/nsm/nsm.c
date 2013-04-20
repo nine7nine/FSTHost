@@ -3,7 +3,7 @@
 
 static nsm_client_t *nsm = NULL;
 
-static int cb_nsm_open (
+int cb_nsm_open (
 			const char *name,
 			const char *display_name,
 			const char *client_id,
@@ -15,7 +15,7 @@ static int cb_nsm_open (
 	return ERR_OK;
 }
 
-static int cb_nsm_save ( char **out_msg, void *userdata ) {
+int cb_nsm_save ( char **out_msg, void *userdata ) {
 //	do_save_stuff();
 	printf("NSM: Save callback\n");
 	return ERR_OK;
