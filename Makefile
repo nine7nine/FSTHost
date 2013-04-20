@@ -91,14 +91,14 @@ clean:: $(SUBDIRS:%=%/__clean__) $(EXTRASUBDIRS:%=%/__clean__)
 
 # Rules for install
 install: $(EXES)
-	install -Dm 0644 fsthost32.so $(DESTDIR)$(LIB32_INST_PATH)/fsthost32.so
-	install -Dm 0755 fsthost32 $(DESTDIR)$(BIN_INST_PATH)/fsthost32
+#	install -Dm 0644 fsthost32.so $(DESTDIR)$(LIB32_INST_PATH)/fsthost32.so
+#	install -Dm 0755 fsthost32 $(DESTDIR)$(BIN_INST_PATH)/fsthost32
 ifeq ($(LBITS), 64)
 	install -Dm 0644 fsthost64.so $(DESTDIR)$(LIB64_INST_PATH)/fsthost64.so
 	install -Dm 0755 fsthost64 $(DESTDIR)$(BIN_INST_PATH)/fsthost64
 endif
 	install -Dm 0755 fsthost_menu $(DESTDIR)$(BIN_INST_PATH)/fsthost_menu
-	ln -s fsthost32 $(DESTDIR)$(BIN_INST_PATH)/fsthost
+	ln -fs fsthost32 $(DESTDIR)$(BIN_INST_PATH)/fsthost
 
 $(SUBDIRS:%=%/__clean__): dummy
 	cd `dirname $@` && $(MAKE) clean

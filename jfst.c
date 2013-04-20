@@ -812,6 +812,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 		}
 	}
 
+	jvst_nsm_init(jvst->client_name, argv[0]);
 	if (optind < argc) {
 		/* We have more arguments than getops options */
 		const char* path = argv[optind];
@@ -848,7 +849,6 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	/****************** Jack setup *************************/
 	if (!jvst->client_name) jvst->client_name = jvst->fst->handle->name;
 
-	jvst_nsm_init(jvst->client_name, argv[0]);
 	jack_set_info_function(jvst_log);
 	jack_set_error_function(jvst_log);
 
