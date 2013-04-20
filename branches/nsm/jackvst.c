@@ -4,6 +4,13 @@
 bool fps_save(JackVST* jvst, const char* filename);
 bool fps_load(JackVST* jvst, const char* filename);
 
+/* audiomaster.c */
+extern intptr_t jack_host_callback (AEffect*, int32_t, int32_t, intptr_t, void *, float );
+
+/* info.c */
+char* fst_info_get_plugin_path(const char* dbpath, const char* filename);
+
+
 JackVST* jvst_new() {
 	JackVST* jvst = calloc (1, sizeof (JackVST));
 	short i;
@@ -11,6 +18,7 @@ JackVST* jvst_new() {
 	pthread_mutex_init (&jvst->sysex_lock, NULL);
 	pthread_cond_init (&jvst->sysex_sent, NULL);
 	jvst->with_editor = WITH_EDITOR_SHOW;
+	jvst->volume = 1;
 	jvst->tempo = -1; // -1 here mean get it from Jack
 	/* Local Keyboard MIDI CC message (122) is probably not used by any VST */
 	jvst->want_state_cc = 122;
@@ -30,9 +38,29 @@ JackVST* jvst_new() {
 	return jvst;
 }
 
+bool jvst_load(JackVST* jvst, const char* path) {
+	printf( "yo... lets see...\n" );
+	jvst->fst = fst_load_open (path, (audioMasterCallback) &jack_host_callback, jvst);
+	if (jvst->fst) return true;
+
+	if (! jvst->dbinfo_file) return false;
+	char *p = fst_info_get_plugin_path(jvst->dbinfo_file, path);
+	if (!p) return false;
+       
+	jvst->fst = fst_load_open (p, (audioMasterCallback) &jack_host_callback, jvst);
+	free(p);
+	if (jvst->fst) return true;
+
+	return false;
+}
+
 void jvst_destroy(JackVST* jvst) {
 	midi_filter_cleanup( &jvst->filters );
 	free(jvst);
+}
+
+void jvst_sysex_set_uuid(JackVST* jvst, uint8_t uuid) {
+	jvst->sysex_ident_reply.model[0] = jvst->sysex_dump.uuid = uuid;
 }
 
 void jvst_log(const char *msg) { fprintf(stderr, "JACK: %s", msg); }
@@ -63,6 +91,7 @@ void jvst_bypass(JackVST* jvst, bool bypass) {
 bool jvst_load_state (JackVST* jvst, const char * filename) {
 	bool success;
 	char* file_ext = strrchr(filename, '.');
+	if (! file_ext) return FALSE;
 
 	if (strcasecmp(file_ext, ".fps") == 0) {
 		success = fps_load(jvst, filename);

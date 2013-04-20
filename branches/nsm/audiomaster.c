@@ -36,8 +36,6 @@
 #define SHOW_CALLBACK(...)
 #endif
 
-extern void queue_midi_message(JackVST* jvst, int status, int d1, int d2, jack_nframes_t delta );
-
 #ifdef DEBUG_TIME
 #define SHOW_TIME show_time_flags
 static void show_time_flags(intptr_t value) {
@@ -56,6 +54,49 @@ static void show_time_flags(intptr_t value) {
 #else
 #define SHOW_TIME(...)
 #endif
+
+static void
+queue_midi_message(JackVST* jvst, uint8_t status, uint8_t d1, uint8_t d2, jack_nframes_t delta )
+{
+	jack_ringbuffer_t* ringbuffer;
+	size_t	written;
+	uint8_t statusHi = (status >> 4) & 0xF;
+	uint8_t statusLo = status & 0xF;
+	struct  MidiMessage ev;
+
+	/* fst_error("queue_new_message = 0x%hhX, %d, %d", status, d1, d2);*/
+	/* fst_error("statusHi = %d, statusLo = %d", statusHi, statusLo);*/
+
+	ev.data[0] = status;
+	if (statusHi == 0xC || statusHi == 0xD) {
+		ev.len = 2;
+		ev.data[1] = d1;
+	} else if (statusHi == 0xF) {
+		if (statusLo == 0 || statusLo == 2) {
+			ev.len = 3;
+			ev.data[1] = d1;
+			ev.data[2] = d2;
+		} else if (statusLo == 1 || statusLo == 3) {
+			ev.len = 2;
+			ev.data[1] = d1;
+		} else ev.len = 1;
+	} else {
+		ev.len = 3;
+		ev.data[1] = d1;
+		ev.data[2] = d2;
+	}
+
+	ev.time = jack_frame_time(jvst->client) + delta;
+
+	ringbuffer = jvst->ringbuffer;
+	if (jack_ringbuffer_write_space(ringbuffer) < sizeof(ev)) {
+		fst_error("Not enough space in the ringbuffer, NOTE LOST.");
+		return;
+	}
+
+	written = jack_ringbuffer_write(ringbuffer, (char*)&ev, sizeof(ev));
+	if (written != sizeof(ev)) fst_error("jack_ringbuffer_write failed, NOTE LOST.");
+}
 
 intptr_t VSTCALLBACK
 jack_host_callback (struct AEffect* effect, int32_t opcode, int32_t index, intptr_t value, void* ptr, float opt)
@@ -171,16 +212,13 @@ jack_host_callback (struct AEffect* effect, int32_t opcode, int32_t index, intpt
 		// VstEvents* in <ptr>
 		if (! jackvst) return 0;
 
-		int i;
-		long numEvents;
-		VstEvents* events = (VstEvents*)ptr;
-
-		numEvents = events->numEvents;
+		VstEvents* events = (VstEvents*) ptr;
+		int32_t numEvents = events->numEvents;
+		int32_t i;
 		for (i = 0; i < numEvents; i++) {
-			char* midiData;
-			VstMidiEvent* event = (VstMidiEvent*)events->events[i];
-			//printf( "delta = %d\n", (int) event->deltaFrames );
-			midiData = event->midiData;
+			VstMidiEvent* event = (VstMidiEvent*) events->events[i];
+			//printf( "delta = %d\n", event->deltaFrames );
+			char* midiData = event->midiData;
 			queue_midi_message(jackvst, midiData[0], midiData[1], midiData[2], event->deltaFrames);
 		}
 		return 1;

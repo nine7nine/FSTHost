@@ -28,8 +28,8 @@
 #include "jackvst.h"
 #include <jack/thread.h>
 
-#define VERSION "1.5.0"
 #define CTRLAPP "FHControl"
+#define VERSION "1.5.0"
 #ifdef __x86_64__
 #define APPNAME "fsthost64"
 #define ARCH "64bit"
@@ -58,19 +58,12 @@ extern void jvst_lash_init(JackVST *jvst, int* argc, char** argv[]);
 /* nsm.c */
 extern void jvst_nsm_init(const char* client_name, const char* exec_name);
 
-/* Structures & Prototypes for midi output and associated queue */
-struct MidiMessage {
-        jack_nframes_t time;
-        int            len; /* Length of MIDI message, in bytes. */
-        unsigned char  data[3];
-};
-
 static void *(*the_function)(void*);
 static void *the_arg;
 static pthread_t the_thread_id;
 static sem_t sema;
 GMainLoop* glib_main_loop;
-JackVST *jvst_first;
+JackVST *jvst_first = NULL;
 
 static void sysex_makeASCII(uint8_t* ascii_midi_dest, char* name, size_t size_dest) {
 	size_t i;
@@ -191,8 +184,7 @@ static void jvst_parse_sysex_input(JackVST* jvst, jack_midi_data_t* data, size_t
 				     sizeof(jvst->sysex_ident_reply.version)*sizeof(uint8_t)) == 0)
 				{
 					printf("OK\n");
-					jvst->sysex_ident_reply.model[0] =
-					jvst->sysex_dump.uuid = sysex_id_offer->uuid;
+					jvst_sysex_set_uuid( jvst, sysex_id_offer->uuid );
 					jvst_send_sysex(jvst, SYSEX_WANT_IDENT_REPLY);
 				} else {
 					printf("NOT FOR US\n");
@@ -245,7 +237,6 @@ static void jvst_quit(JackVST* jvst) {
 		printf("Jack Deactivate\n");
 		jack_deactivate(jvst->client);
 
-		printf("Close plugin\n");
 		fst_close(jvst->fst);
 	} else {
 		gtk_gui_quit();
@@ -492,50 +483,6 @@ static inline void process_midi_input(JackVST* jvst, jack_nframes_t nframes) {
 	plugin->dispatcher (plugin, effProcessEvents, 0, 0, jvst->events, 0.0f);
 }
 
-// This function is used in audiomaster.c
-void queue_midi_message(JackVST* jvst, int status, int d1, int d2, jack_nframes_t delta ) {
-	jack_ringbuffer_t* ringbuffer;
-	int	written;
-	short	statusHi = (status >> 4) & 0xF;
-	short	statusLo = status & 0xF;
-	struct  MidiMessage ev;
-
-	/*fst_error("queue_new_message = 0x%hhX, %d, %d\n", status, d1, d2);*/
-	/* fst_error("statusHi = %d, statusLo = %d\n", statusHi, statusLo);*/
-
-	ev.data[0] = status;
-	if (statusHi == 0xC || statusHi == 0xD) {
-		ev.len = 2;
-		ev.data[1] = d1;
-	} else if (statusHi == 0xF) {
-		if (statusLo == 0 || statusLo == 2) {
-			ev.len = 3;
-			ev.data[1] = d1;
-			ev.data[2] = d2;
-		} else if (statusLo == 1 || statusLo == 3) {
-			ev.len = 2;
-			ev.data[1] = d1;
-		} else ev.len = 1;
-	} else {
-		ev.len = 3;
-		ev.data[1] = d1;
-		ev.data[2] = d2;
-	}
-
-	ev.time = jack_frame_time(jvst->client) + delta;
-
-	ringbuffer = jvst->ringbuffer;
-	if (jack_ringbuffer_write_space(ringbuffer) < sizeof(ev)) {
-		fst_error("Not enough space in the ringbuffer, NOTE LOST.");
-		return;
-	}
-
-	written = jack_ringbuffer_write(ringbuffer, (char*)&ev, sizeof(ev));
-	if (written != sizeof(ev)) {
-		fst_error("jack_ringbuffer_write failed, NOTE LOST.");
-	}
-}
-
 static int process_callback( jack_nframes_t nframes, void* data) {
 	short i, o;
 	JackVST* jvst = (JackVST*) data;
@@ -604,9 +551,8 @@ static bool session_callback( JackVST* jvst ) {
 		event->flags |= JackSessionSaveError;
 	}
 
-	snprintf( retval, sizeof(retval), "%s -U %d -u %s -s \"${SESSION_DIR}state.fps\" \"%s\"",
-		APPNAME, jvst->sysex_dump.uuid, event->client_uuid, jvst->handle->path);
-	event->command_line = strdup( retval );
+	snprintf( retval, sizeof(retval), "%s -u %s -s \"${SESSION_DIR}state.fps\"", APPNAME, event->client_uuid);
+	event->command_line = strndup( retval, sizeof(retval) );
 
 	jack_session_reply(jvst->client, event);
 
@@ -782,10 +728,11 @@ static void usage(char* appname) {
 
 	fprintf(stderr, "\nUsage: %s [ options ] <plugin>\n", appname);
 	fprintf(stderr, "  or\n");
-	fprintf(stderr, "Usage: %s -d <xml_db_info> <path_for_add_to_db>\n\n", appname);
+	fprintf(stderr, "Usage: %s -g [ -d <xml_db_info> ] <path_for_add_to_db>\n\n", appname);
 	fprintf(stderr, "Options:\n");
 	fprintf(stderr, format, "-b", "Start in bypass mode");
-	fprintf(stderr, format, "-d xml_db_path", "Create/Update XML info DB.");
+	fprintf(stderr, format, "-g", "Create/Update XML info DB.");
+	fprintf(stderr, format, "-d xml_db_path", "Custom path to XML DB");
 	fprintf(stderr, format, "-n", "Disable Editor and GTK GUI");
 	fprintf(stderr, format, "-N", "Notify changes by SysEx");
 	fprintf(stderr, format, "-e", "Hide Editor");
@@ -815,123 +762,77 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	AEffect*	plugin;
 	jack_status_t	status;
 	short		i;
-	short		opt_numIns = -1;
-	short		opt_numOuts = -1;
-	bool		load_state = FALSE;
+	int32_t		opt_numIns = -1;
+	int32_t		opt_numOuts = -1;
+	bool		opt_generate_dbinfo = false;
 	bool		sigusr1_save_state = FALSE;
 	bool		want_midi_physical = false;
-	const char*	dbinfo_path = NULL;
 	const char*	connect_to = NULL;
-	const char*	plug_path;
-	int		sample_rate = 0;
-	long		block_size = 0;
 
 	printf("FSTHost Version: %s (%s)\n", VERSION, ARCH);
 
 	JackVST*	jvst = jvst_new();
 	jvst_first = jvst;
 
+	const char* henv = getenv("HOME");
+	size_t dbilen = strlen(henv) + strlen(APPNAME);
+	char ddbif[dbilen + 7];
+	snprintf(ddbif, sizeof ddbif, "%s/.%s.xml", henv, APPNAME);
+	jvst->dbinfo_file = ddbif;
+
         // Parse command line options
 	cmdline2arg(&argc, &argv, cmdline);
-	while ( (i = getopt (argc, argv, "bd:es:c:k:i:j:lnNm:pPo:t:u:U:V")) != -1) {
+	while ( (i = getopt (argc, argv, "bd:egs:c:k:i:j:lnNm:pPo:t:u:U:V")) != -1) {
 		switch (i) {
-			case 'b':
-				jvst->bypassed = TRUE;
-				break;
-			case 'd':
-				dbinfo_path = optarg;
-				break;
-			case 'e':
-				jvst->with_editor = WITH_EDITOR_HIDE;
-				break;
-			case 's':
-				load_state = 1;
-                                jvst->default_state_file = optarg;
-				break;
-			case 'c':
-				jvst->client_name = optarg;
-				break;
+			case 'b': jvst->bypassed = TRUE; break;
+			case 'd': jvst->dbinfo_file = optarg; break;
+			case 'e': jvst->with_editor = WITH_EDITOR_HIDE; break;
+			case 'g': opt_generate_dbinfo = true; break;
+			case 's': jvst->default_state_file = optarg; break;
+			case 'c': jvst->client_name = optarg; break;
 			case 'k':
 				jvst->channel = strtol(optarg, NULL, 10);
-				if (jvst->channel < 0 || jvst->channel > 17)
-					jvst->channel = 0;
+				if (jvst->channel < 0 || jvst->channel > 17) jvst->channel = 0;
 				midi_filter_one_channel( &jvst->filters, jvst->channel );
 				break;
-			case 'i':
-				opt_numIns = strtol(optarg, NULL, 10);
-				break;
-			case 'j':
-				connect_to = optarg;
-				break;
-			case 'l':
-				sigusr1_save_state = TRUE;
-				break;
-			case 'p':
-				want_midi_physical = TRUE;
-				break;
-			case 'P':
-				/* mean used but not enabled */
-				jvst->midi_pc = MIDI_PC_SELF;
-				break;
-			case 'o':
-				opt_numOuts = strtol(optarg, NULL, 10);
-				break;
-			case 'n':
-				jvst->with_editor = WITH_EDITOR_NO;
-				break;
-			case 'N':
-				jvst->sysex_want_notify = true;
-				break;
-			case 'm':
-				jvst->want_state_cc = strtol(optarg, NULL, 10);
-				break;
-			case 't':
-				jvst->tempo = strtod(optarg, NULL);
-				break;
-			case 'u':
-				jvst->uuid = optarg;
-				break;
-			case 'U':
-				jvst->sysex_ident_reply.model[0] =
-				jvst->sysex_dump.uuid = strtol(optarg, NULL, 10);
-				break;
-			case 'V':
-				jvst->volume = -1;
-				break;
-			default:
-				usage (argv[0]);
-				return 1;
+			case 'i': opt_numIns = strtol(optarg, NULL, 10); break;
+			case 'j': connect_to = optarg; break;
+			case 'l': sigusr1_save_state = TRUE; break;
+			case 'p': want_midi_physical = TRUE; break;
+			case 'P': jvst->midi_pc = MIDI_PC_SELF; break; /* used but not enabled */
+			case 'o': opt_numOuts = strtol(optarg, NULL, 10); break;
+			case 'n': jvst->with_editor = WITH_EDITOR_NO; break;
+			case 'N': jvst->sysex_want_notify = true; break;
+			case 'm': jvst->want_state_cc = strtol(optarg, NULL, 10); break;
+			case 't': jvst->tempo = strtod(optarg, NULL); break;
+			case 'u': jvst->uuid = optarg; break;
+			case 'U': jvst_sysex_set_uuid( jvst, strtol(optarg, NULL, 10) ); break;
+			case 'V': jvst->volume = -1; break;
+			default: usage (argv[0]); return 1;
 		}
 	}
 
-	if (optind >= argc) {
+	if (optind < argc) {
+		/* We have more arguments than getops options */
+		const char* path = argv[optind];
+		if (opt_generate_dbinfo) {
+			if (! jvst->dbinfo_file) return 1;
+			return fst_info(jvst->dbinfo_file, path);
+		} else jvst_load( jvst, path );
+	} else if (! jvst->default_state_file) {
 		usage (argv[0]);
 		return 1;
 	}
 
-	plug_path = argv[optind];
-
-	if (dbinfo_path) return fst_info(dbinfo_path, plug_path);
-
-	menv = getenv("FSTHOST_NOGUI");
-	if (menv && strtol(menv, NULL, 2) == 1) jvst->with_editor = WITH_EDITOR_NO;
-
-	jvst_set_volume(jvst, 63);
-
-	printf( "yo... lets see...\n" );
-	if ((jvst->handle = fst_load (plug_path)) == NULL) {
-		fst_error ("can't load plugin %s", plug_path);
-		return 1;
+        // load state if requested
+	if ( jvst->default_state_file ) {
+		bool loaded = jvst_load_state (jvst, jvst->default_state_file);
+		if ( ! loaded && ! sigusr1_save_state ) return 1;
 	}
 
-	if (!jvst->client_name) jvst->client_name = jvst->handle->name;
+	/* Are we loaded plugini ? */
+	if (! jvst->fst) return 1;
 
-	printf( "Revive plugin: %s\n", jvst->client_name);
-	if ((jvst->fst = fst_open (jvst->handle, (audioMasterCallback) &jack_host_callback, jvst)) == NULL) {
-		fst_error ("can't instantiate plugin %s", plug_path);
-		return 1;
-	}
-	
 	fst = jvst->fst;
 	plugin = fst->plugin;
 
@@ -944,8 +845,10 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
         printf("Main Thread W32ID: %d | LWP: %d | W32 Class: %d | W32 Priority: %d\n",
 		GetCurrentThreadId (), (int) syscall (SYS_gettid), GetPriorityClass (h_thread), GetThreadPriority(h_thread));
 
-	jvst_nsm_init(jvst->client_name, argv[0]);
+	/****************** Jack setup *************************/
+	if (!jvst->client_name) jvst->client_name = jvst->fst->handle->name;
 
+	jvst_nsm_init(jvst->client_name, argv[0]);
 	jack_set_info_function(jvst_log);
 	jack_set_error_function(jvst_log);
 
@@ -969,12 +872,12 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	jack_set_graph_order_callback(jvst->client, graph_order_callback, jvst);
 
 	/* set rate and blocksize */
-	sample_rate = (int) jack_get_sample_rate(jvst->client);
-	block_size = jack_get_buffer_size(jvst->client);
-	printf("Sample Rate: %d | Block Size: %ld\n", sample_rate, block_size);
-
+	jack_nframes_t sample_rate = jack_get_sample_rate(jvst->client);
 	plugin->dispatcher (plugin, effSetSampleRate, 0, 0, NULL, (float) sample_rate);
-	plugin->dispatcher (plugin, effSetBlockSize, 0, jack_get_buffer_size (jvst->client), NULL, 0.0f);
+
+	int block_size = jack_get_buffer_size(jvst->client);
+	plugin->dispatcher (plugin, effSetBlockSize, 0, (intptr_t) block_size, NULL, 0.0f);
+	printf("Sample Rate: %d | Block Size: %d\n", sample_rate, block_size);
 
 	/**************** Control MIDI ports ***********************/
 	// Register Control MIDI ports
@@ -1089,10 +992,6 @@ audio_ports:
 	jvst_lash_init(jvst, &argc, &argv);
 #endif
 
-        // load state if requested
-	if ( load_state && ! jvst_load_state (jvst, jvst->default_state_file) && ! sigusr1_save_state )
-		return 1;
-
 	// Activate plugin
 	if (! jvst->bypassed) fst_resume(jvst->fst);
 
@@ -1113,6 +1012,10 @@ audio_ports:
 	// Add FST event callback to Gblib main loop
 	g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 100, (GSourceFunc) fst_event_callback, NULL, NULL);
 
+	// Handle FSTHOST_NOGUI environment
+	menv = getenv("FSTHOST_NOGUI");
+	if (menv && strtol(menv, NULL, 2) == 1) jvst->with_editor = WITH_EDITOR_NO;
+
 	// Create GTK or GlibMain thread
 	if (jvst->with_editor != WITH_EDITOR_NO) {
 		printf( "Start GUI\n" );
@@ -1122,9 +1025,6 @@ audio_ports:
 		printf("GUI Disabled - start GlibMainLoop\n");
 		g_main_loop_run(glib_main_loop);
 	}
-
-	printf("Unload plugin\n");
-	fst_unload(jvst->handle);
 
 	jvst_destroy(jvst);
 

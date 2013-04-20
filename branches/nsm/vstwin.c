@@ -1,3 +1,4 @@
+#include <string.h>
 #include <libgen.h>
 #include <signal.h>
 #include <stdlib.h>
@@ -385,84 +386,96 @@ fst_event_loop_add_plugin (FST* fst) {
 	}
 }
 
-FSTHandle*
-fst_load (const char * path) {
-	char mypath[PATH_MAX];
-	char *base, *envdup, *vst_path, *last, *fullpath;
-	HMODULE dll = NULL;
+static main_entry_t
+fst_get_main_entry(HMODULE dll) {
 	main_entry_t main_entry;
-	FSTHandle* fhandle;
 
-	strcpy(mypath, path);
-	if (strstr (path, ".dll") == NULL)
-		strcat (mypath, ".dll");
+	main_entry = (main_entry_t) GetProcAddress (dll, "VSTPluginMain");
+	if (main_entry) return main_entry;
+
+	main_entry = (main_entry_t) GetProcAddress (dll, "main");
+	if (main_entry) return main_entry;
+
+	fst_error("Can't found either main and VSTPluginMain entry");
+	return NULL;
+}
+
+FSTHandle*
+fst_load (const char *path) {
+	char mypath[PATH_MAX];
+	size_t mypath_maxchars = sizeof(mypath) - 1;
+
+	printf("Load library %s\n", path);
+
+	/* Copy path for later juggling */
+	strncpy(mypath, path, mypath_maxchars);
 
 	/* Get basename */
-	last = basename (mypath);
-	base = alloca(strlen(last));
-	strcpy(base, last);
+	char* base = basename( (char*) path );
 
-	// If we got full path
-	dll = LoadLibraryA(mypath);
-
-	// Try find plugin in VST_PATH
-	if ( !dll && (envdup = getenv("VST_PATH"))) {
-		envdup = strdup (envdup);
-		vst_path = strtok (envdup, ":");
-		while (vst_path) {
-			last = vst_path + strlen(vst_path) - 1;
-			if (*last == '/') *last='\0';
-
-			sprintf(mypath, "%s/%s", vst_path, base);
-			printf("Search in %s\n", mypath);
-
-			if ( (dll = LoadLibraryA(mypath)) != NULL)
-				break;
-			vst_path = strtok (NULL, ":");
-		}
-		free(envdup);
-	}
-
-	if (! dll) {
-		fst_error("Can't load plugin\n");
-		return NULL;
-	}
-
-	if ( 
-	  (main_entry = (main_entry_t) GetProcAddress (dll, "VSTPluginMain")) == NULL &&
-	  (main_entry = (main_entry_t) GetProcAddress (dll, "main")) == NULL
-	) {
-		FreeLibrary (dll);
-		fst_error("Can't found either main and VSTPluginMain entry\n");
-		return NULL;
-	}
-
-	if ( ! (fullpath = realpath(mypath,NULL)) )
-		strdup(mypath);
+	// Just try load plugin
+	HMODULE dll = LoadLibraryA(mypath);
+	if ( dll ) goto have_dll;
 	
+	// Try find plugin in VST_PATH
+	char* env = getenv("VST_PATH");
+	if ( env ) {
+		char* vpath = strtok (env, ":");
+		while (vpath) {
+			char* last = vpath + strlen(vpath) - 1;
+			if (*last == '/') {
+				snprintf(mypath, sizeof(mypath), "%s%s", vpath, base);
+			} else {
+				snprintf(mypath, sizeof(mypath), "%s/%s", vpath, base);
+			}
+
+			printf("Load library %s\n", mypath);
+			dll = LoadLibraryA(mypath);
+			if (dll) goto have_dll;
+
+			vpath = strtok (NULL, ":");
+		}
+	}
+
+	fst_error("Can't load library: %s", base);
+	return NULL;
+
+have_dll: ;
+/* Wine path to library
+	char buf[PATH_MAX];
+	GetModuleFileName(dll, (LPSTR) &buf, sizeof(buf));
+	printf("GetModuleFileName: %s\n", buf);
+*/
+
+	main_entry_t main_entry = fst_get_main_entry(dll);
+	if (! main_entry) {	
+		FreeLibrary (dll);
+		return NULL;
+	}
+
+	char* fullpath = realpath(mypath,NULL);
+	if (! fullpath) fullpath = strndup(mypath, sizeof(mypath));
+
+	char* ext = strstr(base, ".dll");
+	if (!ext) ext = strstr(base, ".DLL");
+	char* name = (ext) ? strndup(base, ext - base) : strdup(base);
+	
+	FSTHandle* fhandle;
 	fhandle = malloc(sizeof(FSTHandle));
 	fhandle->dll = dll;
 	fhandle->main_entry = main_entry;
 	fhandle->path = fullpath;
-	fhandle->name = strndup(base, strrchr(base, '.') - base);
-	fhandle->plugincnt = 0;
-	
+	fhandle->name = name;
+
 	return fhandle;
 }
 
 bool
 fst_unload (FSTHandle* fhandle) {
-	// Some plugin use this library ?
-	if (fhandle->plugincnt) {
-		fst_error("Can't unload library %s because %d plugins still using it\n",
-			fhandle->name, fhandle->plugincnt);
-		return FALSE;
-	}
-
+	printf("Unload library: %s\n", fhandle->path);
 	FreeLibrary (fhandle->dll);
 	free (fhandle->path);
 	free (fhandle->name);
-	
 	free (fhandle);
 
 	return TRUE;
@@ -470,19 +483,20 @@ fst_unload (FSTHandle* fhandle) {
 
 FST*
 fst_open (FSTHandle* fhandle, audioMasterCallback amc, void* userptr) {
-	if( fhandle == NULL ) {
-	    fst_error( "the handle was NULL\n" );
+	if (fhandle == NULL) {
+	    fst_error( "the handle was NULL" );
 	    return NULL;
 	}
+	printf("Revive plugin: %s\n", fhandle->name);
 
 	AEffect* plugin = fhandle->main_entry (amc);
 	if (plugin == NULL)  {
-		fst_error ("%s could not be instantiated\n", fhandle->name);
+		fst_error ("%s could not be instantiated", fhandle->name);
 		return NULL;
 	}
 
 	if (plugin->magic != kEffectMagic) {
-		fst_error ("%s is not a VST plugin\n", fhandle->name);
+		fst_error ("%s is not a VST plugin", fhandle->name);
 		return NULL;
 	}
 
@@ -493,7 +507,7 @@ fst_open (FSTHandle* fhandle, audioMasterCallback amc, void* userptr) {
 
 	// Open Plugin
 	plugin->dispatcher (plugin, effOpen, 0, 0, NULL, 0.0f);
-	fst->vst_version = fst->plugin->dispatcher (fst->plugin, effGetVstVersion, 0, 0, NULL, 0.0f);
+	fst->vst_version = plugin->dispatcher (plugin, effGetVstVersion, 0, 0, NULL, 0.0f);
 
 	if (fst->vst_version >= 2) {
 		fst->canReceiveVstEvents = fst_canDo(fst, "receiveVstEvents");
@@ -501,11 +515,19 @@ fst_open (FSTHandle* fhandle, audioMasterCallback amc, void* userptr) {
 		fst->canSendVstEvents = fst_canDo(fst, "sendVstEvents");
 		fst->canSendVstMidiEvent = fst_canDo(fst, "sendVstMidiEvent");
 
-		fst->isSynth = (fst->plugin->flags & effFlagsIsSynth) > 0;
+		fst->isSynth = (plugin->flags & effFlagsIsSynth) > 0;
 		printf("%-31s : %s\n", "Plugin isSynth", fst->isSynth ? "Yes" : "No");
+
+		/* Get plugin name */
+		char tmpstr[32];
+		if ( plugin->dispatcher (plugin, effGetEffectName, 0, 0, tmpstr, 0 ) )
+			fst->name = strndup ( tmpstr, sizeof(tmpstr) );
 	}
 
-	++fst->handle->plugincnt;
+	// We always need some name ;-)
+	if (! fst->name) fst->name = strdup ( fst->handle->name );
+
+	// Bind to plugin list
 	fst_event_loop_add_plugin(fst);
 
 	MainThreadId = GetCurrentThreadId();
@@ -513,8 +535,22 @@ fst_open (FSTHandle* fhandle, audioMasterCallback amc, void* userptr) {
 	return fst;
 }
 
+FST*
+fst_load_open (const char* path, audioMasterCallback amc, void* userptr) {
+	FSTHandle* handle = fst_load(path);
+	if (! handle) return NULL;
+
+	// Revive plugin
+	FST* fst = fst_open(handle, amc, userptr);
+	if (! fst) return NULL;
+
+	return fst;
+}
+
 void
 fst_close (FST* fst) {
+	printf("Close plugin: %s\n", fst->name);
+
 	// It's matter from which thread we calling it
 	if (GetCurrentThreadId() == MainThreadId) {
 		pthread_mutex_lock (&fst->lock);
@@ -524,9 +560,10 @@ fst_close (FST* fst) {
 
 		fst->plugin->dispatcher(fst->plugin, effClose, 0, 0, NULL, 0.0f);
 		fst_event_loop_remove_plugin(fst);
-		--fst->handle->plugincnt;
 
 		pthread_mutex_unlock (&fst->lock);
+		fst_unload(fst->handle);
+		free(fst->name);
 		free(fst);
 
 		printf("Plugin closed\n");

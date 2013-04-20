@@ -17,7 +17,7 @@ static int cb_nsm_open (
 
 static int cb_nsm_save ( char **out_msg, void *userdata ) {
 //	do_save_stuff();
-	printf("NSM: Open callback\n");
+	printf("NSM: Save callback\n");
 	return ERR_OK;
 }
 
