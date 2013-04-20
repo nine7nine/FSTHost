@@ -30,19 +30,26 @@ enum WithEditor {
 };
 
 enum SysExWant {
-	SYSEX_WANT_NO          = 0,
-	SYSEX_WANT_IDENT_REPLY = 1,
-	SYSEX_WANT_DUMP        = 2
+   SYSEX_WANT_NO          = 0,
+   SYSEX_WANT_IDENT_REPLY = 1,
+   SYSEX_WANT_DUMP        = 2
+};
+
+/* Structures & Prototypes for midi output and associated queue */
+struct MidiMessage {
+   jack_nframes_t   time;
+   uint8_t          len; /* Length of MIDI message, in bytes. */
+   jack_midi_data_t data[3];
 };
 
 struct _JackVST {
     jack_client_t*  client;
-    FSTHandle*      handle;
     FST*            fst;
     char*           client_name;
     char*           default_state_file;
-    short           numIns;
-    short           numOuts;
+    char*           dbinfo_file;
+    int32_t         numIns;
+    int32_t         numOuts;
     float**         ins;
     float**         outs;
     jack_port_t*    midi_inport;
@@ -94,6 +101,7 @@ struct _JackVST {
 };
 
 JackVST* jvst_new();
+bool jvst_load(JackVST* jvst, const char* path);
 void jvst_log(const char *msg);
 void jvst_destroy(JackVST* jvst);
 void jvst_send_sysex(JackVST* jvst, enum SysExWant);
@@ -101,6 +109,7 @@ void jvst_bypass(JackVST* jvst, bool bypass);
 bool jvst_load_state(JackVST* jvst, const char * filename);
 bool jvst_save_state(JackVST* jvst, const char * filename);
 void jvst_set_volume(JackVST* jvst, short volume);
+void jvst_sysex_set_uuid(JackVST* jvst, uint8_t uuid);
 unsigned short jvst_get_volume(JackVST* jvst);
 
 #endif /* __jack_vst_h__ */

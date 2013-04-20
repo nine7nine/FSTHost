@@ -1,5 +1,6 @@
 #include <dirent.h>
 
+#include <libgen.h>
 #include <libxml/parser.h>
 #include <libxml/tree.h>
 
@@ -21,15 +22,12 @@ bool2str(xmlChar *str, int buf_len, bool boolean) {
 
 static bool
 fst_exists(char *path, xmlNode *xml_rn) {
-	xmlNode* fst_node;
 	char fullpath[PATH_MAX];
+	if (! realpath(path,fullpath)) return 10;
 
-	if (! realpath(path,fullpath))
-		return 10;
-
+	xmlNode* fst_node;
 	for (fst_node = xml_rn->children; fst_node; fst_node = fst_node->next) {
-		if (xmlStrcmp(fst_node->name, BAD_CAST "fst"))
-			continue;
+		if (xmlStrcmp(fst_node->name, BAD_CAST "fst")) continue;
 
 		if (! xmlStrcmp(xmlGetProp(fst_node, BAD_CAST "path"), BAD_CAST fullpath)) {
 			printf("%s already exists\n", path);
@@ -46,14 +44,10 @@ static void fst_add2db(FST* fst, xmlNode *xml_rn) {
 
 	fst_node = xmlNewChild(xml_rn, NULL,BAD_CAST "fst", NULL);
 
+	xmlNewProp(fst_node,BAD_CAST "file",BAD_CAST fst->handle->name);
 	xmlNewProp(fst_node,BAD_CAST "path",BAD_CAST fst->handle->path);
 
-	if ( fst_call_dispatcher( fst, effGetEffectName, 0, 0, tmpstr, 0 ) ) {
-		xmlNewChild(fst_node, NULL,BAD_CAST "name",tmpstr);
-	} else {
-		xmlNewChild(fst_node, NULL,BAD_CAST "name",BAD_CAST fst->handle->name);
-	}
-
+	xmlNewChild(fst_node, NULL,BAD_CAST "name", BAD_CAST fst->name);
 	xmlNewChild(fst_node, NULL,BAD_CAST "uniqueID", int2str(tmpstr,sizeof tmpstr,fst->plugin->uniqueID));
 	xmlNewChild(fst_node, NULL,BAD_CAST "version", int2str(tmpstr,sizeof tmpstr,fst->plugin->version));
 	xmlNewChild(fst_node, NULL,BAD_CAST "vst_version", int2str(tmpstr,sizeof tmpstr,fst->vst_version));
@@ -74,34 +68,17 @@ static void fst_add2db(FST* fst, xmlNode *xml_rn) {
 }
 
 static void fst_get_info(char* path, xmlNode *xml_rn) {
-	FST*		fst;
-	FSTHandle*	handle;
+	if (fst_exists(path, xml_rn)) return;
 
-	if (! fst_exists(path, xml_rn)) {
-		printf("Load plugin %s\n", path);
-		handle = fst_load(path);
-		if (! handle) {
-			fst_error ("can't load plugin %s", path);
-			return;
-		}
+	// Load and open plugin
+	FST* fst = fst_load_open(path, &simple_master_callback, NULL);
+	if (! fst) return;
 
-		printf( "Revive plugin: %s\n", handle->name);
-		fst = fst_open(handle, &simple_master_callback, NULL);
-		if (! fst) {
-			fst_error ("can't instantiate plugin %s", handle->name);
-			return;
-		}
+	fst_add2db(fst, xml_rn);
 
-		fst_add2db(fst, xml_rn);
+	fst_close(fst);
 
-		printf("Close plugin: %s\n", handle->name);
-		fst_close(fst);
-
-		need_save = TRUE;
-
-		printf("Unload plugin: %s\n", path);
-		fst_unload(handle);
-	}
+	need_save = TRUE;
 }
 
 static void scandirectory( const char *dir, xmlNode *xml_rn ) {
@@ -109,15 +86,14 @@ static void scandirectory( const char *dir, xmlNode *xml_rn ) {
 	DIR *d = opendir(dir);
 
 	if ( !d ) {
-		fst_error("Can't open directory %s\n", dir);
+		fst_error("Can't open directory %s", dir);
 		return;
 	}
 
 	char fullname[PATH_MAX];
 	while ( (entry = readdir( d )) ) {
 		if (entry->d_type & DT_DIR) {
-			/* Check that the directory is not "d" or d's parent. */
-            
+			/* Do not processing self and our parent */
 			if (! strcmp (entry->d_name, "..") || ! strcmp (entry->d_name, "."))
 				continue;
 
@@ -134,6 +110,35 @@ static void scandirectory( const char *dir, xmlNode *xml_rn ) {
 		}
 	}
 	closedir(d);
+}
+
+char* fst_info_get_plugin_path(const char* dbpath, const char* filename) {
+	xmlDoc* xml_db = xmlReadFile(dbpath, NULL, 0);
+	if (!xml_db) return NULL;
+
+	char* base = basename ( (char*) filename );
+	char* ext = strchr( base, '.' );
+	char* fname = (ext) ? strndup(base, ext - base) : strdup( base );
+
+	char* path = NULL;
+	xmlNode* n;
+	xmlNode* xml_rn = xmlDocGetRootElement(xml_db);
+	for (n = xml_rn->children; n; n = n->next) {
+		if (xmlStrcmp(n->name, BAD_CAST "fst")) continue;
+
+		char* p = (char*) xmlGetProp(n, BAD_CAST "path");
+		char* f = (char*) xmlGetProp(n, BAD_CAST "file");
+		if (!p || !f) continue;
+			
+		if (! strcmp(f, fname)) {
+			path = p;
+			break;
+		}
+	}
+
+	free(fname);
+	xmlFreeDoc(xml_db);
+	return (path) ? strdup (path) : NULL;
 }
 
 int fst_info(const char *dbpath, const char *fst_path) {

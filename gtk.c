@@ -449,7 +449,7 @@ filter_enable_handler(GtkButton* button, gpointer ptr) {
 
 void filter_addrow(GtkWidget* vpacker, MIDIFILTER **filters, MIDIFILTER *filter) {
 	GtkWidget* hpacker = gtk_hbox_new (FALSE, 7);
-	gtk_box_pack_end(GTK_BOX(vpacker), hpacker, FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(vpacker), hpacker, FALSE, FALSE, 0);
 
 	GtkWidget* checkbox_enable = gtk_check_button_new();
 	gtk_widget_set_tooltip_text(checkbox_enable, "Enable");
@@ -513,14 +513,14 @@ midifilter_handler (GtkWidget* widget, JackVST *jvst) {
 
 	gtk_container_add (GTK_CONTAINER (fwin), fvpacker);
 
-	MIDIFILTER *f;
-	for (f = jvst->filters; f; f = f->next) filter_addrow(fvpacker, &jvst->filters, f);
-
 	GtkToolItem* button_new = gtk_tool_button_new_from_stock(GTK_STOCK_ADD);
 	gtk_toolbar_insert(GTK_TOOLBAR(ftoolbar), button_new, 0);
 	gtk_box_pack_start(GTK_BOX(fvpacker), ftoolbar, FALSE, FALSE, 0);
 	gtk_widget_set_tooltip_text(GTK_WIDGET(button_new), "New Filter");
 	g_signal_connect (G_OBJECT(button_new),  "clicked", G_CALLBACK(filter_new_handler), jvst);
+
+	MIDIFILTER *f;
+	for (f = jvst->filters; f; f = f->next) filter_addrow(fvpacker, &jvst->filters, f);
 
 	gtk_widget_show_all (fwin);
 }
@@ -772,7 +772,6 @@ gtk_gui_start (JackVST* jvst) {
 	printf("Jack Deactivate\n");
 	jack_deactivate(jvst->client);
 
-	printf("Close plugin\n");
 	fst_close(jvst->fst);
 
 	return TRUE;

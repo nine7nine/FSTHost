@@ -63,8 +63,6 @@ struct _FSTHandle
     char*		name;
     char*		path;
     main_entry_t	main_entry;
-
-    int plugincnt;
 };
 
 struct FSTDispatcher {
@@ -93,6 +91,7 @@ struct _FST
 	FSTHandle*		handle;
 	struct _FST*		next;
 
+	char*			name;
 	enum EventCall		event_call;
 	struct FSTDispatcher*	dispatcher;
 
@@ -150,8 +149,8 @@ void fst_suspend (FST *fst);
 void fst_resume (FST *fst);
 
 FST* fst_open (FSTHandle*, audioMasterCallback amc, void* userptr);
+FST* fst_load_open (const char* path, audioMasterCallback amc, void* userptr);
 void fst_close (FST*);
-void fst_loop_quit();
 
 void fst_program_change (FST *fst, short want_program);
 bool fst_get_program_name (FST *fst, short program, char* name, size_t size);
