@@ -24,9 +24,9 @@ enum WantState {
 };
 
 enum WithEditor {
-   WITH_EDITOR_NO,
-   WITH_EDITOR_HIDE,
-   WITH_EDITOR_SHOW
+   WITH_EDITOR_NO   = 0,
+   WITH_EDITOR_HIDE = 1,
+   WITH_EDITOR_SHOW = 2
 };
 
 enum SysExWant {

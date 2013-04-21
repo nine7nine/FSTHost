@@ -140,12 +140,16 @@ static void jvst_parse_sysex_input(JackVST* jvst, jack_midi_data_t* data, size_t
 			// Type
 			switch(data[3]) {
 			case SYSEX_TYPE_DUMP:
-				printf("DUMP - OK\n");
+				printf("DUMP - ");
 
 				SysExDumpV1* sysex = (SysExDumpV1*) data;
-				printf("uuid:%d state:%d program:%d channel:%d volume:%d", sysex->uuid,
-					sysex->state, sysex->program, sysex->channel, sysex->volume);
+				if (sysex->uuid != jvst->sysex_dump.uuid) {
+					printf("Not to Us (ID:%d)\n", sysex->uuid);
+					break;
+				}
 
+				printf("OK | uuid:%d state:%d program:%d channel:%d volume:%d\n", sysex->uuid,
+					sysex->state, sysex->program, sysex->channel, sysex->volume);
 				jvst_bypass(jvst, (sysex->state == SYSEX_STATE_ACTIVE) ? FALSE : TRUE);
 				fst_program_change(jvst->fst, sysex->program);
 				jvst->channel = sysex->channel;
@@ -164,7 +168,7 @@ static void jvst_parse_sysex_input(JackVST* jvst, jack_midi_data_t* data, size_t
 				} else {
 					printf("Not to Us\n");
 				}
-				/* If we got DumpRequest then it mean that there is FHControl, so we wanna notify */
+				/* If we got DumpRequest then it mean FHControl is here and we wanna notify */
 				jvst->sysex_want_notify = true;
 				break;
 			case SYSEX_TYPE_OFFER: ;
@@ -190,7 +194,6 @@ static void jvst_parse_sysex_input(JackVST* jvst, jack_midi_data_t* data, size_t
 			default:
 				printf("BROKEN\n");
 			}
-
 			break;
 		default:
 			printf("not supported\n");
@@ -614,8 +617,8 @@ static int graph_order_callback( void *arg ) {
 static inline void jvst_sysex_notify(JackVST* jvst) {
 	// Wait until program change
 	if (jvst->fst->want_program != -1) return;
-	// Do not notify if have not set SysEx UUID
-	if (jvst->sysex_ident_reply.model[0] != SYSEX_AUTO_ID) return;
+	// Do not notify if have not SysEx ID
+	if (jvst->sysex_ident_reply.model[0] == SYSEX_AUTO_ID) return;
 
 	SysExDumpV1* d = &jvst->sysex_dump;
 	if ( d->program != jvst->fst->current_program ||
@@ -1009,9 +1012,10 @@ audio_ports:
 	// Add FST event callback to Gblib main loop
 	g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 100, (GSourceFunc) fst_event_callback, NULL, NULL);
 
-	// Handle FSTHOST_NOGUI environment
-	menv = getenv("FSTHOST_NOGUI");
-	if (menv && strtol(menv, NULL, 2) == 1) jvst->with_editor = WITH_EDITOR_NO;
+	// Handle FSTHOST_GUI environment
+	if ( (menv = getenv("FSTHOST_GUI")) ) {
+		jvst->with_editor = strtol(menv, NULL, 10);
+	}
 
 	// Create GTK or GlibMain thread
 	if (jvst->with_editor != WITH_EDITOR_NO) {
