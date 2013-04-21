@@ -89,19 +89,16 @@ void jvst_bypass(JackVST* jvst, bool bypass) {
 }
 
 bool jvst_load_state (JackVST* jvst, const char * filename) {
-	bool success;
+	bool success = false;
 	char* file_ext = strrchr(filename, '.');
-	if (! file_ext) return FALSE;
+	if (! file_ext) return false;
 
-	if (strcasecmp(file_ext, ".fps") == 0) {
+	if ( !strcasecmp(file_ext, ".fps") ) {
 		success = fps_load(jvst, filename);
-	} else if ( (strcasecmp(file_ext, ".fxp") == 0) ||
-		    (strcasecmp(file_ext, ".fxb") == 0) )
-	{
-		success = fst_load_fxfile(jvst->fst, filename);
+	} else if ( !strcasecmp(file_ext, ".fxp") || !strcasecmp(file_ext, ".fxb") ) {
+		if (jvst->fst) success = fst_load_fxfile(jvst->fst, filename);
 	} else {
 		printf("Unkown file type\n");
-		success = FALSE;
 	}
 
 	if (success) {
