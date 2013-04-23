@@ -232,11 +232,6 @@ static void jvst_sysex_handler(JackVST* jvst) {
 static void jvst_quit(JackVST* jvst) {
 	if (jvst->with_editor == WITH_EDITOR_NO) {
 		g_main_loop_quit(glib_main_loop);
-
-		printf("Jack Deactivate\n");
-		jack_deactivate(jvst->client);
-
-		fst_close(jvst->fst);
 	} else {
 		gtk_gui_quit();
 	}
@@ -1021,6 +1016,11 @@ audio_ports:
 		printf("GUI Disabled - start GlibMainLoop\n");
 		g_main_loop_run(glib_main_loop);
 	}
+
+	printf("Jack Deactivate\n");
+	jack_deactivate(jvst->client);
+
+	fst_close(jvst->fst);
 
 	jvst_destroy(jvst);
 
