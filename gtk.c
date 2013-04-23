@@ -746,7 +746,6 @@ gtk_gui_start (JackVST* jvst) {
 	gtk_box_pack_start(GTK_BOX(hpacker), cpu_usage, FALSE, FALSE, 0);
 	gtk_widget_set_tooltip_text(cpu_usage, "CPU Usage");
 	//----------------------------------------------------------------------------------
-
 	gtk_container_set_border_width (GTK_CONTAINER(hpacker), 3); 
 	g_signal_connect (G_OBJECT(window), "delete_event", G_CALLBACK(destroy_handler), jvst);
 	
@@ -765,12 +764,6 @@ gtk_gui_start (JackVST* jvst) {
 	printf( "calling gtk_main now\n" );
 	gtk_main ();
 
-	// We exit now
-	printf("Jack Deactivate\n");
-	jack_deactivate(jvst->client);
-
-	fst_close(jvst->fst);
-
 	return TRUE;
 }
 
@@ -780,7 +773,7 @@ int fst_xerror_handler( Display *disp, XErrorEvent *ev ) {
 
 	XGetErrorText(disp, error_code, (char *) &error_text, 256);
 
-	if( disp == the_gtk_display ) {
+	if ( disp == the_gtk_display ) {
 		printf( "Xerror : GTK: %s\n", error_text );
 		return gtk_error_handler( disp, ev );
 	} else {
