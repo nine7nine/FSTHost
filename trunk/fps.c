@@ -115,10 +115,10 @@ fps_process_node(JackVST* jvst, xmlNode *a_node) {
        // MIDI Channel
        } else if (xmlStrcmp(cur_node->name, BAD_CAST "channel") == 0) {
 	  int channel = strtol((const char*) xmlGetProp(cur_node, BAD_CAST "number"), NULL, 10);
-          midi_filter_one_channel_set( jvst->channel, channel );
+          midi_filter_one_channel_set( &jvst->channel, channel );
        // MIDI Filter
        } else if (xmlStrcmp(cur_node->name, BAD_CAST "filter") == 0 &&
-                  midi_filter_one_channel_get(jvst->channel) < 1)
+                  midi_filter_one_channel_get(&jvst->channel) < 1)
        {
          const char* prop = NULL;
          MIDIFILTER mf = {0};
@@ -313,8 +313,10 @@ bool fps_save (JackVST* jvst, const char* filename) {
    }
 
    // MIDI Channel
+/* No is controlled by MIDI ONE FILTERS crew
    cur_node = xmlNewChild(plugin_state_node, NULL, BAD_CAST "channel", NULL);
-   xmlNewProp(cur_node, BAD_CAST "number", int2str(tString, sizeof tString, midi_filter_one_channel_get(jvst->channel)));
+   xmlNewProp(cur_node, BAD_CAST "number", int2str(tString, sizeof tString, midi_filter_one_channel_get(&jvst->channel)));
+*/
 
    // MIDI Filter
    MIDIFILTER *mf;

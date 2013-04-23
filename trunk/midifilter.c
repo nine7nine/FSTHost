@@ -110,7 +110,7 @@ bool midi_filter_check( MIDIFILTER **filters, uint8_t* data, size_t size ) {
 	return ret;
 }
 
-void midi_filter_one_channel_init ( MIDIFILTER **filters, OCH_FILTERS* ) {
+void midi_filter_one_channel_init ( MIDIFILTER **filters, OCH_FILTERS* ochf ) {
 	MIDIFILTER filter = {0};
 	filter.enabled = false;
 	filter.built_in = true;
@@ -118,51 +118,61 @@ void midi_filter_one_channel_init ( MIDIFILTER **filters, OCH_FILTERS* ) {
 	/* Filter out real channel 1 */
 	filter.channel = 1;
 	filter.rule = DROP_ALL;
-	midi_filter_add( filters, &filter );
+	ochf->drop_real_one = midi_filter_add( filters, &filter );
 
 	/* Redirect selected channel to 1 */
 	filter.rule = CHANNEL_REDIRECT;
+	filter.channel = 0;
 	filter.rvalue = 1;
-	midi_filter_add( filters, &filter );
+	ochf->redirect = midi_filter_add( filters, &filter );
 
 	/* Accept channel 1 */
 	filter.channel = 1;
 	filter.rule = ACCEPT;
-	midi_filter_add( filters, &filter );
+	ochf->accept = midi_filter_add( filters, &filter );
 
 	/* Drop rest */
 	filter.channel = 0;
 	filter.rule = DROP_ALL;
-	midi_filter_add( filters, &filter );
+	ochf->drop_rest = midi_filter_add( filters, &filter );
 }
 
 /* Shortcut for our old ComoboBox .. and example how to use filters */
 void midi_filter_one_channel_set ( OCH_FILTERS* ochf, uint8_t channel ) {
-	if (channel < 0 || channel > 17) {
-		channel = 0;
+	if (channel > 17) {
 		MF_DEBUG("OneChannel: value out of range %d\n", channel);
+		channel = 17;
 	}
 
-	if (channel == 0) {
-		ochf.drop_real_one.enabled	= false;
-		ochf.redirect.enabled		= false;
-		ochf.accept.enabled		= false;
-		ochf.drop_rest.enabled		= false;
-	} else if (channel == 1) {
-		ochf.drop_real_one.enabled	= false;
-		ochf.redirect.enabled		= false;
-		ochf.accept.enabled		= true;
-		ochf.drop_rest.enabled		= true;
-	} else {
-		ochf.drop_real_one.enabled	= true;
-		ochf.redirect.enabled		= true;
-		ochf.accept.enabled		= true;
-		ochf.drop_rest.enabled		= true;
+	switch (channel) {
+	case 0:
+		ochf->drop_real_one->enabled	= false;
+		ochf->redirect->enabled		= false;
+		ochf->accept->enabled		= false;
+		ochf->drop_rest->enabled	= false;
+		break;
+	case 1:
+		ochf->drop_real_one->enabled	= false;
+		ochf->redirect->enabled		= false;
+		ochf->accept->enabled		= true;
+		ochf->drop_rest->enabled	= true;
+		break;
+	case 17: /* None */
+		ochf->drop_real_one->enabled	= false;
+		ochf->redirect->enabled		= false;
+		ochf->accept->enabled		= false;
+		ochf->drop_rest->enabled	= true;
+		break;
+	default:
+		ochf->drop_real_one->enabled	= true;
+		ochf->redirect->enabled		= true;
+		ochf->accept->enabled		= true;
+		ochf->drop_rest->enabled	= true;
 	}
-	ochf.redirect.channel = channel;
+	ochf->redirect->channel = channel;
 }
 
 uint8_t midi_filter_one_channel_get ( OCH_FILTERS* ochf ) {
-	return ochf.redirect.channel;
+	return ochf->redirect->channel;
 }
 

@@ -73,7 +73,7 @@ struct _JackVST {
     int             midi_learn_PARAM;
     short           midi_pc;
     MIDIFILTER*     filters;
-    OCH_FILTERS*    channel;
+    OCH_FILTERS     channel;
 
     /* SysEx send support */
     pthread_mutex_t   sysex_lock;
