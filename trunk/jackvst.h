@@ -58,7 +58,6 @@ struct _JackVST {
     jack_port_t*    ctrl_outport;
     jack_port_t**   inports;
     jack_port_t**   outports;
-    int             channel; /* 0 Omni, 17 None */
     bool            bypassed;
     enum WantState  want_state;
     short           want_state_cc;
@@ -74,6 +73,7 @@ struct _JackVST {
     int             midi_learn_PARAM;
     short           midi_pc;
     MIDIFILTER*     filters;
+    OCH_FILTERS*    channel;
 
     /* SysEx send support */
     pthread_mutex_t   sysex_lock;

@@ -35,6 +35,8 @@ JackVST* jvst_new() {
 	SysExDumpV1 sxd = SYSEX_DUMP;
 	memcpy(&jvst->sysex_dump, &sxd, sizeof(SysExDumpV1));
 
+	midi_filter_one_channel_init( &jvst->filters, jvst->channel );
+
 	return jvst;
 }
 
@@ -55,7 +57,7 @@ bool jvst_load(JackVST* jvst, const char* path) {
 }
 
 void jvst_destroy(JackVST* jvst) {
-	midi_filter_cleanup( &jvst->filters );
+	midi_filter_cleanup( &jvst->filters, true );
 	free(jvst);
 }
 
