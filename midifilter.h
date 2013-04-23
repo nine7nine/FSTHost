@@ -4,8 +4,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-typedef struct _MIDIFILTER MIDIFILTER;
-
 #define MF_STR_NOTE_OFF         "NOTE OFF"
 #define MF_STR_ALL              "ALL"
 #define MF_STR_NOTE_ON          "NOTE ON"
@@ -30,10 +28,11 @@ enum MidiMessageType {
 	MM_PITCH_BEND = 0xE
 };
 
-struct _MIDIFILTER {
+typedef struct _MIDIFILTER {
 	/* General part */
 	struct _MIDIFILTER *next;
 	bool enabled;
+	bool built_in;
 
 	/* Match part */
 	enum MidiMessageType type;
@@ -48,12 +47,21 @@ struct _MIDIFILTER {
 		ACCEPT
 	} rule;
 	uint8_t rvalue;
-};
+} MIDIFILTER;
+
+typedef struct _OCH_FILTERS {
+	MIDIFILTER* drop_real_one;
+	MIDIFILTER* redirect;
+	MIDIFILTER* accept;
+	MIDIFILTER* drop_rest;
+} OCH_FILTERS;
 
 MIDIFILTER* midi_filter_add( MIDIFILTER **filters, MIDIFILTER *new );
 bool midi_filter_check( MIDIFILTER **filters, uint8_t* data, size_t size );
 void midi_filter_remove ( MIDIFILTER **filters, MIDIFILTER *toRemove );
-void midi_filter_one_channel( MIDIFILTER **filters, uint8_t channel);
-void midi_filter_cleanup( MIDIFILTER **filters );
+void midi_filter_one_channel_init ( MIDIFILTER **filters, OCH_FILTERS* );
+void midi_filter_one_channel_set ( OCH_FILTERS* ochf, uint8_t channel );
+uint8_t midi_filter_one_channel_get ( OCH_FILTERS* ochf );
+void midi_filter_cleanup( MIDIFILTER **filters, bool BuiltIn );
 
 #endif /* __midifilter_h__ */

@@ -476,8 +476,12 @@ void filter_addrow(GtkWidget* vpacker, MIDIFILTER **filters, MIDIFILTER *filter)
 	rbd->filters = filters;
 	rbd->toRemove = filter;
 	rbd->hpacker = hpacker;
-	g_signal_connect_data ( G_OBJECT(button_remove), "clicked",
-		G_CALLBACK(filter_remove_handler), rbd, (GClosureNotify) free, 0);
+	if (filter->built_in) {
+		gtk_widget_set_sensitive (button_remove, FALSE);
+	} else {
+		g_signal_connect_data ( G_OBJECT(button_remove), "clicked",
+			G_CALLBACK(filter_remove_handler), rbd, (GClosureNotify) free, 0);
+	}
 	gtk_box_pack_start(GTK_BOX(hpacker), button_remove, FALSE, FALSE, 0);
 }
 
@@ -548,18 +552,17 @@ program_change (GtkComboBox *combo, JackVST *jvst) {
 
 static void
 channel_check(GtkComboBox *combo, JackVST *jvst) {
-	if (jvst->channel == gtk_combo_box_get_active (combo))
+	uint8_t channel = midi_filter_one_channel_get ( jvst->channel );
+	if (channel == gtk_combo_box_get_active (combo))
 		return;
 
-	gtk_combo_box_set_active(combo, (jvst->channel));
+	gtk_combo_box_set_active(combo, (channel));
 }
 
 static void
 channel_change (GtkComboBox *combo, JackVST *jvst) {
 	short channel = gtk_combo_box_get_active (combo);
-
-	jvst->channel = channel;
-	midi_filter_one_channel( &jvst->filters, channel );
+	midi_filter_one_channel_set( jvst->channel, channel );
 }
 
 static gboolean

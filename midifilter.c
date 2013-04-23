@@ -26,6 +26,11 @@ MIDIFILTER* midi_filter_add( MIDIFILTER **filters, MIDIFILTER *new ) {
 }
 
 void midi_filter_remove ( MIDIFILTER **filters, MIDIFILTER *toRemove ) {
+	if (toRemove->built_in) {
+		MF_DEBUG("FilterRemove: Filter is built_in %p\n", *toRemove);
+		return;
+	}
+
 	MIDIFILTER *f, *prev;
 	MF_DEBUG("F0: %p\n", *filters);
 	for (f = *filters, prev = NULL; f; prev = f, f = f->next) {
@@ -43,13 +48,27 @@ void midi_filter_remove ( MIDIFILTER **filters, MIDIFILTER *toRemove ) {
 	MF_DEBUG("FilterRemove: can't find %p\n", toRemove);
 }
 
-void midi_filter_cleanup( MIDIFILTER **filters ) {
-	MIDIFILTER *f, *prev;
-	for (f = *filters, prev = NULL; f; prev = f, f = f->next) {
-		if (prev) free(prev);
+void midi_filter_cleanup( MIDIFILTER **filters, bool BuiltIn ) {
+	MIDIFILTER *f = *filters;
+	MIDIFILTER *prev = NULL;
+	MIDIFILTER *next = NULL;
+	while ( f ) {
+		next = f->next;
+		/* Are we remove this element ? */
+		if (BuiltIn || f->built_in) {
+			if (prev) {
+				prev->next = next;
+			} else {
+				/* No previous element, so it was first, mean move pointer to next */
+				*filters = next;
+			}
+			free(f);
+		} else {
+			/* Skip element this */
+			prev = f;
+		}
+		f = next;
 	}
-	if (f) free(f);
-	*filters = NULL;
 }
 
 bool midi_filter_check( MIDIFILTER **filters, uint8_t* data, size_t size ) {
@@ -62,12 +81,12 @@ bool midi_filter_check( MIDIFILTER **filters, uint8_t* data, size_t size ) {
 	for (f = *filters; f; f = f->next) {
 		/* ... here because last filter would change data */
 		type = (data[0] >> 4) & 0xF;
-		channel = data[0] & 0xF;
+		channel = ( data[0] & 0xF ) + 1;
 
 		MF_DEBUG("FILTER: ENABLED: %X, TYPE: %X, CH: %X, RULE_TYPE: %X\n", f->enabled, f->type, f->channel, f->rule);
-		if ( ! f->enabled ||
-		     ( f->type && f->type != type ) ||
-		     ( f->channel && f->channel != channel + 1 )
+		if (	( ! f->enabled ) ||
+			! ( f->type && f->type != type ) ||
+			! ( f->channel && f->channel != channel )
 //		     ! (f->value1 && size > 2 && f->value1 != data[1]) ||
 //		     ! (f->value2 && size > 3 && f->value2 != data[2])
 		) continue;
@@ -91,34 +110,59 @@ bool midi_filter_check( MIDIFILTER **filters, uint8_t* data, size_t size ) {
 	return ret;
 }
 
-/* Shortcut for our old ComoboBox .. and example how to use filters */
-void midi_filter_one_channel( MIDIFILTER **filters, uint8_t channel) {
-	midi_filter_cleanup( filters );
-        if (! channel) return;
+void midi_filter_one_channel_init ( MIDIFILTER **filters, OCH_FILTERS* ) {
+	MIDIFILTER filter = {0};
+	filter.enabled = false;
+	filter.built_in = true;
 
-        MIDIFILTER filter = {0};
-        filter.enabled = true;
+	/* Filter out real channel 1 */
+	filter.channel = 1;
+	filter.rule = DROP_ALL;
+	midi_filter_add( filters, &filter );
 
-        if (channel != 1) {
-                /* Filter out real channel 1 */
-                filter.channel = 1;
-                filter.rule = DROP_ALL;
-                midi_filter_add( filters, &filter );
+	/* Redirect selected channel to 1 */
+	filter.rule = CHANNEL_REDIRECT;
+	filter.rvalue = 1;
+	midi_filter_add( filters, &filter );
 
-                /* Redirect selected channel to 1 */
-                filter.channel = channel;
-                filter.rule = CHANNEL_REDIRECT;
-                filter.rvalue = 1;
-                midi_filter_add( filters, &filter );
-        }
+	/* Accept channel 1 */
+	filter.channel = 1;
+	filter.rule = ACCEPT;
+	midi_filter_add( filters, &filter );
 
-        /* Accept channel 1 */
-        filter.channel = 1;
-        filter.rule = ACCEPT;
-        midi_filter_add( filters, &filter );
-
-        /* Drop rest */
-        filter.channel = 0;
-        filter.rule = DROP_ALL;
-        midi_filter_add( filters, &filter );
+	/* Drop rest */
+	filter.channel = 0;
+	filter.rule = DROP_ALL;
+	midi_filter_add( filters, &filter );
 }
+
+/* Shortcut for our old ComoboBox .. and example how to use filters */
+void midi_filter_one_channel_set ( OCH_FILTERS* ochf, uint8_t channel ) {
+	if (channel < 0 || channel > 17) {
+		channel = 0;
+		MF_DEBUG("OneChannel: value out of range %d\n", channel);
+	}
+
+	if (channel == 0) {
+		ochf.drop_real_one.enabled	= false;
+		ochf.redirect.enabled		= false;
+		ochf.accept.enabled		= false;
+		ochf.drop_rest.enabled		= false;
+	} else if (channel == 1) {
+		ochf.drop_real_one.enabled	= false;
+		ochf.redirect.enabled		= false;
+		ochf.accept.enabled		= true;
+		ochf.drop_rest.enabled		= true;
+	} else {
+		ochf.drop_real_one.enabled	= true;
+		ochf.redirect.enabled		= true;
+		ochf.accept.enabled		= true;
+		ochf.drop_rest.enabled		= true;
+	}
+	ochf.redirect.channel = channel;
+}
+
+uint8_t midi_filter_one_channel_get ( OCH_FILTERS* ochf ) {
+	return ochf.redirect.channel;
+}
+
