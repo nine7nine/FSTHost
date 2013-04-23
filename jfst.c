@@ -96,8 +96,8 @@ void jvst_send_sysex(JackVST* jvst, enum SysExWant sysex_want) {
 
 //		sxd->uuid = ; /* Set once on start */
 		sxd->program = jvst->fst->current_program;
-		sxd->channel = midi_filter_one_channel_get( jvst->channel );
-		midi_filter_one_channel_set( jvst->channel, sxd->channel );
+		sxd->channel = midi_filter_one_channel_get( &jvst->channel );
+		midi_filter_one_channel_set( &jvst->channel, sxd->channel );
 		sxd->volume = jvst_get_volume(jvst);
 		sxd->state = (jvst->bypassed) ? SYSEX_STATE_NOACTIVE : SYSEX_STATE_ACTIVE;
 		sysex_makeASCII(sxd->program_name, progName, 24);
@@ -152,7 +152,7 @@ static void jvst_parse_sysex_input(JackVST* jvst, jack_midi_data_t* data, size_t
 					sysex->state, sysex->program, sysex->channel, sysex->volume);
 				jvst_bypass(jvst, (sysex->state == SYSEX_STATE_ACTIVE) ? FALSE : TRUE);
 				fst_program_change(jvst->fst, sysex->program);
-				midi_filter_one_channel( jvst->channel, sysex->channel );
+				midi_filter_one_channel_set(&jvst->channel, sysex->channel);
 				jvst_set_volume(jvst, sysex->volume);
 
 				// Copy sysex state for preserve resending SysEx Dump
@@ -621,7 +621,7 @@ static inline void jvst_sysex_notify(JackVST* jvst) {
 
 	SysExDumpV1* d = &jvst->sysex_dump;
 	if ( d->program != jvst->fst->current_program ||
-		d->channel != midi_filter_one_channel_get( jvst->channel ) ||
+		d->channel != midi_filter_one_channel_get( &jvst->channel ) ||
 		d->state   != ( (jvst->bypassed) ? SYSEX_STATE_NOACTIVE : SYSEX_STATE_ACTIVE ) ||
 		d->volume  != jvst_get_volume(jvst)
 	) jvst_send_sysex(jvst, SYSEX_WANT_DUMP);
@@ -791,10 +791,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 			case 'g': opt_generate_dbinfo = true; break;
 			case 's': jvst->default_state_file = optarg; break;
 			case 'c': jvst->client_name = optarg; break;
-			case 'k': ;
-				uint8_t channel = strtol(optarg, NULL, 10);
-				midi_filter_one_channel( jvst->channel, channel );
-				break;
+			case 'k': midi_filter_one_channel_set(&jvst->channel, strtol(optarg, NULL, 10)); break;
 			case 'i': opt_numIns = strtol(optarg, NULL, 10); break;
 			case 'j': connect_to = optarg; break;
 			case 'l': sigusr1_save_state = TRUE; break;
