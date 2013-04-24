@@ -415,23 +415,41 @@ GtkWidget* add_combo(GtkWidget* hpacker, GtkListStore* store, uint8_t* value, co
 }
 
 static void
-entry_changed_handler (GtkEntry* entry, gpointer ptr) {
-	int8_t* value = (int8_t*) ptr;
-	*value = strtol(gtk_entry_get_text(entry), NULL, 10);
+entry_changed_handler_uint8 (GtkEntry* entry, gpointer ptr) {
+	uint8_t* value = (uint8_t*) ptr;
+	*value = (uint8_t) strtol(gtk_entry_get_text(entry), NULL, 10);
 }
 
-GtkWidget* add_entry(GtkWidget* hpacker, void* value, int len, const char* tooltip) {
-	char buf[4];
-	int* vp = (int*) value;
-	snprintf(buf, sizeof buf, "%d", *vp);
+static void
+entry_changed_handler_int8 (GtkEntry* entry, gpointer ptr) {
+	int8_t* value = (int8_t*) ptr;
+	*value = (int8_t) strtol(gtk_entry_get_text(entry), NULL, 10);
+}
 
+enum VTYPE {
+	VTYPE_UINT8,
+	VTYPE_INT8
+};
+
+GtkWidget* add_entry(GtkWidget* hpacker, void* value, enum VTYPE vtype,int len, const char* tooltip) {
 	GtkWidget *entry = gtk_entry_new();
-	gtk_box_pack_start(GTK_BOX(hpacker), entry, FALSE, FALSE, 0);
+
+	char buf[4];
+	if ( vtype == VTYPE_UINT8 ) {
+		uint8_t* vp = (uint8_t*) value;
+		snprintf(buf, sizeof buf, "%d", *vp);
+		g_signal_connect( G_OBJECT(entry), "changed", G_CALLBACK(entry_changed_handler_uint8), value);
+	} else { /* VTYPE_INT8 */
+		int8_t* vp = (int8_t*) value;
+		snprintf(buf, sizeof buf, "%d", *vp);
+		g_signal_connect( G_OBJECT(entry), "changed", G_CALLBACK(entry_changed_handler_int8), value);
+	}
+
 	gtk_entry_set_text(GTK_ENTRY(entry), buf);
 	gtk_widget_set_tooltip_text(entry, tooltip);
 	gtk_entry_set_max_length(GTK_ENTRY(entry), len);
 	gtk_entry_set_width_chars(GTK_ENTRY(entry), len);
-	g_signal_connect( G_OBJECT(entry), "changed", G_CALLBACK(entry_changed_handler), value);
+	gtk_box_pack_start(GTK_BOX(hpacker), entry, FALSE, FALSE, 0);
 
 	return entry;
 }
@@ -464,10 +482,10 @@ void filter_addrow(GtkWidget* vpacker, MIDIFILTER **filters, MIDIFILTER *filter)
 
 	GtkWidget* combo_type = add_combo(hpacker, mf_type_store(), (uint8_t*) &filter->type, "Filter Type");
 	GtkWidget* combo_channel = add_combo(hpacker, create_channel_store(), &filter->channel, "MIDI Channel");
-//	GtkWidget* entry_value1 = add_entry(hpacker, (int*) &filter->value1, 3, "Value 1");
-//	GtkWidget* entry_value2 = add_entry(hpacker, (int*) &filter->value2, 3, "Value 2");
+//	GtkWidget* entry_value1 = add_entry(hpacker, &filter->value1, VTYPE_UINT8, 3, "Value 1");
+//	GtkWidget* entry_value2 = add_entry(hpacker, &filter->value2, VTYPE_UINT8, 3, "Value 2");
 	GtkWidget* combo_rule = add_combo(hpacker, mf_rule_store(), (uint8_t*) &filter->rule, "Filter Rule");
-	GtkWidget* entry_rvalue = add_entry(hpacker, &filter->rvalue, 3, "Rule Value");
+	GtkWidget* entry_rvalue = add_entry(hpacker, &filter->rvalue, VTYPE_INT8, 3, "Rule Value");
 
 	/* Compiler remove this lines - but this suppress warnings ;-) */
 	combo_type = combo_type;
