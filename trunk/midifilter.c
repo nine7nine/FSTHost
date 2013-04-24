@@ -3,7 +3,7 @@
 #include <string.h>
 #include "midifilter.h"
 
-#define MF_DEBUG_ENABLED
+//#define MF_DEBUG_ENABLED
 
 #ifdef MF_DEBUG_ENABLED
 #define MF_DEBUG printf
@@ -53,6 +53,8 @@ MIDIFILTER* midi_filter_add( MIDIFILTER **filters, MIDIFILTER *new ) {
 	MIDIFILTER *f = *filters;
 	MIDIFILTER *n =  malloc( sizeof(MIDIFILTER) );
 	*n = *new;
+	/* Defaule rule */
+	if (n->rule == 0) n->rule = CHANNEL_REDIRECT;
 
 	if (f) {
 		while (f->next) f = f->next;
