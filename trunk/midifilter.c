@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include "midifilter.h"
 
 #define MF_DEBUG_ENABLED
@@ -9,6 +10,44 @@
 #else
 #define MF_DEBUG(...)
 #endif
+
+struct MIDI_MAP {
+	short key;
+	const char* name;
+};
+
+#define MIDI_STRING_MAP_LENGTH 13
+static struct MIDI_MAP midi_string_map[MIDI_STRING_MAP_LENGTH] = {
+	{ MM_ALL, "ALL" },
+	{ MM_NOTE, "NOTE" },
+	{ MM_NOTE_OFF, "NOTE OFF" },
+	{ MM_NOTE_ON, "NOTE ON" },
+	{ MM_AFTERTOUCH, "AFTERTOUCH" },
+	{ MM_CONTROL_CHANGE, "CONTROL CHANGE" },
+	{ MM_PROGRAM_CHANGE, "PROGRAM CHANGE" },
+	{ MM_CHANNEL_PRESSURE, "CHANNEL PRESSURE" },
+	{ MM_PITCH_BEND, "PITCH BEND" },
+	{ CHANNEL_REDIRECT, "CHANNEL REDIRECT" },
+	{ TRANSPOSE, "TRANSPOSE" },
+	{ DROP_ALL, "DROP ALL" },
+	{ ACCEPT, "ACCEPT" }
+};
+
+const char* midi_filter_key2name ( int key ) {
+	short i;
+	for (i=0; i < MIDI_STRING_MAP_LENGTH; i++)
+		if ( key == midi_string_map[i].key )
+			return midi_string_map[i].name;
+	return NULL;
+}
+
+int midi_filter_name2key ( const char* name ) {
+	short i;
+	for (i=0; i < MIDI_STRING_MAP_LENGTH; i++)
+		if ( strcmp(name, midi_string_map[i].name) == 0 )
+			 return midi_string_map[i].key;
+	return -1;
+}
 
 MIDIFILTER* midi_filter_add( MIDIFILTER **filters, MIDIFILTER *new ) {
 	MIDIFILTER *f = *filters;

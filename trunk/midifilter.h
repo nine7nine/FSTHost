@@ -4,21 +4,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define MF_STR_ALL              "ALL"
-#define MF_STR_NOTE             "NOTE"
-#define MF_STR_NOTE_OFF         "NOTE OFF"
-#define MF_STR_NOTE_ON          "NOTE ON"
-#define MF_STR_AFTERTOUCH       "AFTERTOUCH"
-#define MF_STR_CONTROL_CHANGE   "CONTROL CHANGE"
-#define MF_STR_PROGRAM_CHANGE   "PROGRAM CHANGE"
-#define MF_STR_CHANNEL_PRESSURE "CHANNEL PRESSURE"
-#define MF_STR_PITCH_BEND       "PITCH BEND"
-
-#define MF_STR_CHANNEL_REDIRECT "CHANNEL REDIRECT"
-#define MF_STR_TRANSPOSE        "TRANSPOSE"
-#define MF_STR_DROP_ALL         "DROP ALL"
-#define MF_STR_ACCEPT           "ACCEPT"
-
 enum MidiMessageType {
 	MM_ALL = 0,
 	MM_NOTE = 1, /* Fake message type for agregate note on/off */
@@ -29,6 +14,13 @@ enum MidiMessageType {
 	MM_PROGRAM_CHANGE = 0xC,
 	MM_CHANNEL_PRESSURE = 0xD,
 	MM_PITCH_BEND = 0xE
+};
+
+enum MidiRule {
+	CHANNEL_REDIRECT = 100,
+	TRANSPOSE = 101,
+	DROP_ALL = 102,
+	ACCEPT = 103
 };
 
 typedef struct _MIDIFILTER {
@@ -44,22 +36,19 @@ typedef struct _MIDIFILTER {
 	uint8_t value2;
 
 	/* Rule part */
-	enum {
-		CHANNEL_REDIRECT,
-		TRANSPOSE,
-		DROP_ALL,
-		ACCEPT
-	} rule;
+	enum MidiRule rule;
 	int8_t rvalue;
 } MIDIFILTER;
 
-typedef struct _OCH_FILTERS {
+typedef struct {
 	MIDIFILTER* drop_real_one;
 	MIDIFILTER* redirect;
 	MIDIFILTER* accept;
 	MIDIFILTER* drop_rest;
 } OCH_FILTERS;
 
+const char* midi_filter_key2name ( int key );
+int midi_filter_name2key ( const char* name );
 MIDIFILTER* midi_filter_add( MIDIFILTER **filters, MIDIFILTER *new );
 bool midi_filter_check( MIDIFILTER **filters, uint8_t* data, size_t size );
 void midi_filter_remove ( MIDIFILTER **filters, MIDIFILTER *toRemove );

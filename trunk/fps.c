@@ -128,25 +128,9 @@ fps_process_node(JackVST* jvst, xmlNode *a_node) {
          MIDIFILTER mf = {0};
          mf.enabled = ( xmlStrcmp(xmlGetProp(cur_node, BAD_CAST "enabled"), BAD_CAST "yes") == 0 ) ? true : false;
 	 const xmlChar* type = xmlGetProp(cur_node, BAD_CAST "rule");
-         if (xmlStrcmp(type, BAD_CAST MF_STR_NOTE_OFF) == 0) {
-            mf.type = MM_NOTE_OFF;
-         } else if (xmlStrcmp(type, BAD_CAST MF_STR_NOTE_ON) == 0) {
-            mf.type = MM_NOTE_ON;
-         } else if (xmlStrcmp(type, BAD_CAST MF_STR_NOTE) == 0) {
-            mf.type = MM_NOTE;
-         } else if (xmlStrcmp(type, BAD_CAST MF_STR_AFTERTOUCH) == 0) {
-            mf.type = MM_AFTERTOUCH;
-         } else if (xmlStrcmp(type, BAD_CAST MF_STR_CONTROL_CHANGE) == 0) {
-            mf.type = MM_CONTROL_CHANGE;
-         } else if (xmlStrcmp(type, BAD_CAST MF_STR_PROGRAM_CHANGE) == 0) {
-            mf.type = MM_PROGRAM_CHANGE;
-         } else if (xmlStrcmp(type, BAD_CAST MF_STR_CHANNEL_PRESSURE) == 0) {
-            mf.type = MM_CHANNEL_PRESSURE;
-         } else if (xmlStrcmp(type, BAD_CAST MF_STR_PITCH_BEND) == 0) {
-            mf.type = MM_PITCH_BEND;
-         } else if (xmlStrcmp(type, BAD_CAST MF_STR_ALL) == 0) {
-            mf.type = MM_ALL;
-         }
+         mf.type =  midi_filter_name2key ( (const char*) type );
+         if ( mf.type == -1 ) { printf("Wrong filter type\n"); continue; }
+
          prop = (const char*) xmlGetProp(cur_node, BAD_CAST "channel");
 	 mf.channel = (prop) ? strtol(prop, NULL, 10) : 0;
 
@@ -156,18 +140,9 @@ fps_process_node(JackVST* jvst, xmlNode *a_node) {
          prop = (const char*) xmlGetProp(cur_node, BAD_CAST "value2");
 	 mf.value2 = (prop) ? strtol(prop, NULL, 10) : 0;
 	 const xmlChar* rule = xmlGetProp(cur_node, BAD_CAST "rule");
-         if (xmlStrcmp(rule, BAD_CAST MF_STR_CHANNEL_REDIRECT) == 0) {
-           mf.rule = CHANNEL_REDIRECT;
-         } else if (xmlStrcmp(rule, BAD_CAST MF_STR_TRANSPOSE) == 0) {
-           mf.rule = TRANSPOSE;
-         } else if (xmlStrcmp(rule, BAD_CAST MF_STR_DROP_ALL) == 0) {
-           mf.rule = DROP_ALL;
-         } else if (xmlStrcmp(rule, BAD_CAST MF_STR_ACCEPT) == 0) {
-           mf.rule = ACCEPT;
-         } else {
-           printf("Wrong filter rule\n");
-           continue;
-         }
+         mf.rule =  midi_filter_name2key ( (const char*) rule );
+         if ( mf.rule == -1 ) { printf("Wrong filter rule\n"); continue; }
+
          prop = (const char*) xmlGetProp(cur_node, BAD_CAST "rvalue");
 	 mf.rvalue = (prop) ? strtol(prop, NULL, 10) : 0;
 
@@ -335,30 +310,15 @@ bool fps_save (JackVST* jvst, const char* filename) {
 
       cur_node = xmlNewChild(plugin_state_node, NULL, BAD_CAST "filter", NULL);
       xmlNewProp(cur_node, BAD_CAST "enabled", BAD_CAST (mf->enabled ? "yes" : "no") );
-      const char *msg_type = NULL;
-      switch(mf->type) {
-         case MM_ALL:              msg_type = MF_STR_ALL; break;
-         case MM_NOTE:             msg_type = MF_STR_NOTE; break;
-         case MM_NOTE_OFF:         msg_type = MF_STR_NOTE_OFF; break;
-         case MM_NOTE_ON:          msg_type = MF_STR_NOTE_ON; break;
-         case MM_AFTERTOUCH:       msg_type = MF_STR_AFTERTOUCH; break;
-         case MM_CONTROL_CHANGE:   msg_type = MF_STR_CONTROL_CHANGE; break;
-         case MM_PROGRAM_CHANGE:   msg_type = MF_STR_PROGRAM_CHANGE; break;
-         case MM_CHANNEL_PRESSURE: msg_type = MF_STR_CHANNEL_PRESSURE; break;
-         case MM_PITCH_BEND:       msg_type = MF_STR_PITCH_BEND; break;
-      }
+      const char *msg_type = midi_filter_key2name ( mf->type );
       if (msg_type) xmlNewProp(cur_node, BAD_CAST "type", BAD_CAST msg_type);
+
       if (mf->channel) xmlNewProp(cur_node, BAD_CAST "channel", int2str(tString, sizeof tString, (int) mf->channel));
       if (mf->value1) xmlNewProp(cur_node, BAD_CAST "value1", int2str(tString, sizeof tString, (int) mf->value1));
       if (mf->value2) xmlNewProp(cur_node, BAD_CAST "value2", int2str(tString, sizeof tString, (int) mf->value2));
-      const char *rule = NULL;
-      switch(mf->rule) {
-         case CHANNEL_REDIRECT: rule = MF_STR_CHANNEL_REDIRECT; break;
-         case TRANSPOSE:        rule = MF_STR_TRANSPOSE; break;
-         case DROP_ALL:         rule = MF_STR_DROP_ALL; break;
-         case ACCEPT:           rule = MF_STR_ACCEPT; break;
-      }
+      const char *rule = midi_filter_key2name ( mf->rule );
       if (rule) xmlNewProp(cur_node, BAD_CAST "rule", BAD_CAST rule);
+
       if (mf->rvalue) xmlNewProp(cur_node, BAD_CAST "rvalue", int2str(tString, sizeof tString, (int) mf->rvalue));
    }
 

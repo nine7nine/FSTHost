@@ -362,37 +362,45 @@ static GtkListStore* create_channel_store() {
 	return retval;
 }
 
-void store_add(GtkListStore* store, char* text, int value) {
-	gtk_list_store_insert_with_values(store, NULL, -1, 0, text, 1, value, -1 );
+void store_add(GtkListStore* store, int value) {
+	printf("V: %d | N: %s\n", value, midi_filter_key2name(value));
+	gtk_list_store_insert_with_values(store, NULL, -1, 0, midi_filter_key2name(value), 1, value, -1 );
 }
 
 GtkListStore* mf_rule_store() {
 	GtkListStore *store = gtk_list_store_new( 2, G_TYPE_STRING, G_TYPE_INT );
-	store_add(store, MF_STR_CHANNEL_REDIRECT, CHANNEL_REDIRECT);
-	store_add(store, MF_STR_TRANSPOSE, TRANSPOSE);
-	store_add(store, MF_STR_DROP_ALL, DROP_ALL);
-	store_add(store, MF_STR_ACCEPT, ACCEPT);
+	store_add(store, CHANNEL_REDIRECT);
+	store_add(store, TRANSPOSE);
+	store_add(store, DROP_ALL);
+	store_add(store, ACCEPT);
 	return store;
 }
 
 GtkListStore* mf_type_store() {
 	GtkListStore *store = gtk_list_store_new( 2, G_TYPE_STRING, G_TYPE_INT );
-	store_add(store, MF_STR_ALL, MM_ALL);
-	store_add(store, MF_STR_NOTE, MM_NOTE);
-	store_add(store, MF_STR_NOTE_OFF, MM_NOTE_OFF);
-	store_add(store, MF_STR_NOTE_ON, MM_NOTE_ON);
-	store_add(store, MF_STR_AFTERTOUCH, MM_AFTERTOUCH);
-	store_add(store, MF_STR_CONTROL_CHANGE, MM_CONTROL_CHANGE);
-	store_add(store, MF_STR_PROGRAM_CHANGE, MM_PROGRAM_CHANGE);
-	store_add(store, MF_STR_CHANNEL_PRESSURE, MM_CHANNEL_PRESSURE);
-	store_add(store, MF_STR_PITCH_BEND, MM_PITCH_BEND);
+	store_add(store, MM_ALL);
+	store_add(store, MM_NOTE);
+	store_add(store, MM_NOTE_OFF);
+	store_add(store, MM_NOTE_ON);
+	store_add(store, MM_AFTERTOUCH);
+	store_add(store, MM_CONTROL_CHANGE);
+	store_add(store, MM_PROGRAM_CHANGE);
+	store_add(store, MM_CHANNEL_PRESSURE);
+	store_add(store, MM_PITCH_BEND);
 	return store;
 }
 
 static void
-combo_changed_handler(GtkCombo* combo, gpointer ptr) {
-	uint8_t* value = (uint8_t*) ptr;
-	*value = gtk_combo_box_get_active(GTK_COMBO_BOX(combo));
+combo_changed_handler(GtkComboBox* combo, gpointer ptr) {
+	int* value = (int*) ptr;
+
+	GtkTreeIter iter;
+	GtkTreePath *path;
+	GtkTreeModel *tree = gtk_combo_box_get_model( combo );
+	gtk_combo_box_get_active_iter( combo, &iter );
+	gtk_tree_model_get( tree, &iter, 1 , value, -1 );
+
+//	*value = gtk_combo_box_get_active(GTK_COMBO_BOX(combo));
 }
 
 GtkWidget* add_combo_nosig(GtkWidget* hpacker, GtkListStore* store, int active, const char* tooltip) {
@@ -402,12 +410,13 @@ GtkWidget* add_combo_nosig(GtkWidget* hpacker, GtkListStore* store, int active, 
 	gtk_cell_layout_set_attributes (GTK_CELL_LAYOUT (combo), renderer, "text", 0, NULL);
 	gtk_widget_set_tooltip_text( combo, tooltip);
 	gtk_combo_box_set_active(GTK_COMBO_BOX(combo), active);
+	printf("TOOLTIP: %s, ACTIVE: %d\n", tooltip, active);
 	gtk_box_pack_start(GTK_BOX(hpacker), GTK_WIDGET(combo), FALSE, FALSE, 0);
 
 	return combo;
 }
 
-GtkWidget* add_combo(GtkWidget* hpacker, GtkListStore* store, uint8_t* value, const char* tooltip) {
+GtkWidget* add_combo(GtkWidget* hpacker, GtkListStore* store, int* value, const char* tooltip) {
 	GtkWidget* combo = add_combo_nosig(hpacker, store, *value, tooltip);
 	g_signal_connect( G_OBJECT(combo), "changed", G_CALLBACK(combo_changed_handler), value ); 
 
@@ -480,11 +489,11 @@ void filter_addrow(GtkWidget* vpacker, MIDIFILTER **filters, MIDIFILTER *filter)
 	g_signal_connect( G_OBJECT(checkbox_enable), "clicked", G_CALLBACK(filter_enable_handler), &filter->enabled);
 	gtk_box_pack_start(GTK_BOX(hpacker), checkbox_enable, FALSE, FALSE, 0);
 
-	GtkWidget* combo_type = add_combo(hpacker, mf_type_store(), (uint8_t*) &filter->type, "Filter Type");
-	GtkWidget* combo_channel = add_combo(hpacker, create_channel_store(), &filter->channel, "MIDI Channel");
+	GtkWidget* combo_type = add_combo(hpacker, mf_type_store(), (int*) &filter->type, "Filter Type");
+	GtkWidget* combo_channel = add_combo(hpacker, create_channel_store(), (int*) &filter->channel, "MIDI Channel");
 //	GtkWidget* entry_value1 = add_entry(hpacker, &filter->value1, VTYPE_UINT8, 3, "Value 1");
 //	GtkWidget* entry_value2 = add_entry(hpacker, &filter->value2, VTYPE_UINT8, 3, "Value 2");
-	GtkWidget* combo_rule = add_combo(hpacker, mf_rule_store(), (uint8_t*) &filter->rule, "Filter Rule");
+	GtkWidget* combo_rule = add_combo(hpacker, mf_rule_store(), (int*) &filter->rule, "Filter Rule");
 	GtkWidget* entry_rvalue = add_entry(hpacker, &filter->rvalue, VTYPE_INT8, 3, "Rule Value");
 
 	/* Compiler remove this lines - but this suppress warnings ;-) */
