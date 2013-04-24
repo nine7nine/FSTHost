@@ -395,7 +395,6 @@ combo_changed_handler(GtkComboBox* combo, gpointer ptr) {
 	int* value = (int*) ptr;
 
 	GtkTreeIter iter;
-	GtkTreePath *path;
 	GtkTreeModel *tree = gtk_combo_box_get_model( combo );
 	gtk_combo_box_get_active_iter( combo, &iter );
 	gtk_tree_model_get( tree, &iter, 1 , value, -1 );
@@ -403,14 +402,31 @@ combo_changed_handler(GtkComboBox* combo, gpointer ptr) {
 //	*value = gtk_combo_box_get_active(GTK_COMBO_BOX(combo));
 }
 
+static void combo_set_active( GtkComboBox* combo, int active ) {
+	GtkTreeIter iter;
+	GtkTreeModel *model = gtk_combo_box_get_model( combo );
+	int value;
+	gboolean valid;
+	for ( valid = gtk_tree_model_get_iter_first (model, &iter);
+		valid;
+		valid = gtk_tree_model_iter_next (model, &iter)
+	) {
+		gtk_tree_model_get( model, &iter, 1 , &value, -1 );
+		if ( value == active ) {
+			gtk_combo_box_set_active_iter( combo, &iter );
+			break;
+		}
+	}
+}
+
 GtkWidget* add_combo_nosig(GtkWidget* hpacker, GtkListStore* store, int active, const char* tooltip) {
 	GtkWidget* combo = gtk_combo_box_new_with_model ( GTK_TREE_MODEL(store) );
+	g_object_unref( G_OBJECT( store ) );
 	GtkCellRenderer *renderer = gtk_cell_renderer_text_new ();
 	gtk_cell_layout_pack_start (GTK_CELL_LAYOUT (combo), renderer, TRUE);
 	gtk_cell_layout_set_attributes (GTK_CELL_LAYOUT (combo), renderer, "text", 0, NULL);
 	gtk_widget_set_tooltip_text( combo, tooltip);
-	gtk_combo_box_set_active(GTK_COMBO_BOX(combo), active);
-	printf("TOOLTIP: %s, ACTIVE: %d\n", tooltip, active);
+	combo_set_active ( GTK_COMBO_BOX ( combo ), active );
 	gtk_box_pack_start(GTK_BOX(hpacker), GTK_WIDGET(combo), FALSE, FALSE, 0);
 
 	return combo;
