@@ -28,6 +28,7 @@ static	GtkWidget* bypass_button;
 static	GtkWidget* editor_button;
 static	GtkWidget* editor_checkbox;
 static	GtkWidget* channel_listbox;
+static	GtkWidget* transposition_spin;
 static  GtkWidget* preset_listbox;
 static	GtkWidget* midi_learn_toggle;
 static	GtkWidget* midi_pc;
@@ -53,8 +54,7 @@ struct RemoveFilterData {
 };
 
 static void
-learn_handler (GtkToggleButton *but, gpointer ptr)
-{
+learn_handler (GtkToggleButton *but, gpointer ptr) {
 	JackVST* jvst = (JackVST*) ptr;
 	
 	if ( ! gtk_toggle_button_get_active (but) ) {
@@ -68,16 +68,14 @@ learn_handler (GtkToggleButton *but, gpointer ptr)
 }
 
 static void
-bypass_handler (GtkToggleButton *but, gpointer ptr)
-{
+bypass_handler (GtkToggleButton *but, gpointer ptr) {
 	JackVST* jvst = (JackVST*) ptr;
 
 	jvst_bypass(jvst, gtk_toggle_button_get_active(but));
 }
 
 static void
-volume_handler (GtkVScale *slider, gpointer ptr)
-{
+volume_handler (GtkVScale *slider, gpointer ptr) {
 	JackVST* jvst = (JackVST*) ptr;
 
 	short volume = gtk_range_get_value(GTK_RANGE(slider));
@@ -256,6 +254,9 @@ load_handler (GtkToggleButton *but, gpointer ptr) {
 
 	// Update MIDI PC button
 	gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON( midi_pc ), (jvst->midi_pc > MIDI_PC_PLUG) );
+
+	// Update transposition spin button
+	gtk_spin_button_set_value(GTK_SPIN_BUTTON(transposition_spin), midi_filter_transposition_get(jvst->transposition));
 }
 
 static gboolean
@@ -368,6 +369,7 @@ void store_add(GtkListStore* store, char* text, int value) {
 GtkListStore* mf_rule_store() {
 	GtkListStore *store = gtk_list_store_new( 2, G_TYPE_STRING, G_TYPE_INT );
 	store_add(store, MF_STR_CHANNEL_REDIRECT, CHANNEL_REDIRECT);
+	store_add(store, MF_STR_TRANSPOSE, TRANSPOSE);
 	store_add(store, MF_STR_DROP_ALL, DROP_ALL);
 	store_add(store, MF_STR_ACCEPT, ACCEPT);
 	return store;
@@ -376,6 +378,7 @@ GtkListStore* mf_rule_store() {
 GtkListStore* mf_type_store() {
 	GtkListStore *store = gtk_list_store_new( 2, G_TYPE_STRING, G_TYPE_INT );
 	store_add(store, MF_STR_ALL, MM_ALL);
+	store_add(store, MF_STR_NOTE, MM_NOTE);
 	store_add(store, MF_STR_NOTE_OFF, MM_NOTE_OFF);
 	store_add(store, MF_STR_NOTE_ON, MM_NOTE_ON);
 	store_add(store, MF_STR_AFTERTOUCH, MM_AFTERTOUCH);
@@ -412,22 +415,24 @@ GtkWidget* add_combo(GtkWidget* hpacker, GtkListStore* store, uint8_t* value, co
 }
 
 static void
-entry_changed_handler(GtkEntry* entry, gpointer ptr) {
-	uint8_t* value = (uint8_t*) ptr;
-	*value = (uint8_t) strtol(gtk_entry_get_text(entry), NULL, 10);
+entry_changed_handler (GtkEntry* entry, gpointer ptr) {
+	int8_t* value = (int8_t*) ptr;
+	*value = strtol(gtk_entry_get_text(entry), NULL, 10);
 }
 
-GtkWidget* add_entry(GtkWidget* hpacker, uint8_t* value, int len, const char* tooltip) {
+GtkWidget* add_entry(GtkWidget* hpacker, void* value, int len, const char* tooltip) {
 	char buf[4];
-	snprintf(buf, sizeof buf, "%d", *value);
+	int* vp = (int*) value;
+	snprintf(buf, sizeof buf, "%d", *vp);
 
 	GtkWidget *entry = gtk_entry_new();
 	gtk_box_pack_start(GTK_BOX(hpacker), entry, FALSE, FALSE, 0);
 	gtk_entry_set_text(GTK_ENTRY(entry), buf);
-	gtk_widget_set_tooltip_text( entry, tooltip);
+	gtk_widget_set_tooltip_text(entry, tooltip);
 	gtk_entry_set_max_length(GTK_ENTRY(entry), len);
 	gtk_entry_set_width_chars(GTK_ENTRY(entry), len);
 	g_signal_connect( G_OBJECT(entry), "changed", G_CALLBACK(entry_changed_handler), value);
+
 	return entry;
 }
 
@@ -459,8 +464,8 @@ void filter_addrow(GtkWidget* vpacker, MIDIFILTER **filters, MIDIFILTER *filter)
 
 	GtkWidget* combo_type = add_combo(hpacker, mf_type_store(), (uint8_t*) &filter->type, "Filter Type");
 	GtkWidget* combo_channel = add_combo(hpacker, create_channel_store(), &filter->channel, "MIDI Channel");
-//	GtkWidget* entry_value1 = add_entry(hpacker, &filter->value1, 3, "Value 1");
-//	GtkWidget* entry_value2 = add_entry(hpacker, &filter->value2, 3, "Value 2");
+//	GtkWidget* entry_value1 = add_entry(hpacker, (int*) &filter->value1, 3, "Value 1");
+//	GtkWidget* entry_value2 = add_entry(hpacker, (int*) &filter->value2, 3, "Value 2");
 	GtkWidget* combo_rule = add_combo(hpacker, mf_rule_store(), (uint8_t*) &filter->rule, "Filter Rule");
 	GtkWidget* entry_rvalue = add_entry(hpacker, &filter->rvalue, 3, "Rule Value");
 
@@ -544,6 +549,13 @@ static void
 program_change (GtkComboBox *combo, JackVST *jvst) {
 	short program = gtk_combo_box_get_active (combo);
 	fst_program_change(jvst->fst, program);
+}
+
+static void
+transposition_change (GtkSpinButton* spin_button, gpointer ptr) {
+	MIDIFILTER* t = (MIDIFILTER*) ptr;
+	int8_t value = (int8_t) gtk_spin_button_get_value ( spin_button );
+	midi_filter_transposition_set ( t, value );
 }
 
 static void
@@ -735,6 +747,13 @@ gtk_gui_start (JackVST* jvst) {
 	channel_listbox = add_combo_nosig(hpacker, create_channel_store(), 0, "MIDI Channel");
 	channel_check( GTK_COMBO_BOX(channel_listbox), jvst );
 	g_signal_connect( G_OBJECT(channel_listbox), "changed", G_CALLBACK(channel_change), jvst ); 
+	//----------------------------------------------------------------------------------
+	transposition_spin = gtk_spin_button_new_with_range (-36, 36, 1);
+	gtk_spin_button_set_increments (GTK_SPIN_BUTTON(transposition_spin), 1, 12);
+	gtk_spin_button_set_value(GTK_SPIN_BUTTON(transposition_spin), midi_filter_transposition_get(jvst->transposition));
+	gtk_box_pack_start(GTK_BOX(hpacker), transposition_spin, FALSE, FALSE, 0);
+	gtk_widget_set_tooltip_text(transposition_spin, "Transposition");
+	g_signal_connect( G_OBJECT(transposition_spin), "value-changed", G_CALLBACK( transposition_change ), jvst->transposition );
 	//----------------------------------------------------------------------------------
 	GtkListStore* preset_store = gtk_list_store_new( 2, G_TYPE_STRING, G_TYPE_INT );
 	create_preset_store( preset_store, jvst->fst );

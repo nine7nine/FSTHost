@@ -73,6 +73,7 @@ struct _JackVST {
     int             midi_learn_PARAM;
     short           midi_pc;
     MIDIFILTER*     filters;
+    MIDIFILTER*     transposition;
     OCH_FILTERS     channel;
 
     /* SysEx send support */

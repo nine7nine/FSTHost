@@ -35,6 +35,7 @@ JackVST* jvst_new() {
 	SysExDumpV1 sxd = SYSEX_DUMP;
 	memcpy(&jvst->sysex_dump, &sxd, sizeof(SysExDumpV1));
 
+	jvst->transposition = midi_filter_transposition_init ( &jvst->filters );
 	midi_filter_one_channel_init( &jvst->filters, &jvst->channel );
 
 	return jvst;

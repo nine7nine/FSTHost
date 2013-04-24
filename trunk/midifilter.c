@@ -2,14 +2,13 @@
 #include <stdio.h>
 #include "midifilter.h"
 
-//#define MF_DEBUG_ENABLED
+#define MF_DEBUG_ENABLED
 
 #ifdef MF_DEBUG_ENABLED
 #define MF_DEBUG printf
 #else
 #define MF_DEBUG(...)
 #endif
-
 
 MIDIFILTER* midi_filter_add( MIDIFILTER **filters, MIDIFILTER *new ) {
 	MIDIFILTER *f = *filters;
@@ -27,7 +26,7 @@ MIDIFILTER* midi_filter_add( MIDIFILTER **filters, MIDIFILTER *new ) {
 
 void midi_filter_remove ( MIDIFILTER **filters, MIDIFILTER *toRemove ) {
 	if (toRemove->built_in) {
-		MF_DEBUG("FilterRemove: Filter is built_in %p\n", *toRemove);
+		MF_DEBUG("FilterRemove: Filter is built_in %p\n", toRemove);
 		return;
 	}
 
@@ -55,7 +54,7 @@ void midi_filter_cleanup( MIDIFILTER **filters, bool BuiltIn ) {
 	while ( f ) {
 		next = f->next;
 		/* Are we remove this element ? */
-		if (BuiltIn || f->built_in) {
+		if (BuiltIn && f->built_in) {
 			if (prev) {
 				prev->next = next;
 			} else {
@@ -64,7 +63,7 @@ void midi_filter_cleanup( MIDIFILTER **filters, bool BuiltIn ) {
 			}
 			free(f);
 		} else {
-			/* Skip element this */
+			/* Skip this element */
 			prev = f;
 		}
 		f = next;
@@ -75,21 +74,27 @@ bool midi_filter_check( MIDIFILTER **filters, uint8_t* data, size_t size ) {
 	uint8_t type, channel; 
 	bool ret = true;
 
-	MF_DEBUG("DATA: MSG_TYPE: %X, CH: %X\n", type, channel);
-
 	MIDIFILTER *f;
 	for (f = *filters; f; f = f->next) {
 		/* ... here because last filter would change data */
 		type = (data[0] >> 4) & 0xF;
 		channel = ( data[0] & 0xF ) + 1;
 
+//		MF_DEBUG("DATA: MSG_TYPE: %X, CH: %X\n", type, channel);
 		MF_DEBUG("FILTER: ENABLED: %X, TYPE: %X, CH: %X, RULE_TYPE: %X\n", f->enabled, f->type, f->channel, f->rule);
-		if (	( ! f->enabled ) ||
-			! ( f->type && f->type != type ) ||
-			! ( f->channel && f->channel != channel )
-//		     ! (f->value1 && size > 2 && f->value1 != data[1]) ||
-//		     ! (f->value2 && size > 3 && f->value2 != data[2])
+		if ( ! f->enabled ||
+		     ( f->channel && f->channel != channel )
+//		     (f->value1 && size > 2 && f->value1 != data[1]) ||
+//		     (f->value2 && size > 3 && f->value2 != data[2])
 		) continue;
+
+		if (f->type) {
+			if ( f->type == MM_NOTE ) {
+				if (type != MM_NOTE_ON && type != MM_NOTE_OFF) continue;
+			} else if ( f->type != type ) {
+				continue;
+			}
+		}
 
 		switch(f->rule) {
 		case CHANNEL_REDIRECT:
@@ -98,6 +103,11 @@ bool midi_filter_check( MIDIFILTER **filters, uint8_t* data, size_t size ) {
 				data[0] &= 0xF0;
 				data[0] |= ( (f->rvalue - 1) & 0xF);
 			}
+			break;
+		case TRANSPOSE:
+			MF_DEBUG("Transposigion %d\n", f->rvalue);
+			if ( (data[1] + f->rvalue > 0) && (data[1] + f->rvalue < 128) )
+				data[1] += f->rvalue;
 			break;
 		case DROP_ALL:
 			MF_DEBUG("FilterOut\n");
@@ -174,5 +184,23 @@ void midi_filter_one_channel_set ( OCH_FILTERS* ochf, uint8_t channel ) {
 
 uint8_t midi_filter_one_channel_get ( OCH_FILTERS* ochf ) {
 	return ochf->redirect->channel;
+}
+
+MIDIFILTER* midi_filter_transposition_init ( MIDIFILTER** filters ) {
+	MIDIFILTER filter = {0};
+	filter.enabled = false;
+	filter.built_in = true;
+	filter.type = MM_NOTE;
+	filter.rule = TRANSPOSE;
+	return midi_filter_add ( filters, &filter );
+}
+
+void midi_filter_transposition_set ( MIDIFILTER* t, int8_t value ) {
+	t->enabled = (value == 0) ? false : true;
+	t->rvalue = value;
+}
+
+int8_t midi_filter_transposition_get ( MIDIFILTER* t ) {
+	return t->rvalue;
 }
 

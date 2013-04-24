@@ -116,6 +116,10 @@ fps_process_node(JackVST* jvst, xmlNode *a_node) {
        } else if (xmlStrcmp(cur_node->name, BAD_CAST "channel") == 0) {
 	  int channel = strtol((const char*) xmlGetProp(cur_node, BAD_CAST "number"), NULL, 10);
           midi_filter_one_channel_set( &jvst->channel, channel );
+       // MIDI Transposition
+       } else if (xmlStrcmp(cur_node->name, BAD_CAST "transposition") == 0) {
+	  int value = strtol((const char*) xmlGetProp(cur_node, BAD_CAST "value"), NULL, 10);
+          midi_filter_transposition_set( jvst->transposition, value );
        // MIDI Filter
        } else if (xmlStrcmp(cur_node->name, BAD_CAST "filter") == 0 &&
                   midi_filter_one_channel_get(&jvst->channel) < 1)
@@ -128,6 +132,8 @@ fps_process_node(JackVST* jvst, xmlNode *a_node) {
             mf.type = MM_NOTE_OFF;
          } else if (xmlStrcmp(type, BAD_CAST MF_STR_NOTE_ON) == 0) {
             mf.type = MM_NOTE_ON;
+         } else if (xmlStrcmp(type, BAD_CAST MF_STR_NOTE) == 0) {
+            mf.type = MM_NOTE;
          } else if (xmlStrcmp(type, BAD_CAST MF_STR_AFTERTOUCH) == 0) {
             mf.type = MM_AFTERTOUCH;
          } else if (xmlStrcmp(type, BAD_CAST MF_STR_CONTROL_CHANGE) == 0) {
@@ -152,6 +158,8 @@ fps_process_node(JackVST* jvst, xmlNode *a_node) {
 	 const xmlChar* rule = xmlGetProp(cur_node, BAD_CAST "rule");
          if (xmlStrcmp(rule, BAD_CAST MF_STR_CHANNEL_REDIRECT) == 0) {
            mf.rule = CHANNEL_REDIRECT;
+         } else if (xmlStrcmp(rule, BAD_CAST MF_STR_TRANSPOSE) == 0) {
+           mf.rule = TRANSPOSE;
          } else if (xmlStrcmp(rule, BAD_CAST MF_STR_DROP_ALL) == 0) {
            mf.rule = DROP_ALL;
          } else if (xmlStrcmp(rule, BAD_CAST MF_STR_ACCEPT) == 0) {
@@ -313,19 +321,24 @@ bool fps_save (JackVST* jvst, const char* filename) {
    }
 
    // MIDI Channel
-/* No is controlled by MIDI ONE FILTERS crew
    cur_node = xmlNewChild(plugin_state_node, NULL, BAD_CAST "channel", NULL);
    xmlNewProp(cur_node, BAD_CAST "number", int2str(tString, sizeof tString, midi_filter_one_channel_get(&jvst->channel)));
-*/
+
+   // MIDI Transposition
+   cur_node = xmlNewChild(plugin_state_node, NULL, BAD_CAST "transposition", NULL);
+   xmlNewProp(cur_node, BAD_CAST "value", int2str(tString, sizeof tString, midi_filter_transposition_get(jvst->transposition)));
 
    // MIDI Filter
    MIDIFILTER *mf;
    for (mf = jvst->filters; mf; mf = mf->next) {
+      if (mf->built_in) continue; /* Skip built-in filters */
+
       cur_node = xmlNewChild(plugin_state_node, NULL, BAD_CAST "filter", NULL);
       xmlNewProp(cur_node, BAD_CAST "enabled", BAD_CAST (mf->enabled ? "yes" : "no") );
       const char *msg_type = NULL;
       switch(mf->type) {
          case MM_ALL:              msg_type = MF_STR_ALL; break;
+         case MM_NOTE:             msg_type = MF_STR_NOTE; break;
          case MM_NOTE_OFF:         msg_type = MF_STR_NOTE_OFF; break;
          case MM_NOTE_ON:          msg_type = MF_STR_NOTE_ON; break;
          case MM_AFTERTOUCH:       msg_type = MF_STR_AFTERTOUCH; break;
@@ -341,6 +354,7 @@ bool fps_save (JackVST* jvst, const char* filename) {
       const char *rule = NULL;
       switch(mf->rule) {
          case CHANNEL_REDIRECT: rule = MF_STR_CHANNEL_REDIRECT; break;
+         case TRANSPOSE:        rule = MF_STR_TRANSPOSE; break;
          case DROP_ALL:         rule = MF_STR_DROP_ALL; break;
          case ACCEPT:           rule = MF_STR_ACCEPT; break;
       }
