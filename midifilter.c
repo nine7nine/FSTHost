@@ -146,9 +146,12 @@ bool midi_filter_check( MIDIFILTER **filters, uint8_t* data, size_t size ) {
 			}
 			break;
 		case TRANSPOSE:
-			MF_DEBUG("Transposigion %d\n", f->rvalue);
-			if ( (data[1] + f->rvalue > 0) && (data[1] + f->rvalue < 128) )
-				data[1] += f->rvalue;
+			MF_DEBUG("Transposition %d\n", f->rvalue);
+			if ( (data[1] + f->rvalue < 0) || (data[1] + f->rvalue > 127) ) {
+				MF_DEBUG("Note out of range %d\n", data[1]);
+				return false;
+			}
+			data[1] += f->rvalue;
 			break;
 		case DROP_ALL:
 			MF_DEBUG("FilterOut\n");
