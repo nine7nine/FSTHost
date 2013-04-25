@@ -121,8 +121,8 @@ char* fst_info_get_plugin_path(const char* dbpath, const char* filename) {
 	char* fname = (ext) ? strndup(base, ext - base) : strdup( base );
 
 	char* path = NULL;
-	xmlNode* n;
 	xmlNode* xml_rn = xmlDocGetRootElement(xml_db);
+	xmlNode* n;
 	for (n = xml_rn->children; n; n = n->next) {
 		if (xmlStrcmp(n->name, BAD_CAST "fst")) continue;
 

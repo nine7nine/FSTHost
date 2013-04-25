@@ -29,7 +29,7 @@
 #include <jack/thread.h>
 
 #define CTRLAPP "FHControl"
-#define VERSION "1.5.1"
+#define VERSION "1.5.2"
 #ifdef __x86_64__
 #define APPNAME "fsthost64"
 #define ARCH "64bit"
@@ -49,6 +49,10 @@ extern intptr_t jack_host_callback (AEffect*, int32_t, int32_t, intptr_t, void *
 extern void gtk_gui_init (int* argc, char** argv[]);
 extern int gtk_gui_start (JackVST * jvst);
 extern void gtk_gui_quit();
+
+/* list.c */
+extern char* fst_info_default_path(const char* appname);
+extern int fst_info_list(const char* dbpath);
 
 /* lash.c */
 #ifdef HAVE_LASH
@@ -722,13 +726,16 @@ static void usage(char* appname) {
 
 	fprintf(stderr, "\nUsage: %s [ options ] <plugin>\n", appname);
 	fprintf(stderr, "  or\n");
+	fprintf(stderr, "Usage: %s -L [ -d <xml_db_info> ]\n", appname);
+	fprintf(stderr, "  or\n");
 	fprintf(stderr, "Usage: %s -g [ -d <xml_db_info> ] <path_for_add_to_db>\n", appname);
 	fprintf(stderr, "  or\n");
 	fprintf(stderr, "Usage: %s -s <FPS state file>\n\n", appname);
 	fprintf(stderr, "Options:\n");
-	fprintf(stderr, format, "-b", "Start in bypass mode");
 	fprintf(stderr, format, "-g", "Create/Update XML info DB.");
+	fprintf(stderr, format, "-L", "List plugins from XML info DB.");
 	fprintf(stderr, format, "-d xml_db_path", "Custom path to XML DB");
+	fprintf(stderr, format, "-b", "Start in bypass mode");
 	fprintf(stderr, format, "-n", "Disable Editor and GTK GUI");
 	fprintf(stderr, format, "-N", "Notify changes by SysEx");
 	fprintf(stderr, format, "-e", "Hide Editor");
@@ -761,6 +768,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	int32_t		opt_numIns = -1;
 	int32_t		opt_numOuts = -1;
 	bool		opt_generate_dbinfo = false;
+	bool		opt_list_plugins = false;
 	bool		sigusr1_save_state = FALSE;
 	bool		want_midi_physical = false;
 	const char*	connect_to = NULL;
@@ -770,20 +778,17 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	JackVST*	jvst = jvst_new();
 	jvst_first = jvst;
 
-	const char* henv = getenv("HOME");
-	size_t dbilen = strlen(henv) + strlen(APPNAME);
-	char ddbif[dbilen + 7];
-	snprintf(ddbif, sizeof ddbif, "%s/.%s.xml", henv, APPNAME);
-	jvst->dbinfo_file = ddbif;
+	jvst->dbinfo_file = fst_info_default_path(APPNAME);
 
         // Parse command line options
 	cmdline2arg(&argc, &argv, cmdline);
-	while ( (i = getopt (argc, argv, "bd:egs:c:k:i:j:lnNm:pPo:t:u:U:V")) != -1) {
+	while ( (i = getopt (argc, argv, "bd:egs:c:k:i:j:lLnNm:pPo:t:u:U:V")) != -1) {
 		switch (i) {
 			case 'b': jvst->bypassed = TRUE; break;
-			case 'd': jvst->dbinfo_file = optarg; break;
+			case 'd': free(jvst->dbinfo_file); jvst->dbinfo_file = optarg; break;
 			case 'e': jvst->with_editor = WITH_EDITOR_HIDE; break;
 			case 'g': opt_generate_dbinfo = true; break;
+			case 'L': opt_list_plugins = true; break;
 			case 's': jvst->default_state_file = optarg; break;
 			case 'c': jvst->client_name = optarg; break;
 			case 'k': midi_filter_one_channel_set(&jvst->channel, strtol(optarg, NULL, 10)); break;
@@ -812,6 +817,8 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 			return fst_info(jvst->dbinfo_file, path);
 		} else jvst_load( jvst, path );
 	} else if (! jvst->default_state_file) {
+		if (opt_list_plugins && jvst->dbinfo_file) return fst_info_list ( jvst->dbinfo_file );
+
 		usage (argv[0]);
 		return 1;
 	}
