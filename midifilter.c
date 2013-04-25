@@ -121,15 +121,18 @@ bool midi_filter_check( MIDIFILTER **filters, uint8_t* data, size_t size ) {
 		type = (data[0] >> 4) & 0xF;
 		channel = ( data[0] & 0xF ) + 1;
 
-//		MF_DEBUG("DATA: MSG_TYPE: %X, CH: %X\n", type, channel);
-		MF_DEBUG("FILTER: ENABLED: %X, TYPE: %X, CH: %X, RULE_TYPE: %X\n", f->enabled, f->type, f->channel, f->rule);
+		MF_DEBUG("DATA: MSG_TYPE: %X, CH: %X\n", type, channel);
+		MF_DEBUG("FILTER: ENABLED: %X, TYPE: %s, CH: %X, RULE_TYPE: %s\n", f->enabled,
+			midi_filter_key2name(f->type), f->channel, midi_filter_key2name(f->rule)
+		);
 		if ( ! f->enabled ||
 		     ( f->channel && f->channel != channel )
 //		     (f->value1 && size > 2 && f->value1 != data[1]) ||
 //		     (f->value2 && size > 3 && f->value2 != data[2])
 		) continue;
 
-		if (f->type) {
+		/* Handling virtual NOTE type */
+		if ( f->type ) {
 			if ( f->type == MM_NOTE ) {
 				if (type != MM_NOTE_ON && type != MM_NOTE_OFF) continue;
 			} else if ( f->type != type ) {
@@ -139,7 +142,7 @@ bool midi_filter_check( MIDIFILTER **filters, uint8_t* data, size_t size ) {
 
 		switch(f->rule) {
 		case CHANNEL_REDIRECT:
-			if (f->channel != channel) {
+			if ( f->rvalue != 0 && f->rvalue != channel) {
 				MF_DEBUG("RedirectToChannel %X\n", f->rvalue);
 				data[0] &= 0xF0;
 				data[0] |= ( (f->rvalue - 1) & 0xF);
