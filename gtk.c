@@ -363,7 +363,6 @@ static GtkListStore* create_channel_store() {
 }
 
 void store_add(GtkListStore* store, int value) {
-	printf("V: %d | N: %s\n", value, midi_filter_key2name(value));
 	gtk_list_store_insert_with_values(store, NULL, -1, 0, midi_filter_key2name(value), 1, value, -1 );
 }
 
