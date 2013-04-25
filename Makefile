@@ -44,7 +44,7 @@ LDFLAGS32          := -m32 $(LDFLAGS) -L/usr/lib/i386-linux-gnu/wine
 LDFLAGS64          := -m64 $(LDFLAGS)
 
 ### Global source lists
-C_SRCS             = audiomaster.c fst.c gtk.c jackvst.c jfst.c fxb.c fps.c vstwin.c cpuusage.c info.c midifilter.c
+C_SRCS             = audiomaster.c fst.c gtk.c jackvst.c jfst.c fxb.c fps.c vstwin.c cpuusage.c info.c midifilter.c list.c
 ifeq ($(LASH_EXISTS),yes)
 C_SRCS             += lash.c
 endif
@@ -52,7 +52,7 @@ endif
 ### fsthost.exe sources and settings
 fsthost32_OBJS     = $(C_SRCS:.c=_32.o)
 fsthost64_OBJS     = $(C_SRCS:.c=_64.o)
-ALL_OBJS           := $(fsthost32_OBJS) $(fsthost64_OBJS)
+ALL_OBJS           := $(fsthost32_OBJS) $(fsthost64_OBJS) fsthost_list
 BUILD_OBJS         := $(fsthost32_OBJS)
 
 # On 64 bit platform build also fsthost64
@@ -60,6 +60,7 @@ ifeq ($(LBITS), 64)
 EXES               += fsthost64
 BUILD_OBJS         += $(fsthost64_OBJS)
 endif
+BUILD_OBJS         += fsthost_list
 
 ### Tools
 CC = gcc
@@ -96,6 +97,7 @@ ifeq ($(LBITS), 64)
 	install -Dm 0644 fsthost64.so $(DESTDIR)$(LIB64_INST_PATH)/fsthost64.so
 	install -Dm 0755 fsthost64 $(DESTDIR)$(BIN_INST_PATH)/fsthost64
 endif
+	install -Dm 0755 fsthost_list $(DESTDIR)$(BIN_INST_PATH)/fsthost_list
 	install -Dm 0755 fsthost_menu $(DESTDIR)$(BIN_INST_PATH)/fsthost_menu
 	ln -fs fsthost32 $(DESTDIR)$(BIN_INST_PATH)/fsthost
 
@@ -104,6 +106,9 @@ $(SUBDIRS:%=%/__clean__): dummy
 
 $(EXTRASUBDIRS:%=%/__clean__): dummy
 	cd `dirname $@` && $(RM) $(CLEAN_FILES)
+
+fsthost_list: list_$(LBITS).o
+	gcc flist.c $< $(shell pkg-config --cflags --libs libxml-2.0) -O2 -g -o $@
 
 ### Target specific build rules
 define compile

@@ -2,7 +2,7 @@
 .\" First parameter, NAME, should be all caps
 .\" Second parameter, SECTION, should be 1-8, maybe w/ subsection
 .\" other parameters are allowed: see man(7), man(1)
-.TH FSTHOST 1 2013-04-14
+.TH FSTHOST 1 2013-04-25
 .\" Please adjust this date whenever revising the manpage.
 .\"
 .\" Some roff macros, for reference:
@@ -55,7 +55,7 @@ Supports:
 .br
 - easily plugin discovering (-g option)
 .P
-There is also fsthost_menu - a zenity script for help to start plugins.
+There is also fsthost_menu - a zenity script for help to start plugins, which get input from VST_PATH or fsthost_list tool.
 
 .SH OPTIONS
 .TP
@@ -64,6 +64,9 @@ Start in bypass mode
 .TP
 .B \-g
 Create/Update XML info DB.
+.TP
+.B \-L
+List plugins from XML info DB. Same as fsthost_list.
 .TP
 .B \-d xml_db_path
 Custom path to XML DB

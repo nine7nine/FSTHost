@@ -5,6 +5,7 @@
 
 PATH=.:$PATH
 
+fsthost='fsthost32'
 ZENITY=1
 ZENITY_WIDTH=300
 ZENITY_HEIGHT=700
@@ -15,8 +16,7 @@ list_fst() {
 		# Get from VST_PATH
 		find $(echo $VST_PATH|tr ':' ' ') -iname '*.dll' -type f | awk -F'/' '{print "\""$NF"\"|\""$0"\""}'
 	else
-		xmllint --noblanks "$FSTHOST_DB" | sed 's/<\/fst>/&\n/g' |
-			sed -ne 's/.*<fst .*path="\(.*\)".*<name>\(.*\)<\/name>.*/"\2"|"\1"/p'
+		fsthost_list
 	fi
 }
 
@@ -43,10 +43,10 @@ main_loop() {
 	
 	F=$(echo "$L" | grep "^$G|" | cut -d'|' -f3 | tr -d '"')
 	
-	fsthost32 -l -p -j '' "$F" 1>/tmp/fsthost_menu.log.$G 2>&1 &
+	$fsthost -l -p -j '' "$F" 1>/tmp/fsthost_menu.log.$G 2>&1 &
 }
 
-FSTHOST_DB=${1:-$HOME/.fsthost32.xml}
+FSTHOST_DB=${1:-$HOME/.${fsthost}.xml}
 if [ -f "$FSTHOST_DB" ]; then
 	MODE='FSTHOST_DB'
 elif [ -n "$VST_PATH" ]; then
