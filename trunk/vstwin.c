@@ -125,6 +125,7 @@ fst_show_editor (FST *fst) {
 	
 	fst_resize_editor(fst);
 	ShowWindowAsync(fst->window, SW_SHOWNORMAL);
+//	UpdateWindow(fst->window);
 
 	return TRUE;
 }
