@@ -29,6 +29,7 @@
 
 //#define DEBUG_CALLBACKS
 //#define DEBUG_TIME
+#define JACK_BBT
 
 #ifdef DEBUG_CALLBACKS
 #define SHOW_CALLBACK fst_error
@@ -49,7 +50,7 @@ static void show_time_flags(intptr_t value) {
 	if (value & kVstSmpteValid) strncat(msg, " kVstSmpteValid", sizeof(msg) - 1);
 	if (value & kVstClockValid) strncat(msg, " kVstClockValid", sizeof(msg) - 1);
 	msg[511] = '\0';
-	fst_error("amc time:%s\n", msg);
+	fst_error("amc time:%s", msg);
 }
 #else
 #define SHOW_TIME(...)
@@ -172,19 +173,28 @@ jack_host_callback (struct AEffect* effect, int32_t opcode, int32_t index, intpt
 			timeInfo->nanoSeconds = jack_pos.usecs / 1000;
 			timeInfo->flags |= kVstNanosValid;
 		}
-		// tempo - valid when kVstTempoValid is set
-		// ... but we always set tempo ;-)
-		timeInfo->tempo = (jackvst->tempo == -1) ? 
-			( (jack_pos.beats_per_minute) ? jack_pos.beats_per_minute : 120 ) :
-			jackvst->tempo;
 		// ppqPos - valid when kVstPpqPosValid is set
 		// ... but we always compute it - could be needed later
+#ifdef JACK_BBT
+		double ppqBar = (jack_pos.bar - 1) * jack_pos.beats_per_bar;
+		double ppqBeat = jack_pos.beat - 1;
+		double ppqTick = (double) jack_pos.tick / jack_pos.ticks_per_beat;
+		timeInfo->ppqPos = ppqBar + ppqBeat + ppqTick;
+#else
 		double ppq = timeInfo->sampleRate * 60 / timeInfo->tempo;
 		timeInfo->ppqPos = timeInfo->samplePos / ppq;
+#endif
 		if (jack_pos.valid & JackPositionBBT) {
+			// tempo - valid when kVstTempoValid is set ... but we always set tempo ;-)
+			timeInfo->tempo = (jackvst->tempo == -1) ? jack_pos.beats_per_minute : jackvst->tempo;
+
 			// barStartPos - valid when kVstBarsValid is set
 			if (value & kVstBarsValid) {
-				timeInfo->barStartPos = timeInfo->ppqPos - jack_pos.beat + 1;
+#ifdef JACK_BBT
+				timeInfo->barStartPos = ppqBar;
+#else
+				timeInfo->barStartPos = floor(timeInfo->ppqPos / jack_pos.beats_per_bar);
+#endif
 				timeInfo->flags |= kVstBarsValid;
 			}
 			// timeSigNumerator & timeSigDenominator - valid when kVstTimeSigValid is set
@@ -193,12 +203,19 @@ jack_host_callback (struct AEffect* effect, int32_t opcode, int32_t index, intpt
 				timeInfo->timeSigDenominator = (int32_t) floor (jack_pos.beat_type);
 				timeInfo->flags |= kVstTimeSigValid;
 			}
+		} else {
+			// tempo - valid when kVstTempoValid is set ... but we always set tempo ;-)
+			timeInfo->tempo = (jackvst->tempo == -1) ? 120 : jackvst->tempo;
 		}
 #ifdef DEBUG_TIME
-		fst_error("amc ppq: %g\n", ppq);
-		fst_error("amc ppqPos: %g\n", timeInfo->ppqPos);
-		fst_error("amc barStartPos: %g\n", timeInfo->barStartPos);
-		fst_error("amc answer flags: %d\n", timeInfo->flags);
+		fst_error("amc Offset: %d", jack_pos.bbt_offset);
+#ifndef JACK_BBT
+		fst_error("amc ppq: %f", ppq);
+#endif
+		fst_error("amc ppqPos: %f", timeInfo->ppqPos);
+		fst_error("amc barStartPos: %6.4f", timeInfo->barStartPos);
+		fst_error("amc remain: %4.2f", timeInfo->ppqPos - timeInfo->barStartPos);
+		fst_error("amc answer flags: %d", timeInfo->flags);
 #endif
 		// cycleStartPos & cycleEndPos - valid when kVstCyclePosValid is set
 		// FIXME: not supported yet (acctually do we need this ?) 
