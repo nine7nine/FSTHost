@@ -1026,6 +1026,7 @@ audio_ports:
 
 	printf("Jack Deactivate\n");
 	jack_deactivate(jvst->client);
+	jack_client_close ( jvst->client );
 
 	fst_close(jvst->fst);
 
