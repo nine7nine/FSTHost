@@ -29,7 +29,7 @@
 
 //#define DEBUG_CALLBACKS
 //#define DEBUG_TIME
-#define JACK_BBT
+//#define JACK_BBT
 
 #ifdef DEBUG_CALLBACKS
 #define SHOW_CALLBACK fst_error
@@ -175,16 +175,23 @@ jack_host_callback (struct AEffect* effect, int32_t opcode, int32_t index, intpt
 		}
 		// ppqPos - valid when kVstPpqPosValid is set
 		// ... but we always compute it - could be needed later
-#ifdef JACK_BBT
-		double ppqBar = (jack_pos.bar - 1) * jack_pos.beats_per_bar;
-		double ppqBeat = jack_pos.beat - 1;
-		double ppqTick = (double) jack_pos.tick / jack_pos.ticks_per_beat;
-		timeInfo->ppqPos = ppqBar + ppqBeat + ppqTick;
-#else
+#ifndef JACK_BBT
 		double ppq = timeInfo->sampleRate * 60 / timeInfo->tempo;
 		timeInfo->ppqPos = timeInfo->samplePos / ppq;
 #endif
 		if (jack_pos.valid & JackPositionBBT) {
+#ifdef JACK_BBT
+			double ppqBar = (jack_pos.bar - 1) * jack_pos.beats_per_bar;
+			double ppqBeat = jack_pos.beat - 1;
+			double ppqTick = (double) jack_pos.tick / jack_pos.ticks_per_beat;
+			double ppqOffset = 0;
+			if (jack_pos.valid & JackBBTFrameOffset) {
+				jack_nframes_t nframes = jack_get_buffer_size (jackvst->client);
+				ppqOffset = (double) jack_pos.bbt_offset / nframes;
+				
+			}
+			timeInfo->ppqPos = ppqBar + ppqBeat + ppqTick + ppqOffset;
+#endif
 			// tempo - valid when kVstTempoValid is set ... but we always set tempo ;-)
 			timeInfo->tempo = (jackvst->tempo == -1) ? jack_pos.beats_per_minute : jackvst->tempo;
 
@@ -197,6 +204,7 @@ jack_host_callback (struct AEffect* effect, int32_t opcode, int32_t index, intpt
 #endif
 				timeInfo->flags |= kVstBarsValid;
 			}
+
 			// timeSigNumerator & timeSigDenominator - valid when kVstTimeSigValid is set
 			if (value & kVstTimeSigValid) {
 				timeInfo->timeSigNumerator = (int32_t) floor (jack_pos.beats_per_bar);

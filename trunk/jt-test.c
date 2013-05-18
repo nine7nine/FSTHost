@@ -35,7 +35,7 @@ int main(void) {
 
 		printf("Frame: %010d", jp.frame);
 		if (jp.valid & JackPositionBBT) {
-			printf(" | Bar: %04d | Beat: %d | Tick: %04d", jp.bar, jp.beat, jp.tick);
+			printf(" | Bar: %04d | Beat: %d | Tick: %04d | Offset: %04d", jp.bar, jp.beat, jp.tick, jp.bbt_offset);
 
 			// Current Beat From Frame
 			double ppq = jp.frame_rate * 60 / jp.beats_per_minute;
