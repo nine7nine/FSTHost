@@ -29,7 +29,6 @@
 
 //#define DEBUG_CALLBACKS
 //#define DEBUG_TIME
-//#define JACK_BBT
 
 #ifdef DEBUG_CALLBACKS
 #define SHOW_CALLBACK fst_error
@@ -175,33 +174,38 @@ jack_host_callback (struct AEffect* effect, int32_t opcode, int32_t index, intpt
 		}
 		// ppqPos - valid when kVstPpqPosValid is set
 		// ... but we always compute it - could be needed later
-#ifndef JACK_BBT
-		double ppq = timeInfo->sampleRate * 60 / timeInfo->tempo;
-		timeInfo->ppqPos = timeInfo->samplePos / ppq;
-#endif
+
+		double ppq = 0;
+		if ( jackvst->no_bbt_sync) {
+			ppq = timeInfo->sampleRate * 60 / timeInfo->tempo;
+			timeInfo->ppqPos = timeInfo->samplePos / ppq;
+		}
+
 		if (jack_pos.valid & JackPositionBBT) {
-#ifdef JACK_BBT
-			double ppqBar = (jack_pos.bar - 1) * jack_pos.beats_per_bar;
-			double ppqBeat = jack_pos.beat - 1;
-			double ppqTick = (double) jack_pos.tick / jack_pos.ticks_per_beat;
-			double ppqOffset = 0;
-			if (jack_pos.valid & JackBBTFrameOffset) {
-				jack_nframes_t nframes = jack_get_buffer_size (jackvst->client);
-				ppqOffset = (double) jack_pos.bbt_offset / nframes;
+			double ppqBar = 0;
+			if (! jackvst->no_bbt_sync) {
+				ppqBar = (jack_pos.bar - 1) * jack_pos.beats_per_bar;
+				double ppqBeat = jack_pos.beat - 1;
+				double ppqTick = (double) jack_pos.tick / jack_pos.ticks_per_beat;
+				double ppqOffset = 0;
+				if (jack_pos.valid & JackBBTFrameOffset) {
+					jack_nframes_t nframes = jack_get_buffer_size (jackvst->client);
+					ppqOffset = (double) jack_pos.bbt_offset / nframes;
 				
+				}
+				timeInfo->ppqPos = ppqBar + ppqBeat + ppqTick + ppqOffset;
 			}
-			timeInfo->ppqPos = ppqBar + ppqBeat + ppqTick + ppqOffset;
-#endif
+
 			// tempo - valid when kVstTempoValid is set ... but we always set tempo ;-)
 			timeInfo->tempo = (jackvst->tempo == -1) ? jack_pos.beats_per_minute : jackvst->tempo;
 
 			// barStartPos - valid when kVstBarsValid is set
 			if (value & kVstBarsValid) {
-#ifdef JACK_BBT
-				timeInfo->barStartPos = ppqBar;
-#else
-				timeInfo->barStartPos = floor(timeInfo->ppqPos / jack_pos.beats_per_bar);
-#endif
+				if (jackvst->no_bbt_sync) {
+					timeInfo->barStartPos = floor(timeInfo->ppqPos / jack_pos.beats_per_bar);
+				} else {
+					timeInfo->barStartPos = ppqBar;
+				}
 				timeInfo->flags |= kVstBarsValid;
 			}
 
@@ -217,9 +221,7 @@ jack_host_callback (struct AEffect* effect, int32_t opcode, int32_t index, intpt
 		}
 #ifdef DEBUG_TIME
 		fst_error("amc Offset: %d", jack_pos.bbt_offset);
-#ifndef JACK_BBT
 		fst_error("amc ppq: %f", ppq);
-#endif
 		fst_error("amc ppqPos: %f", timeInfo->ppqPos);
 		fst_error("amc barStartPos: %6.4f", timeInfo->barStartPos);
 		fst_error("amc remain: %4.2f", timeInfo->ppqPos - timeInfo->barStartPos);
