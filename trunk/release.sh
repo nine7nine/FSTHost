@@ -11,4 +11,4 @@ cp -r . /tmp/${APP}-${VER}
 
 echo "${PKG}"
 
-tar cJv -C /tmp -f ${PKG} ${APP}-${VER}/
+tar cJv -C /tmp --exclude-vcs -f ${PKG} ${APP}-${VER}/
