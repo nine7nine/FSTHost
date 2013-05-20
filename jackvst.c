@@ -66,7 +66,7 @@ void jvst_sysex_set_uuid(JackVST* jvst, uint8_t uuid) {
 	jvst->sysex_ident_reply.model[0] = jvst->sysex_dump.uuid = uuid;
 }
 
-void jvst_log(const char *msg) { fprintf(stderr, "JACK: %s", msg); }
+void jvst_log(const char *msg) { fprintf(stderr, "JACK: %s\n", msg); }
 
 void jvst_set_volume(JackVST* jvst, short volume) {
 	if (jvst->volume != -1) jvst->volume = powf(volume / 63.0f, 2);
