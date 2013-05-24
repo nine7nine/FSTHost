@@ -66,7 +66,7 @@ struct _JackVST {
     double          tempo;
     float           volume; /* where 0.0 mean silence */
     bool            graph_order_change;
-    bool            no_bbt_sync;
+    bool            bbt_sync;
 
     int32_t         midi_map[128];
     bool            midi_learn;

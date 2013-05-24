@@ -176,14 +176,14 @@ jack_host_callback (struct AEffect* effect, int32_t opcode, int32_t index, intpt
 		// ... but we always compute it - could be needed later
 
 		double ppq = 0;
-		if ( jackvst->no_bbt_sync) {
+		if ( ! jackvst->bbt_sync) {
 			ppq = timeInfo->sampleRate * 60 / timeInfo->tempo;
 			timeInfo->ppqPos = timeInfo->samplePos / ppq;
 		}
 
 		if (jack_pos.valid & JackPositionBBT) {
 			double ppqBar = 0;
-			if (! jackvst->no_bbt_sync) {
+			if (jackvst->bbt_sync) {
 				ppqBar = (jack_pos.bar - 1) * jack_pos.beats_per_bar;
 				double ppqBeat = jack_pos.beat - 1;
 				double ppqTick = (double) jack_pos.tick / jack_pos.ticks_per_beat;
@@ -201,10 +201,10 @@ jack_host_callback (struct AEffect* effect, int32_t opcode, int32_t index, intpt
 
 			// barStartPos - valid when kVstBarsValid is set
 			if (value & kVstBarsValid) {
-				if (jackvst->no_bbt_sync) {
-					timeInfo->barStartPos = floor(timeInfo->ppqPos / jack_pos.beats_per_bar);
-				} else {
+				if (jackvst->bbt_sync) {
 					timeInfo->barStartPos = ppqBar;
+				} else {
+					timeInfo->barStartPos = floor(timeInfo->ppqPos / jack_pos.beats_per_bar);
 				}
 				timeInfo->flags |= kVstBarsValid;
 			}
