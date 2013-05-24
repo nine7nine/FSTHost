@@ -10,7 +10,6 @@ extern intptr_t jack_host_callback (AEffect*, int32_t, int32_t, intptr_t, void *
 /* info.c */
 char* fst_info_get_plugin_path(const char* dbpath, const char* filename);
 
-
 JackVST* jvst_new() {
 	JackVST* jvst = calloc (1, sizeof (JackVST));
 	short i;

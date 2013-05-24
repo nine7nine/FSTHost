@@ -117,7 +117,7 @@ char* fst_info_get_plugin_path(const char* dbpath, const char* filename) {
 	if (!xml_db) return NULL;
 
 	char* base = basename ( (char*) filename );
-	char* ext = strchr( base, '.' );
+	char* ext = strrchr( base, '.' );
 	char* fname = (ext) ? strndup(base, ext - base) : strdup( base );
 
 	char* path = NULL;
@@ -129,8 +129,8 @@ char* fst_info_get_plugin_path(const char* dbpath, const char* filename) {
 		char* p = (char*) xmlGetProp(n, BAD_CAST "path");
 		char* f = (char*) xmlGetProp(n, BAD_CAST "file");
 		if (!p || !f) continue;
-			
-		if (! strcmp(f, fname)) {
+	
+		if (! strcmp(f, fname) || ! strcmp(f, base)) {
 			path = p;
 			break;
 		}
