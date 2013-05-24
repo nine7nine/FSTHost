@@ -51,11 +51,21 @@ fps_check_this(FST *fst, char *field, char *value) {
    char testString[64];
 
    printf("Check %s : %s == ", field, value);
-   if ( strcmp(  field, "productString" ) == 0 ) {
+   if ( strcmp( field, "uniqueID" ) == 0 ) {
+      int32_t ival = strtol( value, NULL, 10 );
+      if ( ival == fst->plugin->uniqueID ) {
+         printf("%d [PASS]\n", ival);
+         return TRUE;
+      } else {
+         printf("%d [FAIL]\nUniqueID mismatch!\n", ival);
+         return FALSE;
+      }
+   // NOTE: All below is for compatibility and shall be removed someday
+   } else if ( strcmp(  field, "productString" ) == 0 ) {
       success = fst_call_dispatcher( fst, effGetProductString, 0, 0, testString, 0 );
-   } else if( strcmp( field, "effectName" ) == 0 ) {
+   } else if ( strcmp( field, "effectName" ) == 0 ) {
       success = fst_call_dispatcher( fst, effGetEffectName, 0, 0, testString, 0 );
-   } else if( strcmp( field, "vendorString" ) == 0 ) {
+   } else if ( strcmp( field, "vendorString" ) == 0 ) {
       success = fst_call_dispatcher( fst, effGetVendorString, 0, 0, testString, 0 );
    }
 
@@ -240,22 +250,6 @@ bool fps_load(JackVST* jvst, const char* filename) {
 }
 
 // SAVE --------------
-static bool
-fps_add_check (FST *fst, xmlNode *node, int opcode, const char *field) {
-   char tString[64];
-   xmlNode *myNode;
-
-   if (fst_call_dispatcher( fst, opcode, 0, 0, tString, 0 )) {
-      myNode = xmlNewChild(node, NULL, BAD_CAST "check", NULL);
-      xmlNewProp(myNode, BAD_CAST "field", BAD_CAST field);
-      xmlNewProp(myNode, BAD_CAST "value", BAD_CAST tString);
-      return TRUE;
-   } else {
-      printf ("No %s string\n", field);
-      return FALSE;
-   }
-} 
-
 bool fps_save (JackVST* jvst, const char* filename) {
    int paramIndex;
    unsigned int cc;
@@ -277,10 +271,10 @@ bool fps_save (JackVST* jvst, const char* filename) {
    cur_node = xmlNewChild(plugin_state_node, NULL, BAD_CAST "file", NULL);
    xmlNewProp(cur_node, BAD_CAST "path", BAD_CAST fst->handle->path);
 
-   // Check
-   fps_add_check(fst, plugin_state_node, effGetProductString, "productString");
-   fps_add_check(fst, plugin_state_node, effGetVendorString, "vendorString");
-   fps_add_check(fst, plugin_state_node, effGetEffectName, "effectName");
+   // Check - UniqueID
+   cur_node = xmlNewChild(plugin_state_node, NULL, BAD_CAST "check", NULL);
+   xmlNewProp(cur_node, BAD_CAST "field", BAD_CAST "uniqueID");
+   xmlNewProp(cur_node, BAD_CAST "value", int2str(tString, sizeof tString, fst->plugin->uniqueID));
 
    // MIDI Map
    for (cc = 0; cc < 128; cc++ ) {
