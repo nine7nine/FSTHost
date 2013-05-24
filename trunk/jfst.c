@@ -258,7 +258,8 @@ static void signal_handler(int signum) {
 	}
 }
 
-static DWORD WINAPI wine_thread_aux( LPVOID arg ) {
+static DWORD WINAPI
+wine_thread_aux( LPVOID arg ) {
         printf("Audio Thread W32ID: %d | LWP: %d\n", GetCurrentThreadId (), (int) syscall (SYS_gettid));
 
 	the_thread_id = pthread_self();
@@ -749,7 +750,7 @@ static void usage(char* appname) {
 	fprintf(stderr, format, "-p", "Connect MIDI In port to all physical");
 	fprintf(stderr, format, "-P", "Self MIDI Program Change handling");
 	fprintf(stderr, format, "-o num_out", "Jack number Out ports");
-	fprintf(stderr, format, "-B", "Disable BBT JackTransport sync (use sample/tempo)");
+	fprintf(stderr, format, "-B", "Use BBT JackTransport sync");
 	fprintf(stderr, format, "-t tempo", "Set fixed Tempo rather than using JackTransport");
 	fprintf(stderr, format, "-u uuid", "JackSession UUID");
 	fprintf(stderr, format, "-U SysExID", "SysEx ID (1-127). 0 is default (do not use it)");
@@ -790,7 +791,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 			case 'e': jvst->with_editor = WITH_EDITOR_HIDE; break;
 			case 'g': opt_generate_dbinfo = true; break;
 			case 'L': opt_list_plugins = true; break;
-			case 'B': jvst->no_bbt_sync = true; break;
+			case 'B': jvst->bbt_sync = true; break;
 			case 's': jvst->default_state_file = optarg; break;
 			case 'c': jvst->client_name = optarg; break;
 			case 'k': midi_filter_one_channel_set(&jvst->channel, strtol(optarg, NULL, 10)); break;
