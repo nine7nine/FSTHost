@@ -291,9 +291,7 @@ configure_handler (GtkWidget* widget, GdkEventConfigure* ev, GtkSocket *sock) {
 	event.xconfigure.override_redirect = False;
 
 	gdk_error_trap_push ();
-	XSendEvent (gdk_x11_drawable_get_xdisplay (w),
-		    GDK_WINDOW_XWINDOW (sock->plug_window),
-		    False, StructureNotifyMask, &event);
+	//XSendEvent (GDK_WINDOW_XDISPLAY (w), GDK_WINDOW_XWINDOW (sock->plug_window), False, StructureNotifyMask, &event);
 	//gdk_display_sync (gtk_widget_get_display (GTK_WIDGET (sock)));
 	gdk_error_trap_pop ();
 
