@@ -98,7 +98,7 @@ ifeq ($(LBITS), 64)
 	install -Dm 0755 fsthost64 $(DESTDIR)$(BIN_INST_PATH)/fsthost64
 endif
 	install -Dm 0755 fsthost_list $(DESTDIR)$(BIN_INST_PATH)/fsthost_list
-	install -Dm 0755 fsthost_menu $(DESTDIR)$(BIN_INST_PATH)/fsthost_menu
+	install -Dm 0755 fsthost_menu.pl $(DESTDIR)$(BIN_INST_PATH)/fsthost_menu
 	ln -fs fsthost32 $(DESTDIR)$(BIN_INST_PATH)/fsthost
 
 $(SUBDIRS:%=%/__clean__): dummy
