@@ -1,7 +1,7 @@
 #include "jackvst.h"
 #include <gtk/gtk.h>
-#include <gdk/gdkx.h>
-#include <gdk/gdkevents.h>
+#include <gtk/gtkx.h>
+#include <gdk/gdk.h>
 #include <X11/Xlib.h>
 #include <sys/syscall.h>
 #include "fsthost.xpm"
@@ -40,7 +40,7 @@ static	GtkWidget* volume_slider;
 static	GtkWidget* cpu_usage;
 static	gulong preset_listbox_signal;
 static	gulong volume_signal;
-static	gulong gtk_socket_signal;
+//static	gulong gtk_socket_signal;
 
 typedef int (*error_handler_t)( Display *, XErrorEvent *);
 static Display *the_gtk_display;
@@ -259,19 +259,20 @@ load_handler (GtkToggleButton *but, gpointer ptr) {
 	gtk_spin_button_set_value(GTK_SPIN_BUTTON(transposition_spin), midi_filter_transposition_get(jvst->transposition));
 }
 
+/* Probably not needed anymore */
+#if 0
 static gboolean
 configure_handler (GtkWidget* widget, GdkEventConfigure* ev, GtkSocket *sock) {
 	XEvent event;
 	gint x, y;
-	GdkWindow *w;
+	GdkWindow *w = gtk_socket_get_plug_window(sock);
 
-	if (sock->plug_window != NULL) return FALSE;
+	if (! w) return FALSE;
 
-	w = sock->plug_window;
 	event.xconfigure.type = ConfigureNotify;
 
-	event.xconfigure.event = GDK_WINDOW_XWINDOW (w);
-	event.xconfigure.window = GDK_WINDOW_XWINDOW (w);
+	event.xconfigure.event = GDK_WINDOW_XID (w);
+	event.xconfigure.window = GDK_WINDOW_XID (w);
 
 	/* The ICCCM says that synthetic events should have root relative
 	 * coordinates. We still aren't really ICCCM compliant, since
@@ -283,8 +284,8 @@ configure_handler (GtkWidget* widget, GdkEventConfigure* ev, GtkSocket *sock) {
 
 	event.xconfigure.x = x;
 	event.xconfigure.y = y;
-	event.xconfigure.width = GTK_WIDGET(sock)->allocation.width;
-	event.xconfigure.height = GTK_WIDGET(sock)->allocation.height;
+//	event.xconfigure.width = GTK_WIDGET(sock)->allocation.width;
+//	event.xconfigure.height = GTK_WIDGET(sock)->allocation.height;
 
 	event.xconfigure.border_width = 0;
 	event.xconfigure.above = None;
@@ -297,6 +298,7 @@ configure_handler (GtkWidget* widget, GdkEventConfigure* ev, GtkSocket *sock) {
 
 	return FALSE;
 }
+#endif
 
 static void
 editor_handler (GtkToggleButton *but, gpointer ptr) {
@@ -309,7 +311,7 @@ editor_handler (GtkToggleButton *but, gpointer ptr) {
 		
 		// Create GTK Socket (Widget)
 		gtk_socket = gtk_socket_new ();
-		GTK_WIDGET_SET_FLAGS(gtk_socket, GTK_CAN_FOCUS);
+		gtk_widget_set_can_default(gtk_socket, TRUE);
 
 		// Add Widget socket to vBox
 		socket_align = gtk_alignment_new(0.5, 0, 0, 0);
@@ -317,9 +319,10 @@ editor_handler (GtkToggleButton *but, gpointer ptr) {
 		gtk_box_pack_start (GTK_BOX(vpacker), socket_align, TRUE, FALSE, 0);
 
 		gtk_widget_set_size_request(gtk_socket, jvst->fst->width, jvst->fst->height);
-		gtk_socket_add_id (GTK_SOCKET (gtk_socket), GDK_GPOINTER_TO_NATIVE_WINDOW (jvst->fst->xid) );
-		gtk_socket_signal = g_signal_connect (G_OBJECT(window), "configure-event",
-			G_CALLBACK(configure_handler), gtk_socket);
+//		gtk_socket_add_id (GTK_SOCKET (gtk_socket), GDK_GPOINTER_TO_NATIVE_WINDOW (jvst->fst->xid) );
+		gtk_socket_add_id (GTK_SOCKET (gtk_socket), GDK_POINTER_TO_XID (jvst->fst->xid) );
+//		gtk_socket_signal = g_signal_connect (G_OBJECT(window), "configure-event",
+//			G_CALLBACK(configure_handler), gtk_socket);
 
 		fst_show_editor(jvst->fst);
 		gtk_widget_show(socket_align);
@@ -327,7 +330,7 @@ editor_handler (GtkToggleButton *but, gpointer ptr) {
 	} else if (! jvst->fst->editor_popup) {
 		fst_destroy_editor(jvst->fst);
 	} else {
-		g_signal_handler_disconnect(G_OBJECT(window), gtk_socket_signal);
+//		g_signal_handler_disconnect(G_OBJECT(window), gtk_socket_signal);
 		gtk_widget_hide(gtk_socket);
 		fst_destroy_editor(jvst->fst);
 		gtk_widget_set_size_request(gtk_socket, -1, -1);
@@ -493,7 +496,7 @@ filter_enable_handler(GtkButton* button, gpointer ptr) {
 }
 
 void filter_addrow(GtkWidget* vpacker, MIDIFILTER **filters, MIDIFILTER *filter) {
-	GtkWidget* hpacker = gtk_hbox_new (FALSE, 7);
+	GtkWidget* hpacker = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 7);
 	gtk_box_pack_start(GTK_BOX(vpacker), hpacker, FALSE, FALSE, 0);
 
 	GtkWidget* checkbox_enable = gtk_check_button_new();
@@ -555,7 +558,7 @@ midifilter_handler (GtkWidget* widget, JackVST *jvst) {
 	g_signal_connect (G_OBJECT(fwin), "delete_event", G_CALLBACK(fwin_destroy_handler), &have_fwin);
 	GtkWidget* ftoolbar = gtk_toolbar_new();
 
-	fvpacker = gtk_vbox_new (FALSE, 7);
+	fvpacker = gtk_box_new (GTK_ORIENTATION_VERTICAL, 7);
 
 	gtk_container_add (GTK_CONTAINER (fwin), fvpacker);
 
@@ -747,8 +750,8 @@ gtk_gui_start (JackVST* jvst) {
 
 	gtk_window_set_icon(GTK_WINDOW(window), gdk_pixbuf_new_from_xpm_data((const char**) fsthost_xpm));
 
-	vpacker = gtk_vbox_new (FALSE, 7);
-	hpacker = gtk_hbox_new (FALSE, 7);
+	vpacker = gtk_box_new (GTK_ORIENTATION_VERTICAL, 7);
+	hpacker = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 7);
 	bypass_button = make_img_button(GTK_STOCK_STOP, "Bypass", TRUE, G_CALLBACK(bypass_handler),
 		jvst, jvst->bypassed, hpacker);
 
@@ -774,7 +777,7 @@ gtk_gui_start (JackVST* jvst) {
 		G_CALLBACK(midifilter_handler), jvst, FALSE, hpacker);
 	//----------------------------------------------------------------------------------
 	if (jvst->volume != -1) {
-		volume_slider = gtk_hscale_new_with_range(0,127,1);
+		volume_slider = gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL,0,127,1);
 		gtk_widget_set_size_request(volume_slider, 100, -1);
 		gtk_scale_set_value_pos (GTK_SCALE(volume_slider), GTK_POS_LEFT);
 		gtk_range_set_value(GTK_RANGE(volume_slider), jvst_get_volume(jvst));
