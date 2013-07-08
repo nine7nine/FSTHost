@@ -7,6 +7,8 @@ int main(int argc, char **argv) {
 		return fst_info_list( argv[1] );
 	} else {
 		char* dbpath = fst_info_default_path( "fsthost32" );
-		return fst_info_list( dbpath );
+		int ret = fst_info_list( dbpath );
+		free ( dbpath );
+		return ret;
 	}
 }
