@@ -8,7 +8,7 @@ use Gtk3;
 my $FSTHOST_VERSION = 32;
 my $FSTHOST_GUI = 2; # 0 - no gui , 1 - hide, 2 - normal
 
-my $filename = "/home/xj/.fsthost".$FSTHOST_VERSION.".xml";
+my $filename = $ENV{'HOME'}."/.fsthost".$FSTHOST_VERSION.".xml";
 
 sub start_fsthost { 
 	my $tv = shift;
