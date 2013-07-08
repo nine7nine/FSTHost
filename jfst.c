@@ -814,13 +814,30 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 
 	if (optind < argc) {
 		/* We have more arguments than getops options */
-		const char* path = argv[optind];
+		const char* custom_path = argv[optind];
 		if (opt_generate_dbinfo) {
-			if (! jvst->dbinfo_file) return 1;
-			return fst_info(jvst->dbinfo_file, path);
-		} else jvst_load( jvst, path );
+			if (! jvst->dbinfo_file) {
+				usage (argv[0]);
+				return 1;
+			}
+			return fst_info(jvst->dbinfo_file, custom_path);
+		} else jvst_load( jvst, custom_path );
 	} else if (! jvst->default_state_file) {
 		if (opt_list_plugins && jvst->dbinfo_file) return fst_info_list ( jvst->dbinfo_file );
+		if (opt_generate_dbinfo) {
+			/* Generate using VST_PATH */
+			char* vst_path = getenv("VST_PATH");
+			if ( jvst->dbinfo_file && vst_path ) {
+				char* vpath = strtok (vst_path, ":");
+				int ret = 1;
+				while (vpath) {
+					// If at least one path is correct - return success
+					if ( ! fst_info(jvst->dbinfo_file, vpath) ) ret = 0;
+					vpath = strtok (NULL, ":");
+				}
+				return ret;
+			}
+		}
 
 		usage (argv[0]);
 		return 1;
