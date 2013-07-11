@@ -154,6 +154,7 @@ void fst_close (FST*);
 
 void fst_program_change (FST *fst, short want_program);
 bool fst_get_program_name (FST *fst, short program, char* name, size_t size);
+bool fst_set_program_name (FST *fst, const char* name);
 
 bool fst_run_editor (FST*, bool popup);
 bool fst_show_editor (FST *fst);
