@@ -250,19 +250,10 @@ bool fst_run_editor (FST* fst, bool popup) {
 	}
 }
 
-bool
-fst_get_program_name (FST *fst, short program, char* name, size_t size) {
+static void valid_program_name ( char* text, size_t size ) {
 	char *m = NULL, *c;
-	AEffect* plugin = fst->plugin;
 
-	if (program == fst->current_program) {
-		plugin->dispatcher(plugin, effGetProgramName, 0, 0, name, 0.0f);
-	} else {
-		plugin->dispatcher(plugin, effGetProgramNameIndexed, program, 0, name, 0.0 );
-	}
-
-	// remove all non ascii signs
-	for (c = name; (*c != 0) && (c - name) < size; c++) {
+	for (c = text; (*c != 0) && (c - text) < size; c++) {
 		if ( isprint(*c)) {
 			if (m) {
 				*m = *c;
@@ -270,10 +261,36 @@ fst_get_program_name (FST *fst, short program, char* name, size_t size) {
 			}
 		} else if (!m) m = c;
 	}
+
 	// make sure of string terminator
 	if (m) *m = 0; else *c = 0;
+}
+
+bool
+fst_get_program_name (FST *fst, short program, char* name, size_t size) {
+	AEffect* plugin = fst->plugin;
+
+	if (program == fst->current_program) {
+		plugin->dispatcher(plugin, effGetProgramName, 0, 0, name, 0.0f);
+	} else {
+		plugin->dispatcher(plugin, effGetProgramNameIndexed, program, 0, name, 0.0 );
+	}
+	valid_program_name ( name, size );
 
 	return TRUE; 
+}
+
+bool
+fst_set_program_name (FST *fst, const char* name) {
+	AEffect* plugin = fst->plugin;
+
+	char nname[24];
+	strncpy ( nname, name, sizeof ( nname ) );
+	valid_program_name ( nname, sizeof nname );
+
+	plugin->dispatcher(plugin, effSetProgramName, 0, 0, nname, 0.0f);
+
+	return TRUE;
 }
 
 void
