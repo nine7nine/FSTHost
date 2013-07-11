@@ -295,8 +295,8 @@ jack_host_callback (struct AEffect* effect, int32_t opcode, int32_t index, intpt
 		// index: width, value: height
 		if (! jackvst) return 0;
 
-		jackvst->fst->width = index + 6;
-		jackvst->fst->height = value + 24;
+		jackvst->fst->width = index;
+		jackvst->fst->height = value;
 		jackvst->fst->wantResize = TRUE;
 		/* Resize also GTK window in popup (embedded) mode */
 		if (jackvst->fst->editor_popup) jackvst->want_resize = TRUE;
