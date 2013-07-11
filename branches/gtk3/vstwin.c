@@ -58,11 +58,11 @@ my_window_proc (HWND w, UINT msg, WPARAM wp, LPARAM lp) {
 		break;
 
 	case WM_CLOSE:
-		if (fst && ! fst->editor_popup) {
-			fst->plugin->dispatcher(fst->plugin, effEditClose, 0, 0, NULL, 0.0f);
+		if (fst) {
 			fst->window = NULL;
-		} else {
-			printf("Receive WM_CLOSE - WTF ?\n");
+			fst->plugin->dispatcher(fst->plugin, effEditClose, 0, 0, NULL, 0.0f);
+
+			if (fst->editor_popup) printf("Receive WM_CLOSE - WTF ?\n");
 		}
 		break;
 	case WM_NCDESTROY:
@@ -112,7 +112,16 @@ register_window_class() {
 }
 
 static void fst_resize_editor (FST *fst) {
-	SetWindowPos(fst->window, HWND_BOTTOM, 0, 0, fst->width, fst->height, SWP_STATECHANGED|
+	int height = fst->height;
+	int width = fst->width;
+
+	if (! fst->editor_popup) {
+		// Add space window title height and borders
+		height += 24;
+		width += 6;
+	}
+
+	SetWindowPos(fst->window, HWND_BOTTOM, 0, 0, width, height, SWP_STATECHANGED|
 		SWP_ASYNCWINDOWPOS|SWP_NOCOPYBITS|SWP_NOMOVE|SWP_NOZORDER|SWP_NOOWNERZORDER|SWP_DEFERERASE);
 }
 
@@ -165,15 +174,9 @@ fst_create_editor (FST* fst) {
 	fst->width  = er->right - er->left;
 	fst->height = er->bottom - er->top;
 
-	if (! fst->editor_popup) {
-		// Add window title height and borders
-		fst->height += 24;
-		fst->width += 6;
-
-		// Bind FST to window
-		if (! SetPropA(window, "FST", fst))
-                	fst_error ("cannot set GUI window property");
-	}
+	// Bind FST to window
+	if (! SetPropA(window, "FST", fst))
+		fst_error ("cannot set GUI window property");
 
 	if (fst->editor_popup) {
 		SetWindowPos (window, 0, 0, 0, 0, 0, SWP_SHOWWINDOW|SWP_NOMOVE|SWP_NOOWNERZORDER|

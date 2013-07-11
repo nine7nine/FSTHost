@@ -367,11 +367,15 @@ editor_handler (GtkToggleButton *but, gpointer ptr) {
 	} else if (! jvst->fst->editor_popup) {
 		fst_destroy_editor(jvst->fst);
 	} else {
+		// For some reason window was closed before we reach this function
+		// That's mean GtkSocket is already destroyed
+		if ( jvst->fst->window ) {
+			gtk_widget_hide(gtk_socket);
+			fst_destroy_editor(jvst->fst);
+			gtk_widget_set_size_request(gtk_socket, -1, -1);
+			gtk_widget_destroy(gtk_socket);
+		}
 //		g_signal_handler_disconnect(G_OBJECT(window), gtk_socket_signal);
-		gtk_widget_hide(gtk_socket);
-		fst_destroy_editor(jvst->fst);
-		gtk_widget_set_size_request(gtk_socket, -1, -1);
-		gtk_widget_destroy(gtk_socket);
 		gtk_widget_destroy(socket_align);
 		gtk_window_resize(GTK_WINDOW(window), 1, 1);
 	}
@@ -737,13 +741,13 @@ idle_cb(JackVST *jvst) {
 		gtk_widget_set_tooltip_text(bypass_button, tmpstr);
 	}
 
-	// Editor button in non-popup mode (not embedded)
-	if (! jvst->fst->editor_popup) {
-		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(editor_button), jvst->fst->window ? TRUE : FALSE);
-	// If is embedded and want resize window
-	} else if (jvst->fst->window && jvst->want_resize) {
+	// Adapt button state to Wine window
+	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(editor_button), jvst->fst->window ? TRUE : FALSE);
+
+	// Editor Window is embedded and wand resize window
+	if ( jvst->fst->editor_popup && jvst->fst->window && jvst->want_resize) {
 		jvst->want_resize = FALSE;
-		gtk_widget_set_size_request(gtk_socket, jvst->fst->width-6, jvst->fst->height-24);
+		gtk_widget_set_size_request(gtk_socket, jvst->fst->width, jvst->fst->height);
 	}
 
 #ifdef HAVE_LASH
