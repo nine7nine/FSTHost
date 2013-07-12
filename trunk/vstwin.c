@@ -538,6 +538,11 @@ fst_open (FSTHandle* fhandle, audioMasterCallback amc, void* userptr) {
 
 FST*
 fst_load_open (const char* path, audioMasterCallback amc, void* userptr) {
+	if ( ! path ) {
+		fst_error ( "empty plugin path ?" );
+		return NULL;
+	}
+
 	FSTHandle* handle = fst_load(path);
 	if (! handle) return NULL;
 
