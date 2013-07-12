@@ -10,6 +10,8 @@
 extern void jvst_lash_idle(JackVST *jvst, bool *quit);
 #endif
 
+#define VUMETER_SIZE 50
+
 /* from cpuusage.c */
 extern void CPUusage_init();
 extern double CPUusage_getCurrentValue();
@@ -38,6 +40,8 @@ static	GtkWidget* save_button;
 static	GtkWidget* sysex_button;
 static	GtkWidget* volume_slider;
 static	GtkWidget* cpu_usage;
+static	GtkWidget* vumeter;
+static	guint vumeter_level = 100;
 static	gulong preset_listbox_signal;
 static	gulong volume_signal;
 //static	gulong gtk_socket_signal;
@@ -52,6 +56,21 @@ struct RemoveFilterData {
 	MIDIFILTER* toRemove;
 	GtkWidget* hpacker;
 };
+
+static void
+vumeter_draw_handler (GtkWidget *widget, cairo_t *cr, gpointer user_data) {
+	cairo_pattern_t *vumeter;
+	int size = vumeter_level * VUMETER_SIZE / 100.0;
+	vumeter = cairo_pattern_create_linear (0, 10, 0, 20);
+	cairo_pattern_add_color_stop_rgba(vumeter, 0.1, 0, 0, 0, 1);
+	cairo_pattern_add_color_stop_rgba(vumeter, 0.5, 0, 1, 0, 1);
+	cairo_pattern_add_color_stop_rgba(vumeter, 0.9, 0, 0, 0, 1);
+
+	cairo_rectangle(cr, 0, 5, size, 20);
+	cairo_set_source(cr, vumeter);
+	cairo_fill(cr);
+	cairo_pattern_destroy (vumeter);
+}
 
 static void
 learn_handler (GtkToggleButton *but, gpointer ptr) {
@@ -721,6 +740,10 @@ idle_cb(JackVST *jvst) {
 		g_signal_handler_unblock(volume_slider, volume_signal);
 	}
 
+	// VU Meter
+	vumeter_level = jvst->out_level;
+	gtk_widget_queue_draw ( vumeter );
+
 	// Channel combo
 	channel_check(GTK_COMBO_BOX(channel_listbox), jvst);
 
@@ -850,6 +873,11 @@ gtk_gui_start (JackVST* jvst) {
 	cpu_usage = gtk_label_new ("0");
 	gtk_box_pack_start(GTK_BOX(hpacker), cpu_usage, FALSE, FALSE, 0);
 	gtk_widget_set_tooltip_text(cpu_usage, "CPU Usage");
+	//----------------------------------------------------------------------------------
+	vumeter = gtk_drawing_area_new();
+	gtk_widget_set_size_request(vumeter, VUMETER_SIZE, 20);
+	g_signal_connect(G_OBJECT(vumeter), "draw", G_CALLBACK(vumeter_draw_handler), NULL);
+	gtk_box_pack_start(GTK_BOX(hpacker), vumeter, FALSE, FALSE, 0);
 	//----------------------------------------------------------------------------------
 	gtk_container_set_border_width (GTK_CONTAINER(hpacker), 3); 
 	g_signal_connect (G_OBJECT(window), "delete_event", G_CALLBACK(destroy_handler), jvst);
