@@ -141,7 +141,7 @@ char* fst_info_get_plugin_path(const char* dbpath, const char* filename) {
 	return (path) ? strdup (path) : NULL;
 }
 
-int fst_info(const char *dbpath, const char *fst_path) {
+int fst_info_update(const char *dbpath, const char *fst_path) {
 	xmlDoc*  xml_db = NULL;
 	xmlNode* xml_rn = NULL;
 
@@ -156,7 +156,20 @@ int fst_info(const char *dbpath, const char *fst_path) {
 		xmlDocSetRootElement(xml_db, xml_rn);
 	}
 
-	scandirectory(fst_path, xml_rn);
+	if ( fst_path ) {
+		scandirectory(fst_path, xml_rn);
+	} else {
+		/* Generate using VST_PATH - if fst_path is NULL */
+		char* vst_path = getenv("VST_PATH");
+		if (! vst_path) return 7;
+		
+		char* vpath = strtok (vst_path, ":");
+		while (vpath) {
+			scandirectory(vpath, xml_rn);
+			vpath = strtok (NULL, ":");
+		}
+	}
+
 
 	if (need_save) {
 		FILE * f = fopen (dbpath, "wb");
