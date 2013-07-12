@@ -774,6 +774,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	bool		sigusr1_save_state = FALSE;
 	bool		want_midi_physical = false;
 	const char*	connect_to = NULL;
+	const char*	custom_path = NULL;
 
 	printf("FSTHost Version: %s (%s)\n", VERSION, ARCH);
 
@@ -812,45 +813,33 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 		}
 	}
 
-	if (optind < argc) {
-		/* We have more arguments than getops options */
-		const char* custom_path = argv[optind];
-		if (opt_generate_dbinfo) {
-			if (! jvst->dbinfo_file) {
-				usage (argv[0]);
-				return 1;
-			}
-			return fst_info(jvst->dbinfo_file, custom_path);
-		} else jvst_load( jvst, custom_path );
-	} else if (! jvst->default_state_file) {
-		if (opt_list_plugins && jvst->dbinfo_file) return fst_info_list ( jvst->dbinfo_file );
-		if (opt_generate_dbinfo) {
-			/* Generate using VST_PATH */
-			char* vst_path = getenv("VST_PATH");
-			if ( jvst->dbinfo_file && vst_path ) {
-				char* vpath = strtok (vst_path, ":");
-				int ret = 1;
-				while (vpath) {
-					// If at least one path is correct - return success
-					if ( ! fst_info(jvst->dbinfo_file, vpath) ) ret = 0;
-					vpath = strtok (NULL, ":");
-				}
-				return ret;
-			}
-		}
+	/* If use want to list plugins then abandon other tasks */
+	if (opt_list_plugins) return fst_info_list ( jvst->dbinfo_file );
 
-		usage (argv[0]);
-		return 1;
+	/* We have more arguments than getops options */
+	if (optind < argc) custom_path = argv[optind];
+
+	/* If NULL then Generate using VST_PATH */
+	if (opt_generate_dbinfo) {
+		int ret = fst_info_update ( jvst->dbinfo_file, custom_path );
+		if (ret > 0) usage ( argv[0] );
+		return ret;
 	}
 
-        // load state if requested
+	/* User provided plugin that want to load (as name or full path) */
+	if ( custom_path ) jvst_load( jvst, custom_path );
+
+        /* load state if requested - state file may contain plugin path */
 	if ( jvst->default_state_file ) {
 		bool loaded = jvst_load_state (jvst, jvst->default_state_file);
 		if ( ! loaded && ! sigusr1_save_state ) return 1;
 	}
 
-	/* Are we loaded plugini ? */
-	if (! jvst->fst) return 1;
+	/* Well .. Are we loaded plugin ? */
+	if (! jvst->fst) {
+		usage ( argv[0] );
+		return 1;
+	}
 
 	fst = jvst->fst;
 	plugin = fst->plugin;
