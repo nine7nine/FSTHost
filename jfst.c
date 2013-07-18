@@ -59,10 +59,6 @@ extern int fst_info_list(const char* dbpath);
 extern void jvst_lash_init(JackVST *jvst, int* argc, char** argv[]);
 #endif
 
-static void *(*the_function)(void*);
-static void *the_arg;
-static pthread_t the_thread_id;
-static sem_t sema;
 GMainLoop* glib_main_loop;
 JackVST *jvst_first = NULL;
 
@@ -258,26 +254,42 @@ static void signal_handler(int signum) {
 	}
 }
 
+struct JackWineThread {
+	void* (*func)(void*);
+	void* arg;
+	pthread_t pthid;
+	sem_t sema;
+};
+
 static DWORD WINAPI
 wine_thread_aux( LPVOID arg ) {
+	struct JackWineThread* jwt = (struct JackWineThread*) arg;
+
         printf("Audio Thread W32ID: %d | LWP: %d\n", GetCurrentThreadId (), (int) syscall (SYS_gettid));
 
-	the_thread_id = pthread_self();
-	sem_post( &sema );
-	the_function( the_arg );
+	void* func_arg = jwt->arg;
+	void* (*func)(void*) = jwt->func;
+
+	jwt->pthid = pthread_self();
+	sem_post( &jwt->sema );
+
+	func ( func_arg );
+
 	return 0;
 }
 
 static int
-wine_pthread_create (pthread_t* thread_id, const pthread_attr_t* attr, void *(*function)(void*), void* arg) {
-	sem_init( &sema, 0, 0 );
-	the_function = function;
-	the_arg = arg;
+wine_thread_create (pthread_t* thread_id, const pthread_attr_t* attr, void *(*function)(void*), void* arg) {
+	struct JackWineThread jwt;
 
-	CreateThread( NULL, 0, wine_thread_aux, arg, 0,0 );
-	sem_wait( &sema );
+	sem_init( &jwt.sema, 0, 0 );
+	jwt.func = function;
+	jwt.arg = arg;
 
-	*thread_id = the_thread_id;
+	CreateThread( NULL, 0, wine_thread_aux, &jwt, 0, 0 );
+	sem_wait( &jwt.sema );
+
+	*thread_id = jwt.pthid;
 	return 0;
 }
 
@@ -872,7 +884,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	}
 
 	// Set client callbacks
-	jack_set_thread_creator (wine_pthread_create);
+	jack_set_thread_creator (wine_thread_create);
 	jack_set_process_callback (jvst->client, (JackProcessCallback) process_callback, jvst);
 	jack_set_session_callback( jvst->client, session_callback_aux, jvst );
 	jack_set_graph_order_callback(jvst->client, graph_order_callback, jvst);

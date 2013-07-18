@@ -1,3 +1,5 @@
+#include <stdlib.h>
+
 /* From info.c */
 extern char* fst_info_default_path(const char* appname);
 extern int fst_info_list(const char* dbpath);
