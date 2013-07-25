@@ -146,7 +146,7 @@ $sw->add($tree_view);
 
 $label = Gtk3::Label->new( '' );
 $label->set_selectable(1);
-$grid->attach ( $label, 0, 1, 1, 1 );
+$grid->attach_next_to ( $label, $sw, 'GTK_POS_BOTTOM', 1, 1 );
 
 $window->show_all;
 Gtk3->main;
