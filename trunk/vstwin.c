@@ -58,11 +58,11 @@ my_window_proc (HWND w, UINT msg, WPARAM wp, LPARAM lp) {
 		break;
 
 	case WM_CLOSE:
-		if (fst && ! fst->editor_popup) {
-			fst->plugin->dispatcher(fst->plugin, effEditClose, 0, 0, NULL, 0.0f);
+		if (fst) {
 			fst->window = NULL;
-		} else {
-			printf("Receive WM_CLOSE - WTF ?\n");
+			fst->plugin->dispatcher(fst->plugin, effEditClose, 0, 0, NULL, 0.0f);
+
+			if (fst->editor_popup) printf("Receive WM_CLOSE - WTF ?\n");
 		}
 		break;
 	case WM_NCDESTROY:
@@ -112,7 +112,16 @@ register_window_class() {
 }
 
 static void fst_resize_editor (FST *fst) {
-	SetWindowPos(fst->window, HWND_BOTTOM, 0, 0, fst->width, fst->height, SWP_STATECHANGED|
+	int height = fst->height;
+	int width = fst->width;
+
+	if (! fst->editor_popup) {
+		// Add space window title height and borders
+		height += 24;
+		width += 6;
+	}
+
+	SetWindowPos(fst->window, HWND_BOTTOM, 0, 0, width, height, SWP_STATECHANGED|
 		SWP_ASYNCWINDOWPOS|SWP_NOCOPYBITS|SWP_NOMOVE|SWP_NOZORDER|SWP_NOOWNERZORDER|SWP_DEFERERASE);
 }
 
@@ -165,15 +174,9 @@ fst_create_editor (FST* fst) {
 	fst->width  = er->right - er->left;
 	fst->height = er->bottom - er->top;
 
-	if (! fst->editor_popup) {
-		// Add window title height and borders
-		fst->height += 24;
-		fst->width += 6;
-
-		// Bind FST to window
-		if (! SetPropA(window, "FST", fst))
-                	fst_error ("cannot set GUI window property");
-	}
+	// Bind FST to window
+	if (! SetPropA(window, "FST", fst))
+		fst_error ("cannot set GUI window property");
 
 	if (fst->editor_popup) {
 		SetWindowPos (window, 0, 0, 0, 0, 0, SWP_SHOWWINDOW|SWP_NOMOVE|SWP_NOOWNERZORDER|
@@ -185,7 +188,7 @@ fst_create_editor (FST* fst) {
 	
 
 	fst->xid = GetPropA (window, "__wine_x11_whole_window");
-	printf("And xid = %p\n", fst->xid );
+//	printf("And xid = %p\n", fst->xid );
 
 	return TRUE;
 }
@@ -250,19 +253,10 @@ bool fst_run_editor (FST* fst, bool popup) {
 	}
 }
 
-bool
-fst_get_program_name (FST *fst, short program, char* name, size_t size) {
+static void valid_program_name ( char* text, size_t size ) {
 	char *m = NULL, *c;
-	AEffect* plugin = fst->plugin;
 
-	if (program == fst->current_program) {
-		plugin->dispatcher(plugin, effGetProgramName, 0, 0, name, 0.0f);
-	} else {
-		plugin->dispatcher(plugin, effGetProgramNameIndexed, program, 0, name, 0.0 );
-	}
-
-	// remove all non ascii signs
-	for (c = name; (*c != 0) && (c - name) < size; c++) {
+	for (c = text; (*c != 0) && (c - text) < size; c++) {
 		if ( isprint(*c)) {
 			if (m) {
 				*m = *c;
@@ -270,10 +264,36 @@ fst_get_program_name (FST *fst, short program, char* name, size_t size) {
 			}
 		} else if (!m) m = c;
 	}
+
 	// make sure of string terminator
 	if (m) *m = 0; else *c = 0;
+}
+
+bool
+fst_get_program_name (FST *fst, short program, char* name, size_t size) {
+	AEffect* plugin = fst->plugin;
+
+	if (program == fst->current_program) {
+		plugin->dispatcher(plugin, effGetProgramName, 0, 0, name, 0.0f);
+	} else {
+		plugin->dispatcher(plugin, effGetProgramNameIndexed, program, 0, name, 0.0 );
+	}
+	valid_program_name ( name, size );
 
 	return TRUE; 
+}
+
+bool
+fst_set_program_name (FST *fst, const char* name) {
+	AEffect* plugin = fst->plugin;
+
+	char nname[24];
+	strncpy ( nname, name, sizeof ( nname ) );
+	valid_program_name ( nname, sizeof nname );
+
+	plugin->dispatcher(plugin, effSetProgramName, 0, 0, nname, 0.0f);
+
+	return TRUE;
 }
 
 void

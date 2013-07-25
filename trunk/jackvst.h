@@ -65,6 +65,7 @@ struct _JackVST {
     bool            want_resize;
     double          tempo;
     float           volume; /* where 0.0 mean silence */
+    uint8_t         out_level;
     bool            graph_order_change;
     bool            bbt_sync;
 
