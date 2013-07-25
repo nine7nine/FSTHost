@@ -6,6 +6,12 @@
 
 #include "fst.h"
 
+#ifdef __x86_64__
+#define ARCH "64"
+#else
+#define ARCH "32"
+#endif
+
 static bool need_save = FALSE;
 
 static xmlChar *
@@ -46,6 +52,7 @@ static void fst_add2db(FST* fst, xmlNode *xml_rn) {
 
 	xmlNewProp(fst_node,BAD_CAST "file",BAD_CAST fst->handle->name);
 	xmlNewProp(fst_node,BAD_CAST "path",BAD_CAST fst->handle->path);
+	xmlNewProp(fst_node,BAD_CAST "arch",BAD_CAST ARCH);
 
 	xmlNewChild(fst_node, NULL,BAD_CAST "name", BAD_CAST fst->name);
 	xmlNewChild(fst_node, NULL,BAD_CAST "uniqueID", int2str(tmpstr,sizeof tmpstr,fst->plugin->uniqueID));

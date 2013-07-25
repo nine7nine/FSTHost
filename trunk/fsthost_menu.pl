@@ -1,20 +1,23 @@
 #!/usr/bin/perl
 
 use strict;
-#use Data::Dumper;
+use Data::Dumper;
 use XML::LibXML;
 use Gtk3;
 
-my $FSTHOST_VERSION = 32;
 my $FSTHOST_GUI = 2; # 0 - no gui , 1 - hide, 2 - normal
 
-my $filename = $ENV{'HOME'}."/.fsthost".$FSTHOST_VERSION.".xml";
+my $filename = $ENV{'HOME'}."/.fsthost.xml";
 
 sub start_fsthost { 
 	my $tv = shift;
 	my ($model, $iter) = $tv->get_selection->get_selected();
-	my $path = $model->get($iter, 1);
-	my $cmd = "env FSTHOST_GUI=$FSTHOST_GUI fsthost$FSTHOST_VERSION \"$path\" >/dev/null 2>&1 &";
+	# Get reference to our part of %fst hash
+	my $arch = $model->get($iter, 1);
+	my $path = $model->get($iter, 2);
+
+
+	my $cmd = "env FSTHOST_GUI=$FSTHOST_GUI fsthost$arch \"$path\" >/dev/null 2>&1 &";
 
 	print "Spawn: $cmd\n";
 	system ( $cmd );
@@ -31,6 +34,7 @@ sub read_xml_db {
 	foreach my $N (@nodes) {
 		my $F = $N->getAttribute('file');
 		$fst->{$F}->{'path'} = $N->getAttribute('path');
+		$fst->{$F}->{'arch'} = $N->getAttribute('arch');
 
 		foreach my $FN ($N->childNodes()) {
 			next unless ($FN->nodeType == XML_ELEMENT_NODE);
@@ -68,13 +72,13 @@ $sw->set_size_request (300, 500);
 $vbox->pack_start($sw, 1, 1,0);
 
 # TreeView
-my $tree_store = Gtk3::TreeStore->new(qw/Glib::String Glib::String/);
+my $tree_store = Gtk3::TreeStore->new(qw/Glib::String Glib::String Glib::String/);
 
 #fill it with arbitry data
 foreach (keys %fst) { 	
 	#the iter is a pointer in the treestore. We use to add data.
 	my $iter = $tree_store->append(undef);
-	$tree_store->set ($iter,0 => $_, 1 => $fst{$_}{'path'});
+	$tree_store->set ($iter, 0 => $_, 1 => $fst{$_}->{'arch'}, 2 => $fst{$_}->{'path'});
 }
 
 #this will create a treeview, specify $tree_store as its model
