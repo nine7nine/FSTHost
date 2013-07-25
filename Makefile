@@ -3,23 +3,34 @@ SRCDIR                = .
 SUBDIRS               =
 EXES                  = fsthost32
 
+GTK2 := 0
+VUMETER := 0
 LBITS = $(shell getconf LONG_BIT)
 LASH_EXISTS := $(shell if pkg-config --exists lash-1.0; then echo yes; else echo no; fi)
 #LAST_EXISTS := 'no'
 
 ### Common settings
 PKG_CONFIG_MODULES := glib-2.0
-PKG_CONFIG_MODULES += gtk+-2.0
 PKG_CONFIG_MODULES += jack
 PKG_CONFIG_MODULES += libxml-2.0
-ifeq ($(LASH_EXISTS),yes)
-PKG_CONFIG_MODULES += lash-1.0
+
+ifeq ($(GTK2),1)
+PKG_CONFIG_MODULES += gtk+-2.0
+override VUMETER = 0
+else
+PKG_CONFIG_MODULES += gtk+-3.0
 endif
 
 # Shared GCC flags
 CEXTRA             := $(shell pkg-config --cflags $(PKG_CONFIG_MODULES))
 CEXTRA             += -g -O2 -Wall -Wno-multichar -frounding-math -fsignaling-nans -mfpmath=sse -msse2
+
+ifeq ($(VUMETER),0)
+CEXTRA             += -DNO_VUMETER
+endif
+
 ifeq ($(LASH_EXISTS),yes)
+PKG_CONFIG_MODULES += lash-1.0
 CEXTRA             += -DHAVE_LASH
 endif
 
