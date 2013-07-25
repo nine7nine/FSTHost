@@ -21,6 +21,7 @@ int fst_info_list(const char* dbpath) {
 		if (xmlStrcmp(n->name, BAD_CAST "fst")) continue;
 
 		xmlChar* p = xmlGetProp(n, BAD_CAST "path");
+		xmlChar* a = xmlGetProp(n, BAD_CAST "arch");
 		xmlChar* f = NULL;
 		xmlNode* nn;
 		for (nn = n->children; nn; nn = nn->next) {
@@ -30,7 +31,7 @@ int fst_info_list(const char* dbpath) {
 			}
 		}
 		if (!f) continue;
-		printf("%s|%s\n", f, p);
+		printf("%s|%s|%s\n", f, a, p);
 	}
 
 	xmlFreeDoc(xml_db);

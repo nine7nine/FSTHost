@@ -5,34 +5,27 @@
 
 PATH=.:$PATH
 
-fsthost='fsthost32'
-ZENITY=1
-ZENITY_WIDTH=300
+ZENITY=0
+ZENITY_WIDTH=420
 ZENITY_HEIGHT=700
 MODE='' # Will be set later
 
-list_fst() {
-	if [ $MODE = 'VST_PATH' ]; then
-		# Get from VST_PATH
-		find $(echo $VST_PATH|tr ':' ' ') -iname '*.dll' -type f | awk -F'/' '{print "\""$NF"\"|\""$0"\""}'
-	else
-		fsthost_list
-	fi
-}
-
 show_menu() {
-	echo "$L" | cut -d'|' -f1-2 |
+	echo "$L" |
 	{
 	if [ $ZENITY -eq 1 ]; then
+		cut -sd '|' -f 1-3 |
 		tr '|' '\n' |
 		zenity --title 'Wybierz Host' \
 			--width=$ZENITY_WIDTH \
 			--height=$ZENITY_HEIGHT \
 			--list \
 			--column 'Number' \
-			--column 'Plugin'
+			--column 'Plugin' \
+			--column 'Arch'
 	else
-		tr '|' ' ' | xargs dialog --menu 'Select VST' 0 0 0 3>&1 1>&2 2>&3
+		awk -F'|' '{print $1 " " "\"" $2 "\""}' |
+		xargs dialog --menu 'Select VST' 0 0 0 3>&1 1>&2 2>&3
 	fi
 	}
 }
@@ -41,12 +34,13 @@ main_loop() {
 	G=$(show_menu)
 	[ -z "$G" ] && exit
 	
-	F=$(echo "$L" | grep "^$G|" | cut -d'|' -f3 | tr -d '"')
+	P=$(echo "$L" | grep "^$G|" | cut -sd'|' -f4 | tr -d '"')
+	A=$(echo "$L" | grep "^$G|" | cut -sd'|' -f3 | tr -d '"')
 	
-	$fsthost -l -p -j '' "$F" 1>/tmp/fsthost_menu.log.$G 2>&1 &
+	fsthost${A} -l -p -j '' "$P" 1>/tmp/fsthost_menu.log.$G 2>&1 &
 }
 
-FSTHOST_DB=${1:-$HOME/.${fsthost}.xml}
+FSTHOST_DB=${1:-$HOME/.fsthost.xml}
 if [ -f "$FSTHOST_DB" ]; then
 	MODE='FSTHOST_DB'
 elif [ -n "$VST_PATH" ]; then
@@ -61,7 +55,7 @@ echo "MODE: $MODE | FSTHOST_DB: $FSTHOST_DB"
 
 L=$(
 	T=1
-	list_fst | while read F; do
+	fsthost_list | while read F; do
 		echo "$T|$F"
 		T=$((T+1))
 	done

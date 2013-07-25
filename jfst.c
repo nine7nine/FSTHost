@@ -31,12 +31,12 @@
 #define CTRLAPP "FHControl"
 #define VERSION "1.5.2"
 #ifdef __x86_64__
-#define APPNAME "fsthost64"
-#define ARCH "64bit"
+#define ARCH "64"
 #else
-#define APPNAME "fsthost32"
-#define ARCH "32bit"
+#define ARCH "32"
 #endif
+#define APPNAME "fsthost"
+#define APPNAME_ARCH APPNAME ARCH
 
 #define RINGBUFFER_SIZE 16 * sizeof(struct MidiMessage)
 #define SYSEX_RINGBUFFER_SIZE 16 * SYSEX_MAX_SIZE
@@ -570,7 +570,7 @@ static bool session_callback( JackVST* jvst ) {
 		event->flags |= JackSessionSaveError;
 	}
 
-	snprintf( retval, sizeof(retval), "%s -u %s -s \"${SESSION_DIR}state.fps\"", APPNAME, event->client_uuid);
+	snprintf( retval, sizeof(retval), "%s -u %s -s \"${SESSION_DIR}state.fps\"", APPNAME_ARCH, event->client_uuid);
 	event->command_line = strndup( retval, sizeof(retval) );
 
 	jack_session_reply(jvst->client, event);
@@ -738,7 +738,7 @@ static void cmdline2arg(int *argc, char ***pargv, LPSTR cmdline) {
 		WideCharToMultiByte(CP_UNIXCP, 0, szArgList[i], -1, (LPSTR) argv[i], nsize, NULL, NULL);
 	}
 	LocalFree(szArgList);
-	argv[0] = (char*) APPNAME; // Force APP name
+	argv[0] = (char*) APPNAME_ARCH; // Force APP name
 	*pargv = argv;
 }
 
@@ -796,7 +796,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	const char*	connect_to = NULL;
 	const char*	custom_path = NULL;
 
-	printf("FSTHost Version: %s (%s)\n", VERSION, ARCH);
+	printf("FSTHost Version: %s (%s)\n", VERSION, ARCH "bit");
 
 	JackVST*	jvst = jvst_new();
 	jvst_first = jvst;
