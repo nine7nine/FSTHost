@@ -1,7 +1,14 @@
 #include "jackvst.h"
 #include <gtk/gtk.h>
+
+#if (GTK_MAJOR_VERSION < 3)
+#include <gdk/gdkx.h>
+#include <gdk/gdkevents.h>
+#else
 #include <gtk/gtkx.h>
 #include <gdk/gdk.h>
+#endif
+
 #include <X11/Xlib.h>
 #include <sys/syscall.h>
 #include "fsthost.xpm"
@@ -10,7 +17,21 @@
 extern void jvst_lash_idle(JackVST *jvst, bool *quit);
 #endif
 
-#define VUMETER_SIZE 50
+#if (GTK_MAJOR_VERSION < 3)
+/* FIXME: workaround code - will be removed */
+static GtkWidget* gtk_box_new (GtkOrientation orientation, gint spacing) {
+	switch (orientation) {
+	case GTK_ORIENTATION_HORIZONTAL:
+		return gtk_hbox_new (FALSE, spacing);
+	case GTK_ORIENTATION_VERTICAL:
+		return gtk_vbox_new (FALSE, spacing);
+	}
+	return NULL;
+}
+
+#define gtk_scale_new_with_range(chuj, ...) gtk_hscale_new_with_range( __VA_ARGS__ )
+#define GDK_POINTER_TO_XID GDK_GPOINTER_TO_NATIVE_WINDOW
+#endif /* (GTK_MAJOR_VERSION < 3) */
 
 /* from cpuusage.c */
 extern void CPUusage_init();
@@ -40,8 +61,6 @@ static	GtkWidget* save_button;
 static	GtkWidget* sysex_button;
 static	GtkWidget* volume_slider;
 static	GtkWidget* cpu_usage;
-static	GtkWidget* vumeter;
-static	guint vumeter_level = 100;
 static	gulong preset_listbox_signal;
 static	gulong volume_signal;
 //static	gulong gtk_socket_signal;
@@ -57,6 +76,11 @@ struct RemoveFilterData {
 	GtkWidget* hpacker;
 };
 
+#ifndef NO_VUMETER
+static	GtkWidget* vumeter;
+static	guint vumeter_level = 0;
+#define VUMETER_SIZE 50
+
 static void
 vumeter_draw_handler (GtkWidget *widget, cairo_t *cr, gpointer user_data) {
 	cairo_pattern_t *vumeter;
@@ -71,6 +95,7 @@ vumeter_draw_handler (GtkWidget *widget, cairo_t *cr, gpointer user_data) {
 	cairo_fill(cr);
 	cairo_pattern_destroy (vumeter);
 }
+#endif
 
 static void
 learn_handler (GtkToggleButton *but, gpointer ptr) {
@@ -740,9 +765,11 @@ idle_cb(JackVST *jvst) {
 		g_signal_handler_unblock(volume_slider, volume_signal);
 	}
 
+#ifndef NO_VUMETER
 	// VU Meter
 	vumeter_level = jvst->out_level;
 	gtk_widget_queue_draw ( vumeter );
+#endif
 
 	// Channel combo
 	channel_check(GTK_COMBO_BOX(channel_listbox), jvst);
@@ -874,10 +901,12 @@ gtk_gui_start (JackVST* jvst) {
 	gtk_box_pack_start(GTK_BOX(hpacker), cpu_usage, FALSE, FALSE, 0);
 	gtk_widget_set_tooltip_text(cpu_usage, "CPU Usage");
 	//----------------------------------------------------------------------------------
+#ifndef NO_VUMETER
 	vumeter = gtk_drawing_area_new();
 	gtk_widget_set_size_request(vumeter, VUMETER_SIZE, 20);
 	g_signal_connect(G_OBJECT(vumeter), "draw", G_CALLBACK(vumeter_draw_handler), NULL);
 	gtk_box_pack_start(GTK_BOX(hpacker), vumeter, FALSE, FALSE, 0);
+#endif
 	//----------------------------------------------------------------------------------
 	gtk_container_set_border_width (GTK_CONTAINER(hpacker), 3); 
 	g_signal_connect (G_OBJECT(window), "delete_event", G_CALLBACK(destroy_handler), jvst);
