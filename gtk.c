@@ -19,16 +19,8 @@ extern void jvst_lash_idle(JackVST *jvst, bool *quit);
 
 #if (GTK_MAJOR_VERSION < 3)
 /* FIXME: workaround code - will be removed */
-static GtkWidget* gtk_box_new (GtkOrientation orientation, gint spacing) {
-	switch (orientation) {
-	case GTK_ORIENTATION_HORIZONTAL:
-		return gtk_hbox_new (FALSE, spacing);
-	case GTK_ORIENTATION_VERTICAL:
-		return gtk_vbox_new (FALSE, spacing);
-	}
-	return NULL;
-}
-
+#define gtk_box_new(orientation, spacing) ( (orientation == GTK_ORIENTATION_HORIZONTAL) ? gtk_hbox_new (FALSE, spacing) : \
+	(orientation == GTK_ORIENTATION_VERTICAL) ? gtk_vbox_new (FALSE, spacing) : NULL )
 #define gtk_scale_new_with_range(chuj, ...) gtk_hscale_new_with_range( __VA_ARGS__ )
 #define GDK_POINTER_TO_XID GDK_GPOINTER_TO_NATIVE_WINDOW
 #endif /* (GTK_MAJOR_VERSION < 3) */
