@@ -71,11 +71,11 @@ my $window = Gtk3::Window->new ('toplevel');
 $window->signal_connect('delete_event' => sub { Gtk3->main_quit; });
 #$window->set_icon_from_file ( 'fsthost.xpm', 0 );
 #$window->set_border_width(5);
- 
-# VBox
-my $vbox = Gtk3::VBox->new ( 0, 5 );
-$window->add( $vbox );
-$vbox->set_border_width( 5 );
+
+# Grid
+my $grid = Gtk3::Grid->new();
+$grid->set_border_width( 5 );
+$window->add( $grid );
 
 # Scrolled window
 #create a scrolled window that will host the treeview
@@ -88,7 +88,7 @@ $sw->set_policy ('automatic', 'automatic');
 $sw->set_size_request (700, 700);
 #method of Gtk3::Container
 #$sw->set_border_width(5);
-$vbox->pack_start($sw, 1, 1, 0);
+$grid->attach ( $sw, 0, 0, 1, 1 );
 
 # TreeView
 my $tree_store = Gtk3::TreeStore->new(qw/Glib::String Glib::String Glib::String/);
@@ -146,7 +146,7 @@ $sw->add($tree_view);
 
 $label = Gtk3::Label->new( '' );
 $label->set_selectable(1);
-$vbox->pack_start($label, 1, 1, 0);
+$grid->attach ( $label, 0, 1, 1, 1 );
 
 $window->show_all;
 Gtk3->main;
