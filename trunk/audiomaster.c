@@ -101,7 +101,7 @@ queue_midi_message(JackVST* jvst, uint8_t status, uint8_t d1, uint8_t d2, jack_n
 intptr_t VSTCALLBACK
 jack_host_callback (struct AEffect* effect, int32_t opcode, int32_t index, intptr_t value, void* ptr, float opt)
 {
-	JackVST* jackvst = effect ? ((JackVST*) effect->resvd1) : NULL;
+	JackVST* jvst = effect ? ((JackVST*) effect->resvd1) : NULL;
 
 	//SHOW_CALLBACK ("am callback, opcode = %d", opcode);
 	
@@ -110,8 +110,8 @@ jack_host_callback (struct AEffect* effect, int32_t opcode, int32_t index, intpt
 	case audioMasterAutomate:
 		SHOW_CALLBACK ("amc: audioMasterAutomate\n");
 		// index, value, returns 0
-		if( jackvst && jackvst->midi_learn )
-			jackvst->midi_learn_PARAM = index;
+		if ( jvst && jvst->midi_learn )
+			jvst->midi_learn_PARAM = index;
 		return 0;
 
 	case audioMasterVersion:
@@ -153,14 +153,14 @@ jack_host_callback (struct AEffect* effect, int32_t opcode, int32_t index, intpt
 		// <value> should contain a mask indicating which fields are required
 		// (see valid masks above), as some items may require extensive
 		// conversions
-		if (! jackvst) return 0;
-		struct VstTimeInfo* timeInfo = &jackvst->fst->timeInfo;
+		if (! jvst) return 0;
+		struct VstTimeInfo* timeInfo = &jvst->fst->timeInfo;
 
 		// We always say that something was changed (are we lie ?)
 		timeInfo->flags = ( kVstTransportChanged | kVstTempoValid | kVstPpqPosValid );
 		// Query JackTransport
 		jack_position_t jack_pos;
-		jack_transport_state_t tstate = jack_transport_query (jackvst->client, &jack_pos);
+		jack_transport_state_t tstate = jack_transport_query (jvst->client, &jack_pos);
 		// Are we play ?
 		if (tstate == JackTransportRolling) timeInfo->flags |= kVstTransportPlaying;
 		// samplePos - always valid
@@ -176,20 +176,20 @@ jack_host_callback (struct AEffect* effect, int32_t opcode, int32_t index, intpt
 		// ... but we always compute it - could be needed later
 
 		double ppq = 0;
-		if ( ! jackvst->bbt_sync) {
+		if ( ! jvst->bbt_sync) {
 			ppq = timeInfo->sampleRate * 60 / timeInfo->tempo;
 			timeInfo->ppqPos = timeInfo->samplePos / ppq;
 		}
 
 		if (jack_pos.valid & JackPositionBBT) {
 			double ppqBar = 0;
-			if (jackvst->bbt_sync) {
+			if (jvst->bbt_sync) {
 				ppqBar = (jack_pos.bar - 1) * jack_pos.beats_per_bar;
 				double ppqBeat = jack_pos.beat - 1;
 				double ppqTick = (double) jack_pos.tick / jack_pos.ticks_per_beat;
 				double ppqOffset = 0;
 				if (jack_pos.valid & JackBBTFrameOffset) {
-					jack_nframes_t nframes = jack_get_buffer_size (jackvst->client);
+					jack_nframes_t nframes = jack_get_buffer_size (jvst->client);
 					ppqOffset = (double) jack_pos.bbt_offset / nframes;
 				
 				}
@@ -197,11 +197,11 @@ jack_host_callback (struct AEffect* effect, int32_t opcode, int32_t index, intpt
 			}
 
 			// tempo - valid when kVstTempoValid is set ... but we always set tempo ;-)
-			timeInfo->tempo = (jackvst->tempo == -1) ? jack_pos.beats_per_minute : jackvst->tempo;
+			timeInfo->tempo = (jvst->tempo == -1) ? jack_pos.beats_per_minute : jvst->tempo;
 
 			// barStartPos - valid when kVstBarsValid is set
 			if (value & kVstBarsValid) {
-				if (jackvst->bbt_sync) {
+				if (jvst->bbt_sync) {
 					timeInfo->barStartPos = ppqBar;
 				} else {
 					timeInfo->barStartPos = floor(timeInfo->ppqPos / jack_pos.beats_per_bar);
@@ -217,7 +217,7 @@ jack_host_callback (struct AEffect* effect, int32_t opcode, int32_t index, intpt
 			}
 		} else {
 			// tempo - valid when kVstTempoValid is set ... but we always set tempo ;-)
-			timeInfo->tempo = (jackvst->tempo == -1) ? 120 : jackvst->tempo;
+			timeInfo->tempo = (jvst->tempo == -1) ? 120 : jvst->tempo;
 		}
 #ifdef DEBUG_TIME
 		fst_error("amc Offset: %d", jack_pos.bbt_offset);
@@ -237,7 +237,7 @@ jack_host_callback (struct AEffect* effect, int32_t opcode, int32_t index, intpt
 	case audioMasterProcessEvents:
 		SHOW_CALLBACK ("amc: audioMasterProcessEvents\n");
 		// VstEvents* in <ptr>
-		if (! jackvst) return 0;
+		if (! jvst) return 0;
 
 		VstEvents* events = (VstEvents*) ptr;
 		int32_t numEvents = events->numEvents;
@@ -246,7 +246,7 @@ jack_host_callback (struct AEffect* effect, int32_t opcode, int32_t index, intpt
 			VstMidiEvent* event = (VstMidiEvent*) events->events[i];
 			//printf( "delta = %d\n", event->deltaFrames );
 			char* midiData = event->midiData;
-			queue_midi_message(jackvst, midiData[0], midiData[1], midiData[2], event->deltaFrames);
+			queue_midi_message(jvst, midiData[0], midiData[1], midiData[2], event->deltaFrames);
 		}
 		return 1;
 	case audioMasterSetTime:
@@ -257,12 +257,12 @@ jack_host_callback (struct AEffect* effect, int32_t opcode, int32_t index, intpt
 	case audioMasterTempoAt:
 		SHOW_CALLBACK ("amc: audioMasterTempoAt\n");
 		intptr_t ret = 120;
-		if (jackvst) {
-			if (jackvst->tempo != -1) {
-				ret = jackvst->tempo;
+		if (jvst) {
+			if (jvst->tempo != -1) {
+				ret = jvst->tempo;
 			} else {
 				jack_position_t jack_pos;
-				jack_transport_query (jackvst->client, &jack_pos);
+				jack_transport_query (jvst->client, &jack_pos);
 				if (jack_pos.beats_per_minute) ret = (intptr_t) jack_pos.beats_per_minute;
 			}
 		}
@@ -288,30 +288,30 @@ jack_host_callback (struct AEffect* effect, int32_t opcode, int32_t index, intpt
 	case audioMasterNeedIdle:
 		SHOW_CALLBACK ("amc: audioMasterNeedIdle\n");
 		// plug needs idle calls (outside its editor window)
-                if( jackvst ) jackvst->fst->wantIdle = TRUE;
+                if( jvst ) jvst->fst->wantIdle = TRUE;
 		return 1;
 	case audioMasterSizeWindow:
 		SHOW_CALLBACK ("amc: audioMasterSizeWindow %d %d\n", index, value);
 		// index: width, value: height
-		if (! jackvst) return 0;
+		if (! jvst) return 0;
 
-		jackvst->fst->width = index;
-		jackvst->fst->height = value;
-		jackvst->fst->wantResize = TRUE;
+		jvst->fst->width = index;
+		jvst->fst->height = value;
+		jvst->fst->wantResize = TRUE;
 		/* Resize also GTK window in popup (embedded) mode */
-		if (jackvst->fst->editor_popup) jackvst->want_resize = TRUE;
+		if (jvst->fst->editor_popup) jvst->want_resize = TRUE;
 		return 1;
 	case audioMasterGetSampleRate:
 		SHOW_CALLBACK ("amc: audioMasterGetSampleRate\n");
-		if( jackvst )
-		    return jack_get_sample_rate( jackvst->client );
+		if ( jvst )
+		    return jack_get_sample_rate( jvst->client );
 
 		return 44100;
 
 	case audioMasterGetBlockSize:
 		SHOW_CALLBACK ("amc: audioMasterGetBlockSize\n");
-		if( jackvst )
-		    return jack_get_buffer_size( jackvst->client );
+		if ( jvst )
+		    return jack_get_buffer_size( jvst->client );
 
 		return 1024;
 
@@ -462,7 +462,8 @@ jack_host_callback (struct AEffect* effect, int32_t opcode, int32_t index, intpt
 	case audioMasterUpdateDisplay:
 		SHOW_CALLBACK ("amc: audioMasterUpdateDisplay\n");
 		// something has changed, update 'multi-fx' display
-		effect->dispatcher(effect, effEditIdle, 0, 0, NULL, 0.0f);
+		if (jvst && jvst->fst && jvst->fst->window)
+			effect->dispatcher(effect, effEditIdle, 0, 0, NULL, 0.0f);
 		return 0;
 		
 	case audioMasterBeginEdit:
