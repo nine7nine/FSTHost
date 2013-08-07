@@ -536,8 +536,11 @@ fst_open (FSTHandle* fhandle, audioMasterCallback amc, void* userptr) {
 		fst->canSendVstEvents = fst_canDo(fst, "sendVstEvents");
 		fst->canSendVstMidiEvent = fst_canDo(fst, "sendVstMidiEvent");
 
-		fst->isSynth = (plugin->flags & effFlagsIsSynth) > 0;
+		fst->isSynth = (plugin->flags & effFlagsIsSynth);
 		printf("%-31s : %s\n", "Plugin isSynth", fst->isSynth ? "Yes" : "No");
+
+		bool pr = (plugin->flags & effFlagsCanReplacing);
+		printf("%-31s : %s\n", "Support processReplacing", pr ? "Yes" : "No");
 
 		/* Get plugin name */
 		char tmpstr[32];
