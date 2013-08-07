@@ -52,6 +52,8 @@ struct _JackVST {
     int32_t         numOuts;
     float**         ins;
     float**         outs;
+    jack_nframes_t  buffer_size;
+    jack_nframes_t  sample_rate;
     jack_port_t*    midi_inport;
     jack_port_t*    midi_outport;
     jack_port_t*    ctrl_inport;
@@ -59,6 +61,7 @@ struct _JackVST {
     jack_port_t**   inports;
     jack_port_t**   outports;
     bool            bypassed;
+    bool            zeroize;
     enum WantState  want_state;
     short           want_state_cc;
     enum WithEditor with_editor;
