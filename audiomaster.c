@@ -167,6 +167,14 @@ jack_host_callback (struct AEffect* effect, int32_t opcode, int32_t index, intpt
 		timeInfo->samplePos = jack_pos.frame;
 		// sampleRate - always valid
 		timeInfo->sampleRate = jack_pos.frame_rate;
+		// tempo - valid when kVstTempoValid is set ... but we always set tempo ;-)
+		if ( jvst->tempo != -1 ) {
+			timeInfo->tempo = jvst->tempo;
+		} else if (jack_pos.valid & JackPositionBBT) {
+			timeInfo->tempo = jack_pos.beats_per_minute;
+		} else {
+			timeInfo->tempo = 120;
+		}
 		// nanoSeconds - valid when kVstNanosValid is set
 		if (value & kVstNanosValid) {
 			timeInfo->nanoSeconds = jack_pos.usecs / 1000;
@@ -174,38 +182,28 @@ jack_host_callback (struct AEffect* effect, int32_t opcode, int32_t index, intpt
 		}
 		// ppqPos - valid when kVstPpqPosValid is set
 		// ... but we always compute it - could be needed later
+		double ppq = timeInfo->sampleRate * 60 / timeInfo->tempo;
+		double VST_ppqPos = timeInfo->samplePos / ppq;
+		double VST_barStartPos = 0.0;
 
-		double ppq = 0;
-		if ( ! jvst->bbt_sync) {
-			ppq = timeInfo->sampleRate * 60 / timeInfo->tempo;
-			timeInfo->ppqPos = timeInfo->samplePos / ppq;
-		}
+		double BBT_ppqPos = 0.0;
+		double BBT_barStartPos = 0.0;
+		double ppqOffset = 0.0;
 
 		if (jack_pos.valid & JackPositionBBT) {
-			double ppqBar = 0;
-			if (jvst->bbt_sync) {
-				ppqBar = (jack_pos.bar - 1) * jack_pos.beats_per_bar;
-				double ppqBeat = jack_pos.beat - 1;
-				double ppqTick = (double) jack_pos.tick / jack_pos.ticks_per_beat;
-				double ppqOffset = 0;
-				if (jack_pos.valid & JackBBTFrameOffset) {
-					jack_nframes_t nframes = jack_get_buffer_size (jvst->client);
-					ppqOffset = (double) jack_pos.bbt_offset / nframes;
-				
-				}
-				timeInfo->ppqPos = ppqBar + ppqBeat + ppqTick + ppqOffset;
+			double ppqBar = (jack_pos.bar - 1) * jack_pos.beats_per_bar;
+			double ppqBeat = jack_pos.beat - 1;
+			double ppqTick = (double) jack_pos.tick / jack_pos.ticks_per_beat;
+			if (jack_pos.valid & JackBBTFrameOffset) {
+				jack_nframes_t nframes = jack_get_buffer_size (jvst->client);
+				ppqOffset = (double) jack_pos.bbt_offset / nframes;
 			}
-
-			// tempo - valid when kVstTempoValid is set ... but we always set tempo ;-)
-			timeInfo->tempo = (jvst->tempo == -1) ? jack_pos.beats_per_minute : jvst->tempo;
+			BBT_ppqPos = ppqBar + ppqBeat + ppqTick;
 
 			// barStartPos - valid when kVstBarsValid is set
 			if (value & kVstBarsValid) {
-				if (jvst->bbt_sync) {
-					timeInfo->barStartPos = ppqBar;
-				} else {
-					timeInfo->barStartPos = floor(timeInfo->ppqPos / jack_pos.beats_per_bar);
-				}
+				BBT_barStartPos = ppqBar;
+				VST_barStartPos = jack_pos.beats_per_bar * floor(VST_ppqPos / jack_pos.beats_per_bar);
 				timeInfo->flags |= kVstBarsValid;
 			}
 
@@ -215,16 +213,26 @@ jack_host_callback (struct AEffect* effect, int32_t opcode, int32_t index, intpt
 				timeInfo->timeSigDenominator = (int32_t) floor (jack_pos.beat_type);
 				timeInfo->flags |= kVstTimeSigValid;
 			}
+		}
+
+		if ( jvst->bbt_sync ) {
+			timeInfo->ppqPos = BBT_ppqPos;
+			timeInfo->barStartPos = BBT_barStartPos;
 		} else {
-			// tempo - valid when kVstTempoValid is set ... but we always set tempo ;-)
-			timeInfo->tempo = (jvst->tempo == -1) ? 120 : jvst->tempo;
+			timeInfo->ppqPos = VST_ppqPos;
+			timeInfo->barStartPos = VST_barStartPos;
 		}
 #ifdef DEBUG_TIME
-		fst_error("amc Offset: %d", jack_pos.bbt_offset);
+		fst_error("amc JACK: Bar %d, Beat %d, Tick %d, Offset %d, BeatsPerBar %f",
+			jack_pos.bar, jack_pos.beat, jack_pos.tick, jack_pos.bbt_offset, jack_pos.beats_per_bar);
+
 		fst_error("amc ppq: %f", ppq);
-		fst_error("amc ppqPos: %f", timeInfo->ppqPos);
-		fst_error("amc barStartPos: %6.4f", timeInfo->barStartPos);
-		fst_error("amc remain: %4.2f", timeInfo->ppqPos - timeInfo->barStartPos);
+		fst_error("amc TIMEINFO BBT: ppqPos %f, barStartPos %6.4f, remain %4.2f, Offset %f",
+			BBT_ppqPos, BBT_barStartPos, BBT_ppqPos - BBT_barStartPos, ppqOffset);
+
+		fst_error("amc TIMEINFO VST: ppqPos %f, barStartPos %6.4f, remain %4.2f",
+			VST_ppqPos, VST_barStartPos, VST_ppqPos - VST_barStartPos);
+
 		fst_error("amc answer flags: %d", timeInfo->flags);
 #endif
 		// cycleStartPos & cycleEndPos - valid when kVstCyclePosValid is set
