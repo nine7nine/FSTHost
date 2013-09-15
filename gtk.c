@@ -30,7 +30,6 @@ extern void CPUusage_init();
 extern double CPUusage_getCurrentValue();
 
 static short mode_cc = 0;
-static bool quit = FALSE;
 static bool have_fwin = FALSE;
 
 static	GtkWidget* window;
@@ -55,7 +54,6 @@ static	GtkWidget* volume_slider;
 static	GtkWidget* cpu_usage;
 static	gulong preset_listbox_signal;
 static	gulong volume_signal;
-//static	gulong gtk_socket_signal;
 
 typedef int (*error_handler_t)( Display *, XErrorEvent *);
 static Display *the_gtk_display;
@@ -332,46 +330,12 @@ load_handler (GtkToggleButton *but, gpointer ptr) {
 	gtk_spin_button_set_value(GTK_SPIN_BUTTON(transposition_spin), midi_filter_transposition_get(jvst->transposition));
 }
 
-/* Probably not needed anymore */
-#if 0
-static gboolean
-configure_handler (GtkWidget* widget, GdkEventConfigure* ev, GtkSocket *sock) {
-	XEvent event;
-	gint x, y;
-	GdkWindow *w = gtk_socket_get_plug_window(sock);
-
-	if (! w) return FALSE;
-
-	event.xconfigure.type = ConfigureNotify;
-
-	event.xconfigure.event = GDK_WINDOW_XID (w);
-	event.xconfigure.window = GDK_WINDOW_XID (w);
-
-	/* The ICCCM says that synthetic events should have root relative
-	 * coordinates. We still aren't really ICCCM compliant, since
-	 * we don't send events when the real toplevel is moved.
-	 */
-	gdk_error_trap_push ();
-	gdk_window_get_origin (w, &x, &y);
-	gdk_error_trap_pop ();
-
-	event.xconfigure.x = x;
-	event.xconfigure.y = y;
-//	event.xconfigure.width = GTK_WIDGET(sock)->allocation.width;
-//	event.xconfigure.height = GTK_WIDGET(sock)->allocation.height;
-
-	event.xconfigure.border_width = 0;
-	event.xconfigure.above = None;
-	event.xconfigure.override_redirect = False;
-
-	gdk_error_trap_push ();
-	//XSendEvent (GDK_WINDOW_XDISPLAY (w), GDK_WINDOW_XWINDOW (sock->plug_window), False, StructureNotifyMask, &event);
-	//gdk_display_sync (gtk_widget_get_display (GTK_WIDGET (sock)));
-	gdk_error_trap_pop ();
-
-	return FALSE;
+/* Workaround for moving problem - some plugins menus were stay where window was opened */
+static void
+configure_handler (GtkWidget* widget, GdkEventConfigure* ev, JackVST* jvst) {
+	SetWindowPos(jvst->fst->window, HWND_BOTTOM, 0, 0, 0, 0, SWP_STATECHANGED|SWP_NOREDRAW|SWP_NOSENDCHANGING|
+		SWP_ASYNCWINDOWPOS|SWP_NOCOPYBITS|SWP_NOMOVE|SWP_NOZORDER|SWP_NOOWNERZORDER|SWP_DEFERERASE|SWP_NOSIZE);
 }
-#endif
 
 static void
 editor_handler (GtkToggleButton *but, gpointer ptr) {
@@ -392,10 +356,8 @@ editor_handler (GtkToggleButton *but, gpointer ptr) {
 		gtk_box_pack_start (GTK_BOX(vpacker), socket_align, TRUE, FALSE, 0);
 
 		gtk_widget_set_size_request(gtk_socket, jvst->fst->width, jvst->fst->height);
-//		gtk_socket_add_id (GTK_SOCKET (gtk_socket), GDK_GPOINTER_TO_NATIVE_WINDOW (jvst->fst->xid) );
 		gtk_socket_add_id (GTK_SOCKET (gtk_socket), GDK_POINTER_TO_XID (jvst->fst->xid) );
-//		gtk_socket_signal = g_signal_connect (G_OBJECT(window), "configure-event",
-//			G_CALLBACK(configure_handler), gtk_socket);
+		g_signal_connect (G_OBJECT(window), "configure-event", G_CALLBACK(configure_handler), jvst);
 
 		fst_show_editor(jvst->fst);
 		gtk_widget_show(socket_align);
@@ -411,7 +373,6 @@ editor_handler (GtkToggleButton *but, gpointer ptr) {
 			gtk_widget_set_size_request(gtk_socket, -1, -1);
 			gtk_widget_destroy(gtk_socket);
 		}
-//		g_signal_handler_disconnect(G_OBJECT(window), gtk_socket_signal);
 		gtk_widget_destroy(socket_align);
 		gtk_window_resize(GTK_WINDOW(window), 1, 1);
 	}
@@ -656,7 +617,6 @@ destroy_handler (GtkWidget* widget, GdkEventAny* ev, gpointer ptr) {
 	JackVST* jvst = (JackVST*) ptr;
 
 	printf("GTK destroy_handler\n");
-//	quit = TRUE;
 
 	fst_destroy_editor(jvst->fst);
 
@@ -694,10 +654,6 @@ channel_change (GtkComboBox *combo, JackVST *jvst) {
 static gboolean
 idle_cb(JackVST *jvst) {
 	FST* fst = (FST*) jvst->fst;
-	if (quit) {
-		gtk_main_quit();
-		return FALSE;
-	}
 
 	// If program was changed via plugin or MIDI
 	if( fst->want_program == -1 &&
@@ -786,14 +742,19 @@ idle_cb(JackVST *jvst) {
 	// Adapt button state to Wine window
 	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(editor_button), jvst->fst->window ? TRUE : FALSE);
 
-	// Editor Window is embedded and wand resize window
+	// Editor Window is embedded and want resize window
 	if ( jvst->fst->editor_popup && jvst->fst->window && jvst->want_resize) {
 		jvst->want_resize = FALSE;
 		gtk_widget_set_size_request(gtk_socket, jvst->fst->width, jvst->fst->height);
 	}
 
 #ifdef HAVE_LASH
+	bool quit = FALSE;
 	jvst_lash_idle(jvst, &quit);
+	if (quit) {
+		gtk_main_quit();
+		return FALSE;
+	}
 #endif
 	return TRUE;
 }
@@ -913,7 +874,7 @@ gtk_gui_start (JackVST* jvst) {
 
  	gtk_widget_show_all (window);
 
-	g_timeout_add(500, (GSourceFunc) idle_cb, jvst);
+        g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 500, (GSourceFunc) idle_cb, jvst, NULL);
 	
 	printf( "calling gtk_main now\n" );
 	gtk_main ();
