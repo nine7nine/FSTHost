@@ -331,10 +331,14 @@ load_handler (GtkToggleButton *but, gpointer ptr) {
 }
 
 /* Workaround for moving problem - some plugins menus were stay where window was opened */
-static void
+static gboolean
 configure_handler (GtkWidget* widget, GdkEventConfigure* ev, JackVST* jvst) {
 	SetWindowPos(jvst->fst->window, HWND_BOTTOM, 0, 0, 0, 0, SWP_STATECHANGED|SWP_NOREDRAW|SWP_NOSENDCHANGING|
 		SWP_ASYNCWINDOWPOS|SWP_NOCOPYBITS|SWP_NOMOVE|SWP_NOZORDER|SWP_NOOWNERZORDER|SWP_DEFERERASE|SWP_NOSIZE);
+
+	/* TRUE to stop other handlers from being invoked for the event.
+	   FALSE to propagate the event further. */
+	return FALSE;
 }
 
 static void
