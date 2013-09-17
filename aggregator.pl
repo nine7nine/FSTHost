@@ -1,103 +1,83 @@
 #!/usr/bin/perl
 
+use strict;
 use warnings;
-#use strict;
-use threads;
-use threads::shared;
+#use Data::Dumper;
 use Gtk3;
-use Glib qw/TRUE FALSE/;
-use Data::Dumper;
-use POSIX qw(mkfifo);
 
-my %shash;
-my $grid;
+use constant CLASS => 'fsthost32';
+use constant TITLE => 'FSTHost Aggregator';
+
+our %xw;
+our $i = 0;
 
 sub xwininfo {
-	my $name = shift;
+	my ( $xw, $class ) = @_;
 
-	my @xwininfo = `xwininfo -int -name "$name"`;
-	my %xw;
+	my @xwininfo = `xwininfo -root -int -tree`;
 
 	chomp ( @xwininfo );
-	foreach ( @xwininfo ) {
-		#print "LINE: $line";
-		if (m/Window id:\s*([0-9]+)/) {
-			$xw{'xid'} = $1;
-		} elsif (m/\W*(.*)\W*:\W*(.*)\W*/) {
-			$xw{$1} = $2;
+	foreach my $line ( grep( /\(\"$class\"/, @xwininfo) ) {
+#		print "LINE: $line\n";
+		if ($line =~ m/\s*(\d+)\s*\"(\S+)\".*?(\d+)x(\d+)\+/) {
+			my $xid = $1;
+			my $name = $2;
+			my $width = $3;
+			my $height = $4;
+
+			next if ($name eq $class);
+			next if exists $xw{$xid};
+
+			$xw{$xid}{'name'} = $name;
+			$xw{$xid}{'width'} = $width;
+			$xw{$xid}{'height'} = $height;
 		}
 	}
-
-	return \%xw;
 }
 
 sub idle_thread {
-	if ($shash{'die'} == 1) {
-		Gtk3->main_quit;
-		return FALSE;
-	}
-	
-	my $line = <F>;
-	if ($line) {
-		chomp ($line);
-		print $line . "\n";
+	print "IDLE\n";
+
+	my $xw = shift;
+	my $grid = $xw->{'grid'};
+	my $window = $xw->{'window'};
+
+	xwininfo ( $xw, CLASS );
+	foreach (keys %$xw) {
+		next if ($_ eq 'grid' || $_ eq 'window');
+		next if exists ( $xw->{$_}->{'added'} );
+		my $xxw = $xw->{$_};
+
+		print "XID:$_ Name:$$xxw{name} Width:$$xxw{width} Height:$$xxw{height}\n";
 
 		my $socket = new Gtk3::Socket;
 
-		#$socket->set_size_request ( $xw->{'Width'} , $xw->{'Height'} );
-		$grid->attach ( $socket, 0, $shash{'row'}++, 1, 1 );
-		$socket->add_id ( $xw->{'xid'} );
+		$socket->set_size_request ( $xxw->{'width'} , $xxw->{'height'} );
+		$grid->attach ( $socket, 0, $i++, 1, 1 );
+		$socket->add_id ( $_ );
+		$socket->show();
+
+		$xxw->{'added'} = 1;
 	}
-
-	return TRUE;
+	return Glib::SOURCE_CONTINUE;
 }
-
-Glib::Object->set_threadsafe (TRUE);
-
-# setup shared hash
-share(%shash); #will work for first level keys
-$shash{'die'} = 0;
-$shash{'row'} = 0;
 
 Gtk3->init; # works if you didn't use -init on use
 my $window = new Gtk3::Window ('toplevel');
+$window->set_title( TITLE );
 $window->signal_connect('delete_event' => sub { Gtk3->main_quit; });
 
 # Grid
-$grid = new Gtk3::Grid;
-
+my $grid = new Gtk3::Grid;
 $window->add( $grid );
+$xw{'grid'} = $grid;
+$xw{'window'} = $window;
+idle_thread( \%xw );
 
-my $path = '/tmp/chuj';
-unlink ($path) if ( -p $path );
-mkfifo($path, 0700) || die "mkfifo $path failed: $!";
+Glib::Timeout->add( 1000, \&idle_thread, \%xw, 200 );
 
-open(F, '<', $path) || die "can't open $path: $!";
-
-
-=chuj
-my $plug = $ARGV[0];
-my $i = 0;
-foreach (@ARGV) {
-	my $xw = xwininfo ( $_ );
-	next unless ( $xw->{'xid'} );
-
-	my $socket = new Gtk3::Socket;
-
-	$socket->set_size_request ( $xw->{'Width'} , $xw->{'Height'} );
-	$grid->attach ( $socket, 0, $i++, 1, 1 );
-	$socket->add_id ( $xw->{'xid'} );
-}
-=cut
-
-#die "can't find any window" unless ($i);
-
-Glib::Timeout->add( 300, \&idle_thread, undef, 200 );
 
 $window->show_all;
 
 Gtk3->main;
-
-close(F);
-unlink($path);
 
