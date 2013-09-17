@@ -27,6 +27,8 @@ sub xwininfo {
 
 			next if ($name eq $class);
 			next if exists $xw{$xid};
+			
+#			print "Add: XID:$xid NAME:$name WIDTH:$width HEIGHT:$height\n";
 
 			$xw{$xid}{'name'} = $name;
 			$xw{$xid}{'width'} = $width;
@@ -36,7 +38,7 @@ sub xwininfo {
 }
 
 sub idle_thread {
-	print "IDLE\n";
+#	print "IDLE\n";
 
 	my $xw = shift;
 	my $grid = $xw->{'grid'};
@@ -75,7 +77,6 @@ $xw{'window'} = $window;
 idle_thread( \%xw );
 
 Glib::Timeout->add( 1000, \&idle_thread, \%xw, 200 );
-
 
 $window->show_all;
 
