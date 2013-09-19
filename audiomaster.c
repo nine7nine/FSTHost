@@ -222,6 +222,10 @@ jack_host_callback (struct AEffect* effect, int32_t opcode, int32_t index, intpt
 			timeInfo->ppqPos = VST_ppqPos;
 			timeInfo->barStartPos = VST_barStartPos;
 		}
+
+		// Workadound for warning
+		ppqOffset = ppqOffset;
+
 #ifdef DEBUG_TIME
 		fst_error("amc JACK: Bar %d, Beat %d, Tick %d, Offset %d, BeatsPerBar %f",
 			jack_pos.bar, jack_pos.beat, jack_pos.tick, jack_pos.bbt_offset, jack_pos.beats_per_bar);
