@@ -15,8 +15,6 @@
 #define MIDI_PC_SELF -1
 #define MIDI_PC_PLUG -2
 
-typedef struct _JackVST JackVST;
-
 enum WantState {
    WANT_STATE_NO     = 0,
    WANT_STATE_RESUME = 1,
@@ -42,7 +40,7 @@ struct MidiMessage {
    jack_midi_data_t data[3];
 };
 
-struct _JackVST {
+typedef struct _JackVST {
     jack_client_t*  client;
     FST*            fst;
     char*           client_name;
@@ -104,7 +102,7 @@ struct _JackVST {
     /* For VST midi effects & synth source (like audio to midi VSTs) support */
     bool               want_midi_out;
     jack_ringbuffer_t* ringbuffer;
-};
+} JackVST;
 
 JackVST* jvst_new();
 bool jvst_load(JackVST* jvst, const char* path);
