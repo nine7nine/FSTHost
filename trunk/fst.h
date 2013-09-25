@@ -6,8 +6,8 @@
 #include <pthread.h>
 #include <stdbool.h>
 
-#include <windows.h>
 #include "vestige/aeffectx.h"
+#include "amc.h"
 
 /**
  * Display FST error message.
@@ -89,6 +89,7 @@ struct _FST
 {
 	AEffect*		plugin;
 	FSTHandle*		handle;
+	AMC*			amc;
 	struct _FST*		next;
 
 	char*			name;
@@ -148,8 +149,8 @@ bool fst_event_callback();
 void fst_suspend (FST *fst);
 void fst_resume (FST *fst);
 
-FST* fst_open (FSTHandle*, audioMasterCallback amc, void* userptr);
-FST* fst_load_open (const char* path, audioMasterCallback amc, void* userptr);
+FST* fst_open (FSTHandle*);
+FST* fst_load_open (const char* path);
 void fst_close (FST*);
 
 void fst_program_change (FST *fst, short want_program);
@@ -170,8 +171,5 @@ int fst_save_fxfile (FST * fst, const char * filename, enum FxFileType fileType)
 
 /* Support for XML Database (info.c) */
 int fst_info_update(const char *dbpath, const char *fst_path);
-
-/* Simple master callback - from fst.c */
-intptr_t VSTCALLBACK simple_master_callback( AEffect *fx, int32_t opcode, int32_t index, intptr_t value, void *ptr, float opt );
 
 #endif /* __fst_fst_h__ */

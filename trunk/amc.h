@@ -1,9 +1,10 @@
 #ifndef __amc_h__
 #define __amc_h__
 
-#include "fst.h"
+#include <stdbool.h>
+#include "vestige/aeffectx.h"
 
-struct _AMC {
+typedef struct _AMC {
 	void		(*Automate) ( struct _AMC* amc, int32_t param );
 	VstTimeInfo*	(*GetTime) ( struct _AMC* amc, int32_t mask );
 	bool		(*ProcessEvents) ( struct _AMC* amc, VstEvents* events );
@@ -13,8 +14,10 @@ struct _AMC {
 	intptr_t	(*GetSampleRate) ( struct _AMC* amc );
 	intptr_t	(*GetBlockSize) ( struct _AMC* amc );
 	bool		(*UpdateDisplay) ( struct _AMC* amc );
-	void* user_ptr;
-};
-typedef struct _AMC AMC;
+	void*		user_ptr;
+} AMC;
+
+intptr_t VSTCALLBACK amc_callback ( AEffect*, int32_t, int32_t, intptr_t, void*, float );
+intptr_t VSTCALLBACK amc_simple_callback ( AEffect*, int32_t, int32_t, intptr_t, void*, float );
 
 #endif /* __amc_h__ */

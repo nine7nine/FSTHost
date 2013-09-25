@@ -78,7 +78,7 @@ static void fst_get_info(char* path, xmlNode *xml_rn) {
 	if (fst_exists(path, xml_rn)) return;
 
 	// Load and open plugin
-	FST* fst = fst_load_open(path, &simple_master_callback, NULL);
+	FST* fst = fst_load_open(path);
 	if (! fst) return;
 
 	fst_add2db(fst, xml_rn);
