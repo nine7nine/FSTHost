@@ -42,9 +42,6 @@
 #define SYSEX_RINGBUFFER_SIZE 16 * SYSEX_MAX_SIZE
 #define MIDI_EVENT_MAX 16 /* Max counts of events in one process */
 
-/* audiomaster.c */
-extern intptr_t jack_host_callback (AEffect*, int32_t, int32_t, intptr_t, void *, float );
-
 /* gtk.c */
 extern void gtk_gui_init (int* argc, char** argv[]);
 extern int gtk_gui_start (JackVST * jvst);
