@@ -55,7 +55,7 @@ LDFLAGS32          := -m32 $(LDFLAGS) -L/usr/lib/i386-linux-gnu/wine
 LDFLAGS64          := -m64 $(LDFLAGS)
 
 ### Global source lists
-C_SRCS             = audiomaster.c fst.c gtk.c jackvst.c jfst.c fxb.c fps.c vstwin.c cpuusage.c info.c midifilter.c list.c
+C_SRCS             = audiomaster.c jackamc.c fst.c gtk.c jackvst.c jfst.c fxb.c fps.c vstwin.c cpuusage.c info.c midifilter.c list.c
 ifeq ($(LASH_EXISTS),yes)
 C_SRCS             += lash.c
 endif
