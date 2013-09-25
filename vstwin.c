@@ -21,6 +21,7 @@ fst_new () {
 	//fst->current_program = 0; - calloc done this
 	fst->event_call = RESET;
 //	fst->editor_popup = TRUE;
+	fst->amc = calloc (1, sizeof (AMC));
 
 	return fst;
 }
@@ -503,14 +504,14 @@ fst_unload (FSTHandle* fhandle) {
 }
 
 FST*
-fst_open (FSTHandle* fhandle, audioMasterCallback amc, void* userptr) {
+fst_open (FSTHandle* fhandle) {
 	if (fhandle == NULL) {
 	    fst_error( "the handle was NULL" );
 	    return NULL;
 	}
 	printf("Revive plugin: %s\n", fhandle->name);
 
-	AEffect* plugin = fhandle->main_entry (amc);
+	AEffect* plugin = fhandle->main_entry ( amc_callback );
 	if (plugin == NULL)  {
 		fst_error ("%s could not be instantiated", fhandle->name);
 		return NULL;
@@ -524,7 +525,7 @@ fst_open (FSTHandle* fhandle, audioMasterCallback amc, void* userptr) {
 	FST* fst = fst_new ();
 	fst->plugin = plugin;
 	fst->handle = fhandle;
-	fst->plugin->resvd1 = userptr;
+	fst->plugin->resvd1 = (intptr_t*) fst->amc;
 
 	// Open Plugin
 	plugin->dispatcher (plugin, effOpen, 0, 0, NULL, 0.0f);
@@ -560,7 +561,7 @@ fst_open (FSTHandle* fhandle, audioMasterCallback amc, void* userptr) {
 }
 
 FST*
-fst_load_open (const char* path, audioMasterCallback amc, void* userptr) {
+fst_load_open ( const char* path ) {
 	if ( ! path ) {
 		fst_error ( "empty plugin path ?" );
 		return NULL;
@@ -570,7 +571,7 @@ fst_load_open (const char* path, audioMasterCallback amc, void* userptr) {
 	if (! handle) return NULL;
 
 	// Revive plugin
-	FST* fst = fst_open(handle, amc, userptr);
+	FST* fst = fst_open(handle);
 	if (! fst) return NULL;
 
 	return fst;
@@ -593,6 +594,7 @@ fst_close (FST* fst) {
 		pthread_mutex_unlock (&fst->lock);
 		fst_unload(fst->handle);
 		free(fst->name);
+		free(fst->amc);
 		free(fst);
 
 		printf("Plugin closed\n");

@@ -22,10 +22,12 @@
  *
  */
 
-#include <stdint.h>
 
 #ifndef _AEFFECTX_H
 #define _AEFFECTX_H
+
+#include <stdint.h>
+#include <windows.h>
 
 #define VSTCALLBACK __cdecl
 

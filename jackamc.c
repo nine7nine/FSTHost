@@ -1,16 +1,16 @@
 #include <jackvst.h>
 #include <amc.h>
 
-void jvstamc_automate ( AMC* amc, int32_t param ) {
+static void jvstamc_automate ( AMC* amc, int32_t param ) {
 	JackVST* jvst = (JackVST*) amc->user_ptr;
 	if ( jvst && jvst->midi_learn )
 		jvst->midi_learn_PARAM = param;
 }
 
-VstTimeInfo* jvstamc_get_time ( AMC* amc, int32_t mask ) {
+static VstTimeInfo* jvstamc_get_time ( AMC* amc, int32_t mask ) {
 	JackVST* jvst = (JackVST*) amc->user_ptr;
 	if ( ! jvst ) return NULL;
-	
+
 	struct VstTimeInfo* timeInfo = &jvst->fst->timeInfo;
 
 	// We always say that something was changed (are we lie ?)
@@ -148,7 +148,7 @@ queue_midi_message(JackVST* jvst, uint8_t status, uint8_t d1, uint8_t d2, jack_n
 	if (written != sizeof(ev)) fst_error("jack_ringbuffer_write failed, NOTE LOST.");
 }
 
-bool jvstamc_process_events ( AMC* amc, VstEvents* events ) {
+static bool jvstamc_process_events ( AMC* amc, VstEvents* events ) {
 	JackVST* jvst = (JackVST*) amc->user_ptr;
 	if ( ! jvst ) return false;
 
@@ -163,7 +163,7 @@ bool jvstamc_process_events ( AMC* amc, VstEvents* events ) {
 	return true;
 }
 
-intptr_t jvstamc_tempo ( struct _AMC* amc, int32_t location ) {
+static intptr_t jvstamc_tempo ( struct _AMC* amc, int32_t location ) {
 	JackVST* jvst = (JackVST*) amc->user_ptr;
 	if ( jvst ) {
 		if (jvst->tempo != -1) {
@@ -178,13 +178,13 @@ intptr_t jvstamc_tempo ( struct _AMC* amc, int32_t location ) {
 	return 120;
 }
 
-void jvstamc_need_idle ( struct _AMC* amc ) {
+static void jvstamc_need_idle ( struct _AMC* amc ) {
 	JackVST* jvst = (JackVST*) amc->user_ptr;
 	if ( jvst && jvst->fst )
 		jvst->fst->wantIdle = TRUE;
 }
 
-void jvstamc_window_resize ( struct _AMC* amc, int32_t width, int32_t height ) {
+static void jvstamc_window_resize ( struct _AMC* amc, int32_t width, int32_t height ) {
 	JackVST* jvst = (JackVST*) amc->user_ptr;
 	if ( ! ( jvst && jvst->fst ) ) return;
 
@@ -195,20 +195,33 @@ void jvstamc_window_resize ( struct _AMC* amc, int32_t width, int32_t height ) {
 	if (jvst->fst->editor_popup) jvst->want_resize = TRUE;
 }
 
-intptr_t jvstamc_get_sample_rate ( struct _AMC* amc ) {
+static intptr_t jvstamc_get_sample_rate ( struct _AMC* amc ) {
 	JackVST* jvst = (JackVST*) amc->user_ptr;
 	return ( jvst ) ? jack_get_sample_rate( jvst->client ) : 44100;
 }
 
-intptr_t jvstamc_get_buffer_size ( struct _AMC* amc ) {
+static intptr_t jvstamc_get_buffer_size ( struct _AMC* amc ) {
 	JackVST* jvst = (JackVST*) amc->user_ptr;
 	return ( jvst) ? jack_get_buffer_size( jvst->client ) : 1024;
 }
 
 /* return true if editor is opened */
-bool jvstamc_update_display ( struct _AMC* amc ) {
+static bool jvstamc_update_display ( struct _AMC* amc ) {
 	JackVST* jvst = (JackVST*) amc->user_ptr;
 	return ( jvst && jvst->fst && jvst->fst->window ) ? true : false;
+}
+
+void jvstamc_init ( JackVST* jvst, AMC* amc ) {
+	amc->user_ptr = jvst;
+	amc->Automate = &jvstamc_automate;
+	amc->GetTime = &jvstamc_get_time;
+	amc->ProcessEvents = &jvstamc_process_events;
+	amc->TempoAt = &jvstamc_tempo;
+	amc->NeedIdle = &jvstamc_need_idle;
+	amc->SizeWindow = &jvstamc_window_resize;
+	amc->GetSampleRate = &jvstamc_get_sample_rate;
+	amc->GetBlockSize = &jvstamc_get_buffer_size;
+	amc->UpdateDisplay = jvstamc_update_display;
 }
 
 /*
