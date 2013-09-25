@@ -28,7 +28,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	FST*		fst;
 	const char* path = cmdline;
 
-	fst = fst_open_load(path, &simple_master_callback, NULL);
+	fst = fst_open_load(path);
 	if (! fst) return 1;
 
 	fst_resume(fst);
