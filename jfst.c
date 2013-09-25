@@ -215,12 +215,10 @@ static void jvst_sysex_handler(JackVST* jvst) {
 	/* Send our queued messages */
 	while (jack_ringbuffer_read_space(rb)) {
 		size_t size;
-		jack_ringbuffer_peek(rb, (char*) &size, sizeof size);
-		jack_ringbuffer_read_advance(rb, sizeof size);
+		jack_ringbuffer_read(rb, (char*) &size, sizeof size);
 
                 jack_midi_data_t tmpbuf[size];
-		jack_ringbuffer_peek(rb, (char*) &tmpbuf, size);
-		jack_ringbuffer_read_advance(rb, size);
+		jack_ringbuffer_read(rb, (char*) &tmpbuf, size);
 
 		jvst_parse_sysex_input(jvst, (jack_midi_data_t *) &tmpbuf, size);
         }
@@ -318,7 +316,7 @@ static inline void process_midi_output(JackVST* jvst, jack_nframes_t nframes) {
 		int t = ev.time + nframes - last_frame_time;
 
 		/* If computed time is too much into the future, we'll send it later. */
-		if (t >= (int) nframes) return;
+		if (t >= nframes) return;
 
 		/* If computed time is < 0, we missed a cycle because of xrun. */
 		if (t < 0) t = 0;
