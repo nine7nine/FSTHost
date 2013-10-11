@@ -5,7 +5,13 @@ use Data::Dumper;
 use XML::LibXML;
 use Gtk3;
 
-my $FSTHOST_GUI = 2; # 0 - no gui , 1 - hide, 2 - normal
+use constant {
+	NOGUI => 0,
+	GUI_HIDE => 1,
+	GUI_NORMAL => 2
+};
+
+my $FSTHOST_GUI = GUI_NORMAL;
 
 my $filename = $ENV{'HOME'}."/.fsthost.xml";
 my $label;
@@ -32,7 +38,7 @@ sub start_fsthost {
 		print "Empty cmd ?\n";
 		return;
 	}
-	print "Spawn: $cmd\n";
+	print "spawn: $cmd\n";
 	system ( $cmd );
 }
 
