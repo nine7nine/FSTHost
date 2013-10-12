@@ -14,7 +14,7 @@
 #include "fsthost.xpm"
 
 #ifdef HAVE_LASH
-extern void jvst_lash_idle(JackVST *jvst, bool *quit);
+extern bool jvst_lash_idle(JackVST *jvst);
 #endif
 
 #if (GTK_MAJOR_VERSION < 3)
@@ -753,12 +753,10 @@ idle_cb(JackVST *jvst) {
 	}
 
 #ifdef HAVE_LASH
-	bool quit = FALSE;
-	jvst_lash_idle(jvst, &quit);
-	if (quit) {
+	if ( ! jvst_lash_idle(jvst) ) {
 		gtk_main_quit();
 		return FALSE;
-	}
+	
 #endif
 	return TRUE;
 }

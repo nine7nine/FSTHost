@@ -122,9 +122,9 @@ jvst_lash_restore(lash_config_t *config, JackVST *jvst ) {
 }
 
 /* Return FALSE if want exit */
-void jvst_lash_idle(JackVST *jvst, bool *quit) {
+bool jvst_lash_idle(JackVST *jvst) {
 	if (! lash_enabled(lash_client))
-		return;
+		return false;
 
 	lash_event_t *event;
 	lash_config_t *config;
@@ -133,8 +133,7 @@ void jvst_lash_idle(JackVST *jvst, bool *quit) {
 		switch (lash_event_get_type(event)) {
 		case LASH_Quit:
 			lash_event_destroy(event);
-			*quit = TRUE;
-			return;
+			return false;
 		case LASH_Restore_Data_Set:
 			printf( "lash_restore... \n" );
 			lash_send_event(lash_client, event);
@@ -145,7 +144,7 @@ void jvst_lash_idle(JackVST *jvst, bool *quit) {
 			lash_send_event(lash_client, event);
 			break;
 		case LASH_Server_Lost:
-			return;
+			return false;
 		default:
 			printf("%s: receieved unknown LASH event of type %d",
 				__FUNCTION__, lash_event_get_type(event));
@@ -157,5 +156,7 @@ void jvst_lash_idle(JackVST *jvst, bool *quit) {
 		jvst_lash_restore(config, jvst);
 		lash_config_destroy(config);
 	}
+
+	return true;
 }
 
