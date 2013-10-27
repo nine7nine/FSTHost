@@ -31,7 +31,7 @@ static bool
 fst_canDo(FST* fst, char* feature) {
 	bool can;
 	can = (fst->plugin->dispatcher(fst->plugin, effCanDo, 0, 0, (void*)feature, 0.0f) > 0);
-	printf("Plugin can %-20s : %s\n", feature, ((can) ? "Yes" : "No"));
+	fst_error("Plugin can %-20s : %s", feature, ((can) ? "Yes" : "No"));
 	return can;
 }
 
@@ -45,7 +45,7 @@ fst_update_current_program(FST* fst) {
 		fst->program_changed = FALSE;
 		fst->current_program = newProg;
 		fst_get_program_name(fst, fst->current_program, progName, sizeof(progName));
-		printf("Program: %d : %s\n", newProg, progName);
+		fst_error("Program: %d : %s", newProg, progName);
 	}
 }
 
@@ -63,12 +63,12 @@ my_window_proc (HWND w, UINT msg, WPARAM wp, LPARAM lp) {
 			fst->window = NULL;
 			fst->plugin->dispatcher(fst->plugin, effEditClose, 0, 0, NULL, 0.0f);
 
-			if (fst->editor_popup) printf("Receive WM_CLOSE - WTF ?\n");
+			if (fst->editor_popup) fst_error("Receive WM_CLOSE - WTF ?");
 		}
 		break;
 	case WM_NCDESTROY:
 	case WM_DESTROY:
-//		printf("Get destroy %d\n", w);
+//		fst_error("Get destroy %d", w);
 		break;
 	default:
 		break;
@@ -104,7 +104,7 @@ register_window_class() {
 	wclass.hIconSm = 0;
 
 	if (!RegisterClassExA(&wclass)){
-		printf( "Class register failed :(\n" );
+		fst_error( "Class register failed :(" );
 		return FALSE;
 	}
 	WindowClassRegistered = TRUE;
@@ -189,7 +189,7 @@ fst_create_editor (FST* fst) {
 	
 
 	fst->xid = GetPropA (window, "__wine_x11_whole_window");
-//	printf("And xid = %p\n", fst->xid );
+//	fst_error("And xid = %p", fst->xid );
 
 	return TRUE;
 }
@@ -311,7 +311,7 @@ fst_program_change (FST *fst, short want_program) {
 		fst->current_program = want_program;
 
 		fst_get_program_name(fst, fst->current_program, progName, sizeof(progName));
-		printf("Program: %d : %s\n", fst->current_program, progName);
+		fst_error("Program: %d : %s", fst->current_program, progName);
 
 		pthread_mutex_unlock (&fst->lock);
 	} else {
@@ -427,7 +427,7 @@ fst_load (const char *path) {
 	char mypath[PATH_MAX];
 	size_t mypath_maxchars = sizeof(mypath) - 1;
 
-	printf("Load library %s\n", path);
+	fst_error("Load library %s", path);
 
 	/* Copy path for later juggling */
 	strncpy(mypath, path, mypath_maxchars);
@@ -451,7 +451,7 @@ fst_load (const char *path) {
 				snprintf(mypath, sizeof(mypath), "%s/%s", vpath, base);
 			}
 
-			printf("Load library %s\n", mypath);
+			fst_error("Load library %s", mypath);
 			dll = LoadLibraryA(mypath);
 			if (dll) goto have_dll;
 
@@ -466,7 +466,7 @@ have_dll: ;
 /* Wine path to library
 	char buf[PATH_MAX];
 	GetModuleFileName(dll, (LPSTR) &buf, sizeof(buf));
-	printf("GetModuleFileName: %s\n", buf);
+	fst_error("GetModuleFileName: %s", buf);
 */
 
 	main_entry_t main_entry = fst_get_main_entry(dll);
@@ -494,7 +494,7 @@ have_dll: ;
 
 bool
 fst_unload (FSTHandle* fhandle) {
-	printf("Unload library: %s\n", fhandle->path);
+	fst_error("Unload library: %s", fhandle->path);
 	FreeLibrary (fhandle->dll);
 	free (fhandle->path);
 	free (fhandle->name);
@@ -509,7 +509,7 @@ fst_open (FSTHandle* fhandle) {
 	    fst_error( "the handle was NULL" );
 	    return NULL;
 	}
-	printf("Revive plugin: %s\n", fhandle->name);
+	fst_error("Revive plugin: %s", fhandle->name);
 
 	AEffect* plugin = fhandle->main_entry ( amc_callback );
 	if (plugin == NULL)  {
@@ -538,10 +538,10 @@ fst_open (FSTHandle* fhandle) {
 		fst->canSendVstMidiEvent = fst_canDo(fst, "sendVstMidiEvent");
 
 		fst->isSynth = (plugin->flags & effFlagsIsSynth);
-		printf("%-31s : %s\n", "Plugin isSynth", fst->isSynth ? "Yes" : "No");
+		fst_error("%-31s : %s\n", "Plugin isSynth", fst->isSynth ? "Yes" : "No");
 
 		bool pr = (plugin->flags & effFlagsCanReplacing);
-		printf("%-31s : %s\n", "Support processReplacing", pr ? "Yes" : "No");
+		fst_error("%-31s : %s\n", "Support processReplacing", pr ? "Yes" : "No");
 
 		/* Get plugin name */
 		char tmpstr[32];
@@ -579,7 +579,7 @@ fst_load_open ( const char* path ) {
 
 void
 fst_close (FST* fst) {
-	printf("Close plugin: %s\n", fst->name);
+	fst_error("Close plugin: %s", fst->name);
 
 	// It's matter from which thread we calling it
 	if (GetCurrentThreadId() == MainThreadId) {
@@ -597,7 +597,7 @@ fst_close (FST* fst) {
 		free(fst->amc);
 		free(fst);
 
-		printf("Plugin closed\n");
+		fst_error("Plugin closed");
 	} else {
 		// Try call from event_loop thread
 		pthread_mutex_lock (&fst->event_call_lock);
@@ -692,8 +692,8 @@ void fst_event_loop (HMODULE hInst) {
 	SetPriorityClass ( h_thread, ABOVE_NORMAL_PRIORITY_CLASS);
 	//SetThreadPriority ( h_thread, THREAD_PRIORITY_TIME_CRITICAL);
 	SetThreadPriority ( h_thread, THREAD_PRIORITY_ABOVE_NORMAL);
-	printf ("W32 GUI EVENT Thread Class: %d\n", GetPriorityClass (h_thread));
-	printf ("W32 GUI EVENT Thread Priority: %d\n", GetThreadPriority(h_thread));
+	fst_error ("W32 GUI EVENT Thread Class: %d", GetPriorityClass (h_thread));
+	fst_error ("W32 GUI EVENT Thread Priority: %d", GetThreadPriority(h_thread));
 
 	if (!SetTimer (NULL, 1000, 100, NULL)) {
 		fst_error ("cannot set timer on dummy window");
@@ -719,5 +719,5 @@ void fst_event_loop (HMODULE hInst) {
 		}
 	}
  
-	printf( "GUI EVENT LOOP: THE END\n" );
+	fst_error( "GUI EVENT LOOP: THE END" );
 }
