@@ -538,10 +538,10 @@ fst_open (FSTHandle* fhandle) {
 		fst->canSendVstMidiEvent = fst_canDo(fst, "sendVstMidiEvent");
 
 		fst->isSynth = (plugin->flags & effFlagsIsSynth);
-		fst_error("%-31s : %s\n", "Plugin isSynth", fst->isSynth ? "Yes" : "No");
+		fst_error("%-31s : %s", "Plugin isSynth", fst->isSynth ? "Yes" : "No");
 
 		bool pr = (plugin->flags & effFlagsCanReplacing);
-		fst_error("%-31s : %s\n", "Support processReplacing", pr ? "Yes" : "No");
+		fst_error("%-31s : %s", "Support processReplacing", pr ? "Yes" : "No");
 
 		/* Get plugin name */
 		char tmpstr[32];

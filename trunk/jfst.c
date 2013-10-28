@@ -159,10 +159,10 @@ static void jvst_parse_sysex_input(JackVST* jvst, jack_midi_data_t* data, size_t
 				SysExDumpRequestV1* sysex_request = (SysExDumpRequestV1*) data;
 				printf("REQUEST - ID %X - ", sysex_request->uuid);
 				if (sysex_request->uuid == jvst->sysex_dump.uuid) {
-					printf("OK\n");
+					puts("OK");
 					jvst_send_sysex(jvst, SYSEX_WANT_DUMP);
 				} else {
-					printf("Not to Us\n");
+					puts("Not to Us");
 				}
 				/* If we got DumpRequest then it mean FHControl is here and we wanna notify */
 				jvst->sysex_want_notify = true;
@@ -176,23 +176,23 @@ static void jvst_parse_sysex_input(JackVST* jvst, jack_midi_data_t* data, size_t
 				printf(" - ");
 
 				if (jvst->sysex_ident_reply.model[0] != SYSEX_AUTO_ID) {
-					printf("UNEXPECTED\n");
+					puts("UNEXPECTED");
 				} else if (memcmp(sysex_id_offer->rnid, jvst->sysex_ident_reply.version, 
 				     sizeof(jvst->sysex_ident_reply.version)*sizeof(uint8_t)) == 0)
 				{
-					printf("OK\n");
+					puts("OK");
 					jvst_sysex_set_uuid( jvst, sysex_id_offer->uuid );
 					jvst_send_sysex(jvst, SYSEX_WANT_IDENT_REPLY);
 				} else {
-					printf("NOT FOR US\n");
+					puts("NOT FOR US");
 				}
 				break;
 			default:
-				printf("BROKEN\n");
+				puts("BROKEN");
 			}
 			break;
 		default:
-			printf("not supported\n");
+			puts("not supported");
 		}
 		break;
 	case SYSEX_NON_REALTIME:
@@ -202,7 +202,7 @@ static void jvst_parse_sysex_input(JackVST* jvst, jack_midi_data_t* data, size_t
 			SysExIdentRqst sxir = SYSEX_IDENT_REQUEST;
 			data[2] = 0x7F; // veil
 			if ( memcmp(data, &sxir, sizeof(SysExIdentRqst) ) == 0) {
-				printf("Got Identity request\n");
+				puts("Got Identity request");
 				jvst_send_sysex(jvst, SYSEX_WANT_IDENT_REPLY);
 			}
 		}
@@ -239,11 +239,11 @@ static void signal_handler(int signum) {
 
 	switch(signum) {
 	case SIGINT:
-		printf("Caught signal to terminate (SIGINT)\n");
+		puts("Caught signal to terminate (SIGINT)");
 		g_idle_add( (GSourceFunc) jvst_quit, jvst);
 		break;
 	case SIGUSR1:
-		printf("Caught signal to save state (SIGUSR1)\n");
+		puts("Caught signal to save state (SIGUSR1)");
 		jvst_save_state(jvst, jvst->default_state_file);
 		break;
 	}
@@ -553,7 +553,7 @@ midi_out:
 }
 
 static bool session_callback( JackVST* jvst ) {
-	printf("session callback\n");
+	puts("session callback");
 
 	jack_session_event_t *event = jvst->session_event;
 
@@ -562,7 +562,7 @@ static bool session_callback( JackVST* jvst ) {
 
 	snprintf( filename, sizeof(filename), "%sstate.fps", event->session_dir );
 	if ( ! jvst_save_state( jvst, filename ) ) {
-		printf("SAVE ERROR\n");
+		puts("SAVE ERROR");
 		event->flags |= JackSessionSaveError;
 	}
 
@@ -572,7 +572,7 @@ static bool session_callback( JackVST* jvst ) {
 	jack_session_reply(jvst->client, event);
 
 	if (event->type == JackSessionSaveAndQuit) {
-		printf("JackSession manager ask for quit\n");
+		puts("JackSession manager ask for quit");
 		jvst_quit(jvst);
 	}
 
@@ -721,7 +721,7 @@ static void cmdline2arg(int *argc, char ***pargv, LPSTR cmdline) {
 
 	szArgList = CommandLineToArgvW(GetCommandLineW(), argc);
 	if (!szArgList) {
-		fprintf(stderr, "Unable to parse command line\n");
+		fputs("Unable to parse command line", stderr);
 		*argc = -1;
 		return;
 	}
@@ -788,7 +788,7 @@ jvst_jack_init( JackVST* jvst ) {
 		fst_error ("can't connect to JACK");
 		return false;
 	}
-	printf("Done\n");
+	puts("Done");
 
 	/* Change client name if jack assign new */
 	if (status & JackNameNotUnique) {
@@ -1043,7 +1043,7 @@ no_midi:
 	// Activate plugin
 	if (! jvst->bypassed) fst_resume(jvst->fst);
 
-	printf("Jack Activate\n");
+	puts("Jack Activate");
 	jack_activate(jvst->client);
 
 	// Init Glib main event loop
@@ -1062,15 +1062,15 @@ no_midi:
 
 	// Create GTK or GlibMain thread
 	if (jvst->with_editor != WITH_EDITOR_NO) {
-		printf( "Start GUI\n" );
+		puts( "Start GUI" );
 		gtk_gui_init(&argc, &argv);
 		gtk_gui_start(jvst);
 	} else {
-		printf("GUI Disabled - start GlibMainLoop\n");
+		puts("GUI Disabled - start GlibMainLoop");
 		g_main_loop_run(glib_main_loop);
 	}
 
-	printf("Jack Deactivate\n");
+	puts("Jack Deactivate");
 	jack_deactivate(jvst->client);
 	jack_client_close ( jvst->client );
 
@@ -1080,7 +1080,7 @@ no_midi:
 
 	jvst_destroy(jvst);
 
-	printf("Game Over\n");
+	puts("Game Over");
 
 	return 0;
 }
