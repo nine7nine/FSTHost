@@ -69,6 +69,7 @@ typedef struct _JackVST {
     uint8_t         out_level;
     bool            graph_order_change;
     bool            bbt_sync;
+    uint16_t        ctrl_port_number;
 
     int32_t         midi_map[128];
     bool            midi_learn;
