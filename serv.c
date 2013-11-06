@@ -1,12 +1,10 @@
-/* C socket server example */
- 
 #include <stdio.h>
 #include <string.h>    //strlen
 #include <sys/socket.h>
 #include <arpa/inet.h> //inet_addr
 #include <unistd.h>    //write
 #include <stdbool.h>
- 
+
 int serv_get_sock ( uint16_t port ) {
 	struct sockaddr_in server;
 
@@ -76,11 +74,11 @@ bool serv_client_get_data ( int client_sock ) {
 	char* cr = strrchr ( client_message, '\r' );
 	if ( cr ) *cr = '\0';
 
-	char buf[2000];
-	snprintf ( buf, sizeof buf, "KIBEL: |%s|", client_message );
-	puts ( buf );
+	char buf[100];
+	snprintf ( buf, sizeof buf, "%s", "CMD OK\n" );
+
 	// send the message back to client
-//	write(client_sock , buf, strlen(buf));
+	read_size = write ( client_sock , buf, strlen(buf) );
 
 	if ( !strcmp ( client_message, "quit" ) ) {
 		puts ( "GOT QUIT" );
