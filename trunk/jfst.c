@@ -880,7 +880,7 @@ handle_client_connection (GIOChannel *source, GIOCondition condition, gpointer d
 //	JackVST* jvst = (JackVST*) data;
 
 	int fd = g_io_channel_unix_get_fd ( source ); 
-	return serv_client_get_data ( fd );	
+	return serv_client_get_data ( fd  );
 }
 
 bool
@@ -1100,18 +1100,22 @@ no_midi:
 	if ( jvst->ctrl_port_number ) {
 		puts ( "Starting CTRL server ..." );
 		fd = serv_get_sock ( jvst->ctrl_port_number );
-		if ( fd ) {
-			/* Watch server socket */
-			GIOChannel* channel = g_io_channel_unix_new(fd);
-			g_io_add_watch_full (
-				channel,
-				G_PRIORITY_DEFAULT_IDLE,
-				G_IO_IN,
-				(GIOFunc) handle_server_connection,
-				jvst, NULL
-			);
-			g_io_channel_unref(channel);
+		if ( ! fd ) {
+			fst_error ( "Cannot create CTRL socket :(" );
+			goto sock_err;
+			
 		}
+		
+		/* Watch server socket */
+		GIOChannel* channel = g_io_channel_unix_new(fd);
+		g_io_add_watch_full (
+			channel,
+			G_PRIORITY_DEFAULT_IDLE,
+			G_IO_IN,
+			(GIOFunc) handle_server_connection,
+			jvst, NULL
+		);
+		g_io_channel_unref(channel);
 	}
 
 	// Create GTK or GlibMain thread
@@ -1122,12 +1126,12 @@ no_midi:
 	} else {
 		puts("GUI Disabled - start GlibMainLoop");
 		g_main_loop_run ( glib_main_loop );
-
 	}
 
 	/* Close CTRL socket */
 	if ( fd ) close ( fd );
 
+sock_err:
 	puts("Jack Deactivate");
 	jack_deactivate(jvst->client);
 	jack_client_close ( jvst->client );
