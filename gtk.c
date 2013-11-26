@@ -156,6 +156,9 @@ save_handler (GtkToggleButton *but, gpointer ptr) {
 	gtk_file_filter_add_pattern(f3,"*.fxp");
 	gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog),f3);
 
+	if ( jvst->default_state_file )
+		gtk_file_chooser_set_filename ( GTK_FILE_CHOOSER(dialog), jvst->default_state_file );
+
 	gtk_file_chooser_set_do_overwrite_confirmation (GTK_FILE_CHOOSER(dialog), TRUE);
 
 	if (gtk_dialog_run (GTK_DIALOG (dialog)) == GTK_RESPONSE_ACCEPT) {
