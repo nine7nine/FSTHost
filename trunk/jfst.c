@@ -62,7 +62,7 @@ extern int serv_get_client ( int );
 extern bool serv_client_get_data ( int );
 
 GMainLoop* glib_main_loop;
-JackVST *jvst_first = NULL;
+volatile JackVST *jvst_first = NULL;
 
 static void sysex_makeASCII(uint8_t* ascii_midi_dest, char* name, size_t size_dest) {
 	size_t i;
@@ -237,10 +237,8 @@ static void jvst_quit(JackVST* jvst) {
 	}
 }
 
-static void signal_handler(int signum) {
-	JackVST *jvst;
-
-	jvst = jvst_first;
+static void signal_handler (int signum) {
+	JackVST *jvst = (JackVST*) jvst_first;
 
 	switch(signum) {
 	case SIGINT:
