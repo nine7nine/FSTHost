@@ -9,12 +9,13 @@ our $gtk3;
 # Load GTK modules
 BEGIN {
 	our $gtk3;
+=here
 	eval {
 		require Gtk3;
 		Gtk3->import();
 		$gtk3 = 1;
 	};
-
+=cut
 	unless ( $gtk3 ) {
 		eval {
 			require Gtk2;
@@ -29,9 +30,12 @@ use constant {
 	GUI_NORMAL => 2
 };
 
-my $FSTHOST_GUI = GUI_NORMAL; # default
-
-my $filename = $ENV{'HOME'}."/.fsthost.xml";
+our $FSTHOST_GUI = GUI_NORMAL; # default
+our %FSTHOST_OPTIONS = (
+	'p' => '',
+	'j' => 'system'
+);
+our $filename = $ENV{'HOME'} . '/.fsthost.xml';
 
 sub get_cmd_from_tv {
 	my $tv = shift;
@@ -42,7 +46,10 @@ sub get_cmd_from_tv {
 	my $arch = $model->get ($iter, 1);
 	my $path = $model->get ($iter, 2);
 
-	return "env FSTHOST_GUI=$FSTHOST_GUI fsthost$arch \"$path\" >/dev/null 2>&1 &";
+	my $opts;
+	( $opts .= " -$_ $FSTHOST_OPTIONS{$_}" ) for ( keys %FSTHOST_OPTIONS );
+
+	return "env FSTHOST_GUI=$FSTHOST_GUI fsthost$arch $opts \"$path\" >/dev/null 2>&1 &";
 }
 
 sub start_fsthost { 
@@ -64,8 +71,28 @@ sub tv_selection_changed {
 }
 
 sub edit_button_toggle {
-	my ( $eb, $data ) = @_;
-	$FSTHOST_GUI = ( $eb->get_active() ) ? GUI_NORMAL : GUI_HIDE;
+	my ( $b, $data ) = @_;
+	$FSTHOST_GUI = ( $b->get_active() ) ? GUI_NORMAL : GUI_HIDE;
+	tv_selection_changed ( $data->{'tv'}, $data->{'label'} );
+}
+
+sub ctp_button_toggle {
+	my ( $b, $data ) = @_;
+	if ( $b->get_active() ) {
+		$FSTHOST_OPTIONS{'p'} = '';
+	} else {
+		delete $FSTHOST_OPTIONS{'p'};
+	}
+	tv_selection_changed ( $data->{'tv'}, $data->{'label'} );
+}
+
+sub connect_button_toggle {
+	my ( $b, $data ) = @_;
+	if ( $b->get_active() ) {
+		$FSTHOST_OPTIONS{'j'} = 'system';
+	} else {
+		delete $FSTHOST_OPTIONS{'j'};
+	}
 	tv_selection_changed ( $data->{'tv'}, $data->{'label'} );
 }
 
@@ -111,13 +138,13 @@ read_xml_db ( \%fst );
 gtk_init(); # works if you didn't use -init on use
 my $window = gtk_window();
 $window->signal_connect('delete_event' => \&gtk_main_quit );
-#$window->set_icon_from_file ( 'fsthost.xpm', 0 );
+$window->set_icon_from_file ( 'fsthost.xpm', 0 ) if ( $gtk3 );
 $window->set_title ( 'FSTHost Menu (GTK' . ( ($gtk3) ? 3 : 2 ) . ')' );
 $window->set_border_width(5);
 
 # Vbox
 my $vbox = gtk_vbox();
-$vbox->set_border_width ( 5 );
+$vbox->set_border_width ( 2 );
 $window->add ( $vbox );
 
 # Toolbar
@@ -125,7 +152,7 @@ my $toolbar = gtk_toolbar();
 $vbox->pack_start ( $toolbar, 0, 0, 0 ); # child, expand, fill, padding
 
 # Label for command
-my $label = gtk_label ( 'KURWA MAC' );
+my $label = gtk_label ( '' );
 $label->set_selectable(1);
 $vbox->pack_start ( $label, 0, 0, 0 ); # child, expand, fill, padding
 
@@ -159,9 +186,23 @@ my $tree_view = gtk_tree_view ($tree_store);
 # Edit Button
 my $edit_button = gtk_toggle_button_stock ( 'gtk-edit' );
 $edit_button->set_active(1);
-$edit_button->set_tooltip_text ( "Toggle GUI type NORMAL/HIDDEN" );
+$edit_button->set_tooltip_text ( 'Toggle GUI type NORMAL/HIDDEN' );
 $edit_button->signal_connect ( 'toggled' => \&edit_button_toggle, { label => $label, tv => $tree_view } );
 $toolbar->insert ( $edit_button, 0 );
+
+# Connect to physical button
+my $ctp_button = gtk_toggle_button_stock ( 'gtk-connect' );
+$ctp_button->set_active(1);
+$ctp_button->set_tooltip_text ( 'Connect to physical MIDI ports' );
+$ctp_button->signal_connect ( 'toggled' => \&ctp_button_toggle, { label => $label, tv => $tree_view } );
+$toolbar->insert ( $ctp_button, 0 );
+
+# Connect button
+my $connect_button = gtk_toggle_button_stock ( 'gtk-execute' );
+$connect_button->set_active(1);
+$connect_button->set_tooltip_text ( 'Connect to "system" ports' );
+$connect_button->signal_connect ( 'toggled' => \&connect_button_toggle, { label => $label, tv => $tree_view } );
+$toolbar->insert ( $connect_button, 0 );
 
 # Connect double-click signal
 $tree_view->signal_connect ('row-activated' => \&start_fsthost );
