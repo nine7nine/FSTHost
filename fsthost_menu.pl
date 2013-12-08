@@ -1,9 +1,27 @@
 #!/usr/bin/perl
 
 use strict;
-use Data::Dumper;
+#use Data::Dumper;
 use XML::LibXML;
-use Gtk3;
+
+our $gtk3;
+
+# Load GTK modules
+BEGIN {
+	our $gtk3;
+	eval {
+		require Gtk3;
+		Gtk3->import();
+		$gtk3 = 1;
+	};
+
+	unless ( $gtk3 ) {
+		eval {
+			require Gtk2;
+			Gtk2->import();
+		}
+	};
+}
 
 use constant {
 	NOGUI => 0, # Disable GUI at all
@@ -70,47 +88,60 @@ sub read_xml_db {
 	}
 }
 
+# GTK wrappers
+sub gtk_init { ($gtk3) ? Gtk3->init() : Gtk2->init(); }
+sub gtk_main { return ($gtk3) ? Gtk3->main() : Gtk2->main(); }
+sub gtk_main_quit { return ($gtk3) ? Gtk3->main_quit() : Gtk2->main_quit(); }
+sub gtk_window { return ($gtk3) ? new Gtk3::Window ('toplevel') : new Gtk2::Window ('toplevel'); }
+sub gtk_vbox { return ($gtk3) ? new Gtk3::Box ('vertical', 0) : new Gtk2::VBox (); }
+sub gtk_toolbar { return ($gtk3) ? new Gtk3::Toolbar () : new Gtk2::Toolbar (); }
+sub gtk_label { return ($gtk3) ? new Gtk3::Label (shift) : new Gtk2::Label (shift); }
+sub gtk_scrolled_window { return ($gtk3) ? new Gtk3::ScrolledWindow (undef,undef) : new Gtk2::ScrolledWindow (undef,undef); }
+sub gtk_tree_store { return ($gtk3) ? new Gtk3::TreeStore (@_) : new Gtk2::TreeStore (@_); }
+sub gtk_tree_view { return ($gtk3) ? new Gtk3::TreeView (shift) : new Gtk2::TreeView (shift); }
+sub gtk_tree_view_column { return ($gtk3) ? new Gtk3::TreeViewColumn () : new Gtk2::TreeViewColumn (); }
+sub gtk_cell_renderer_text { return ($gtk3) ? new Gtk3::CellRendererText () : new Gtk2::CellRendererText (); }
+sub gtk_toggle_button_stock { return ($gtk3) ? Gtk3::ToggleToolButton->new_from_stock(shift) : Gtk2::ToggleToolButton->new_from_stock(shift); }
+
 my %fst;
 read_xml_db ( \%fst );
 
 #print Dumper \%fst;
 
-Gtk3->init(); # works if you didn't use -init on use
-my $window = new Gtk3::Window ('toplevel');
-$window->signal_connect('delete_event' => sub { Gtk3->main_quit; });
+gtk_init(); # works if you didn't use -init on use
+my $window = gtk_window();
+$window->signal_connect('delete_event' => \&gtk_main_quit );
 #$window->set_icon_from_file ( 'fsthost.xpm', 0 );
-#$window->set_border_width(5);
+$window->set_title ( 'FSTHost Menu (GTK' . ( ($gtk3) ? 3 : 2 ) . ')' );
+$window->set_border_width(5);
 
-# Grid
-my $grid = new Gtk3::Grid ();
-$grid->set_border_width ( 5 );
-$window->add ( $grid );
+# Vbox
+my $vbox = gtk_vbox();
+$vbox->set_border_width ( 5 );
+$window->add ( $vbox );
 
 # Toolbar
-my $toolbar = new Gtk3::Toolbar ();
-$toolbar->set_hexpand ( 1 );
-$grid->attach ( $toolbar, 0, 0, 1, 1 ); # left, top, width, height
+my $toolbar = gtk_toolbar();
+$vbox->pack_start ( $toolbar, 0, 0, 0 ); # child, expand, fill, padding
 
 # Label for command
-my $label = new Gtk3::Label ( '' );
+my $label = gtk_label ( 'KURWA MAC' );
 $label->set_selectable(1);
-$grid->attach_next_to ( $label, $toolbar, 'GTK_POS_BOTTOM', 1, 1 );
+$vbox->pack_start ( $label, 0, 0, 0 ); # child, expand, fill, padding
 
 # Scrolled window
 #create a scrolled window that will host the treeview
-my $sw = new Gtk3::ScrolledWindow (undef, undef);
+my $sw = gtk_scrolled_window();
 $sw->set_shadow_type ('etched-out');
 $sw->set_policy ('never', 'automatic');
 #This is a method of the Gtk3::Widget class,it will force a minimum 
 #size on the widget. Handy to give intitial size to a 
 #Gtk3::ScrolledWindow class object
 $sw->set_size_request (300, 300);
-$sw->set_hexpand ( 1 );
-$sw->set_vexpand ( 1 );
-$grid->attach_next_to ( $sw, $label, 'GTK_POS_BOTTOM', 1, 1 );
+$vbox->pack_start ( $sw, 1, 1, 0 ); # child, expand, fill, padding
 
 # TreeView
-my $tree_store = new Gtk3::TreeStore (qw/Glib::String Glib::String Glib::String/);
+my $tree_store = gtk_tree_store (qw/Glib::String Glib::String Glib::String/);
 
 #fill it with arbitry data
 foreach (sort keys %fst) { 	
@@ -120,13 +151,13 @@ foreach (sort keys %fst) {
 }
 
 #create a renderer that will be used to display info in the model
-my $renderer = new Gtk3::CellRendererText();
+my $renderer = gtk_cell_renderer_text();
 
 #this will create a treeview, specify $tree_store as its model
-my $tree_view = new Gtk3::TreeView ($tree_store);
+my $tree_view = gtk_tree_view ($tree_store);
 
 # Edit Button
-my $edit_button = Gtk3::ToggleToolButton->new_from_stock ( 'gtk-edit' );
+my $edit_button = gtk_toggle_button_stock ( 'gtk-edit' );
 $edit_button->set_active(1);
 $edit_button->set_tooltip_text ( "Toggle GUI type NORMAL/HIDDEN" );
 $edit_button->signal_connect ( 'toggled' => \&edit_button_toggle, { label => $label, tv => $tree_view } );
@@ -139,7 +170,7 @@ $tree_view->signal_connect ('cursor-changed' => \&tv_selection_changed, $label )
 my @columns_desc = ( 'Plugin', 'Arch' , 'Path' );
 foreach (0 .. 2) {
 	#create a Gtk3::TreeViewColumn to add to $tree_view
-	my $tree_column = new Gtk3::TreeViewColumn ();
+	my $tree_column = gtk_tree_view_column();
 	$tree_column->set_title ( $columns_desc[$_] );
 
 	# add renderer to $tree_column. This works like a Gtk3::Hbox
@@ -171,5 +202,4 @@ $tree_view->set_reorderable (1);
 $sw->add ($tree_view);
 
 $window->show_all;
-Gtk3->main();
-
+gtk_main();
