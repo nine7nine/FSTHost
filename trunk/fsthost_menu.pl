@@ -9,13 +9,12 @@ our $gtk3;
 # Load GTK modules
 BEGIN {
 	our $gtk3;
-=here
 	eval {
 		require Gtk3;
 		Gtk3->import();
 		$gtk3 = 1;
 	};
-=cut
+
 	unless ( $gtk3 ) {
 		eval {
 			require Gtk2;
@@ -138,7 +137,7 @@ read_xml_db ( \%fst );
 gtk_init(); # works if you didn't use -init on use
 my $window = gtk_window();
 $window->signal_connect('delete_event' => \&gtk_main_quit );
-$window->set_icon_from_file ( 'fsthost.xpm', 0 ) if ( $gtk3 );
+$window->set_icon_from_file ( 'fsthost.xpm' ) if ( $gtk3 );
 $window->set_title ( 'FSTHost Menu (GTK' . ( ($gtk3) ? 3 : 2 ) . ')' );
 $window->set_border_width(5);
 
