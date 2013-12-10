@@ -20,8 +20,11 @@ Supports:
 - volume control
 - plugins which not handling MIDI Program Change messages
 - easily plugin discovering (-g option)
+- GTK2/GTK3
 
-There is also fsthost_menu - zenity script for help to start plugins.
+There are also:
+- fsthost_menu.sh - zenity script for help to start plugins
+- fsthost_menu.pl (default on make install) - Perl GTK2 / GTK3 menu to startup plugins
 
 Getting Started
 ---------------
@@ -29,20 +32,22 @@ Getting Started
 1) ensure you have the necessary build dependencies (devel packages):
   wine
   glib-2.0
-  gtk+-2.0
+  gtk+-2.0 or gtk+-3.0
   jack
   libxml-2.0
-  lash-1.0
+  lash-1.0 ( optional )
 
 2) Type 'make'. If everything works correctly this should create an
    executable file called 'fsthost32' and optionaly 'fsthost64'
 
-3) On 64bit it may fail with a link error, when it cant find a 32bit lash
+3) Type 'make GTK2=1' to force GTK+2 GUI
+
+4) On 64bit it may fail with a link error, when it cant find a 32bit lash
    but the 64bit stuff is in place. 
    build yourself a 32bit lash, or:
    make LASH_EXISTS=no
 
-4) To run your vst plugins:
+5) To run your vst plugins:
    
       ./fsthost32 /path/to/someplugin.dll
    or
@@ -51,25 +56,22 @@ Getting Started
    and set up the inputs and outputs, eg. using qjackctl's
    'Connections' window.
 
-5) To install type 'make install'
+6) To install type 'make install'
 
 XML Database and simple plugin menu
 -----
 
-You build XML Database, and update it later by such command
-fsthost -d ~/fsthost.xml ~/VST
+You can build XML Database, and update it later by such command
+fsthost -g ~/VST
 
-Where ~/fsthost.xml is path to database and ~/VST is path which will be
-scanned recursivelly for search plugins. You can use later this database
-by some GUI app. Default simple script which use zenity or dialog is provided
-as fsthost_menu.
+Where ~/VST is path which will be scanned recursivelly for plugins.
+You can use later this database by some GUI app ( e.g. fsthost_menu ).
+Default path for database is ~/fsthost.xml.
 
 Stuff
 -----
 
 With LASH you can save and restore the state of the plugin.
-in order to promote lash i pushed other methods of load/save
-pretty much down in my priority list.
 
 There is a first version of midi learn, load/save of midimap
 will come tomorrow. i had my beer now and its 5:15
@@ -86,7 +88,7 @@ http://bugs.winehq.org/show_bug.cgi?id=6673
 workaround:
 export WINEDEBUG=synchronous
 
-You can try also this one below - but I see no difference
+You can try also this one below ( but personally I see no difference ;-)
 export GDK_NATIVE_WINDOWS=1
 
 License
@@ -102,3 +104,4 @@ Current maintainer of FSTHost: Pawel Piatek <xj@wp.pl>
 Autors of FST:
 Torben Hohn, Paul Davis, Kjetil S. Matheussen / Notam, Mark Williamson
 Joe Button, Nedko Arnaudov
+

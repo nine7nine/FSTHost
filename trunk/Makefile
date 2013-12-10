@@ -4,6 +4,7 @@ SUBDIRS               =
 EXES                  = fsthost32
 
 GTK2 := 0
+SOCK := 0
 VUMETER := 0
 LBITS = $(shell getconf LONG_BIT)
 LASH_EXISTS := $(shell if pkg-config --exists lash-1.0; then echo yes; else echo no; fi)
@@ -34,6 +35,10 @@ PKG_CONFIG_MODULES += lash-1.0
 CEXTRA             += -DHAVE_LASH
 endif
 
+ifeq ($(SOCK),1)
+CEXTRA             += -DSOCKET_STUFF
+endif
+
 # Shared LDFlags
 LDFLAGS            := -mwindows
 LIBRARIES          := -lpthread -lX11 $(shell pkg-config --libs $(PKG_CONFIG_MODULES))
@@ -55,9 +60,13 @@ LDFLAGS32          := -m32 $(LDFLAGS) -L/usr/lib/i386-linux-gnu/wine
 LDFLAGS64          := -m64 $(LDFLAGS)
 
 ### Global source lists
-C_SRCS             = amc.c jackamc.c fst.c gtk.c serv.c jackvst.c jfst.c fxb.c fps.c vstwin.c cpuusage.c info.c midifilter.c list.c
+C_SRCS             = amc.c jackamc.c fst.c gtk.c jackvst.c jfst.c fxb.c fps.c vstwin.c cpuusage.c info.c midifilter.c list.c
 ifeq ($(LASH_EXISTS),yes)
 C_SRCS             += lash.c
+endif
+
+ifeq ($(SOCK),1)
+C_SRCS             += serv.c
 endif
 
 ### fsthost.exe sources and settings

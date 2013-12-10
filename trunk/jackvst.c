@@ -41,13 +41,14 @@ JackVST* jvst_new() {
 	return jvst;
 }
 
-bool jvst_load(JackVST* jvst, const char* path) {
+/* plug_spec could be path, dll name or eff/plug name */
+bool jvst_load (JackVST* jvst, const char* plug_spec) {
 	printf( "yo... lets see...\n" );
-	jvst->fst = fst_load_open (path);
+	jvst->fst = fst_load_open (plug_spec);
 	if (jvst->fst) goto got_plug;
 
 	if (! jvst->dbinfo_file) return false;
-	char *p = fst_info_get_plugin_path(jvst->dbinfo_file, path);
+	char *p = fst_info_get_plugin_path(jvst->dbinfo_file, plug_spec);
 	if (!p) return false;
 
 	jvst->fst = fst_load_open (p);
@@ -59,12 +60,12 @@ got_plug:
 	return true;
 }
 
-void jvst_destroy(JackVST* jvst) {
+void jvst_destroy (JackVST* jvst) {
 	midi_filter_cleanup( &jvst->filters, true );
 	free(jvst);
 }
 
-void jvst_sysex_set_uuid(JackVST* jvst, uint8_t uuid) {
+void jvst_sysex_set_uuid (JackVST* jvst, uint8_t uuid) {
 	jvst->sysex_ident_reply.model[0] = jvst->sysex_dump.uuid = uuid;
 }
 
