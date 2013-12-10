@@ -57,9 +57,11 @@ extern void jvst_lash_init(JackVST *jvst, int* argc, char** argv[]);
 #endif
 
 /* serv2.c */
+#ifdef SOCKET_STUFF
 extern int serv_get_sock ( uint16_t );
 extern int serv_get_client ( int );
 extern bool serv_client_get_data ( int );
+#endif
 
 GMainLoop* glib_main_loop;
 volatile JackVST *jvst_first = NULL;
@@ -423,7 +425,7 @@ static inline void process_midi_input(JackVST* jvst, jack_nframes_t nframes) {
 		/* MIDI FILTERS */
 		if ( ! midi_filter_check( &jvst->filters, (uint8_t*) &buf, jackevent.size ) ) continue;
 
-		switch ( buf[0] & 0xF0 ) {
+		switch ( (buf[0] >> 4) & 0xF ) {
 		case MM_CONTROL_CHANGE: ;
 			// CC assigments
 			uint8_t CC = buf[1];
@@ -760,7 +762,9 @@ static void usage(char* appname) {
 	fprintf(stderr, format, "-N", "Notify changes by SysEx");
 	fprintf(stderr, format, "-e", "Hide Editor");
 	fprintf(stderr, format, "-s <state_file>", "Load <state_file>");
+#ifdef SOCKET_STUFF
 	fprintf(stderr, format, "-S <port>", "Start CTRL server on port <port>");
+#endif
 	fprintf(stderr, format, "-c <client_name>", "Jack Client name");
 	fprintf(stderr, format, "-k channel", "MIDI Channel (0: all, 17: none)");
 	fprintf(stderr, format, "-i num_in", "Jack number In ports");
@@ -778,8 +782,7 @@ static void usage(char* appname) {
 	fprintf(stderr, format, "-z", "Zeroize output buffers");
 }
 
-static bool
-jvst_jack_init( JackVST* jvst ) {
+static bool jvst_jack_init( JackVST* jvst ) {
 	int32_t i;
 	jack_status_t	status;
 
@@ -873,16 +876,15 @@ void jvst_cleanup ( JackVST* jvst ) {
 	if ( jvst->want_midi_in ) free ( jvst->events );
 }
 
-bool
-handle_client_connection (GIOChannel *source, GIOCondition condition, gpointer data ) {
+#ifdef SOCKET_STUFF
+bool handle_client_connection (GIOChannel *source, GIOCondition condition, gpointer data ) {
 //	JackVST* jvst = (JackVST*) data;
 
 	int fd = g_io_channel_unix_get_fd ( source ); 
 	return serv_client_get_data ( fd  );
 }
 
-bool
-handle_server_connection (GIOChannel *source, GIOCondition condition, gpointer data ) {
+bool handle_server_connection (GIOChannel *source, GIOCondition condition, gpointer data ) {
 	JackVST* jvst = (JackVST*) data;
 
 	int fd = g_io_channel_unix_get_fd ( source ); 
@@ -900,6 +902,7 @@ handle_server_connection (GIOChannel *source, GIOCondition condition, gpointer d
 
 	return true;
 }
+#endif
 
 int WINAPI
 WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
@@ -1092,7 +1095,7 @@ no_midi:
 
 	// Add FST event callback to Gblib main loop
 	g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 100, (GSourceFunc) fst_event_callback, NULL, NULL);
-
+#ifdef SOCKET_STUFF
 	/* Socket stuff */
 	int fd = 0;
 	if ( jvst->ctrl_port_number ) {
@@ -1115,7 +1118,7 @@ no_midi:
 		);
 		g_io_channel_unref(channel);
 	}
-
+#endif
 	// Create GTK or GlibMain thread
 	if (jvst->with_editor != WITH_EDITOR_NO) {
 		puts( "Start GUI" );
@@ -1126,10 +1129,13 @@ no_midi:
 		g_main_loop_run ( glib_main_loop );
 	}
 
+#ifdef SOCKET_STUFF
 	/* Close CTRL socket */
 	if ( fd ) close ( fd );
 
 sock_err:
+#endif
+
 	puts("Jack Deactivate");
 	jack_deactivate(jvst->client);
 	jack_client_close ( jvst->client );

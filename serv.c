@@ -53,6 +53,11 @@ int serv_get_client ( int socket_desc ) {
 	return client_sock;
 }
 
+static void strip_trailing ( char* string, char chr ) {
+	char* c = strrchr ( string, chr );
+	if ( c ) *c = '\0';
+}
+
 bool serv_client_get_data ( int client_sock ) {
 	//Receive a message from client
 	char client_message[2000];
@@ -66,13 +71,10 @@ bool serv_client_get_data ( int client_sock ) {
 		close ( client_sock );
 		return false;
 	}
-	client_message[read_size] = '\0';
+	client_message[read_size] = '\0'; /* make sure there is end */
 
-	char* newline = strrchr ( client_message, '\n' );
-	if ( newline ) *newline = '\0';
-
-	char* cr = strrchr ( client_message, '\r' );
-	if ( cr ) *cr = '\0';
+	strip_trailing ( client_message, '\n' );
+	strip_trailing ( client_message, '\r' );
 
 	char buf[100];
 	snprintf ( buf, sizeof buf, "%s", "CMD OK\n" );
