@@ -4,6 +4,7 @@
 # this is part of FSTHost
 
 use strict;
+use warnings;
 #use Data::Dumper;
 use XML::LibXML;
 
@@ -124,7 +125,7 @@ sub show_it {
 	# Main Window
 	$window = ($Gtk.'::Window')->new( 'toplevel' );
 	$window->signal_connect('delete_event' => \&close_main_window );
-	$window->set_icon_from_file ( 'fsthost.xpm' ) if ( ($Gtk.'::MAJOR_VERSION') > 2 );
+	$window->set_icon_from_file ( 'fsthost.xpm' ) if ( $Gtk eq 'Gtk3' );
 	$window->set_title ( 'FSTHost Menu (' . $Gtk . ')' );
 	$window->set_border_width(5);
 
@@ -271,7 +272,7 @@ $tray_icon->signal_connect( 'activate', \&tray_icon_activate, \%fst );
 $tray_icon->signal_connect( 'popup-menu', \&tray_icon_menu, $menu );
 $tray_icon->set_visible(1);
 
-unless ( $ARGV[0] eq 'hide' ) {
+unless ( $ARGV[0] && $ARGV[0] eq 'hide' ) {
 	show_it ( \%fst );
 }
 
