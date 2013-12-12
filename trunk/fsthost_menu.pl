@@ -271,5 +271,9 @@ $tray_icon->signal_connect( 'activate', \&tray_icon_activate, \%fst );
 $tray_icon->signal_connect( 'popup-menu', \&tray_icon_menu, $menu );
 $tray_icon->set_visible(1);
 
+unless ( $ARGV[0] eq 'hide' ) {
+	show_it ( \%fst );
+}
+
 $Gtk->main();
 
