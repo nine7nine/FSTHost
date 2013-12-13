@@ -132,7 +132,7 @@ sub show_it {
 	# Main Window
 	$window = ($Gtk.'::Window')->new( 'toplevel' );
 	$window->signal_connect('delete_event' => \&close_main_window );
-	$window->set_icon_from_file ( 'fsthost.xpm' ) if ( $Gtk eq 'Gtk3' );
+	$window->set_icon_from_file ( 'fsthost.xpm' );
 	$window->set_title ( 'FSTHost Menu (' . $Gtk . ')' );
 	$window->set_border_width(5);
 
