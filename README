@@ -68,6 +68,13 @@ Where ~/VST is path which will be scanned recursivelly for plugins.
 You can use later this database by some GUI app ( e.g. fsthost_menu ).
 Default path for database is ~/fsthost.xml.
 
+You can also export VST_PATH and scan it recursivelly like:
+   % export VST_PATH=~/VST:/usr/share/vst:/otherlocation
+   % fsthost -g
+
+You can force GTK version (2/3) for "fsthost_menu.pl" by:
+   % export FSTMENU_GTK=2 # or 3
+
 Stuff
 -----
 
