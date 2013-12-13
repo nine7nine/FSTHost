@@ -15,8 +15,15 @@ our $window = undef;
 BEGIN {
 	our $Gtk;
 
-	for my $pkg ( qw/Gtk3 Gtk2/ ) {
-#	for my $pkg ( qw/Gtk2 Gtk3/ ) {
+	my @GTK;
+	if ( exists $ENV{'FSTMENU_GTK'} ) {
+		push ( @GTK, 'Gtk'.$ENV{'FSTMENU_GTK'} );
+	} else {
+		push ( @GTK, qw/Gtk2 Gtk3/ );
+#		push ( @GTK, qw/Gtk3 Gtk2/ );
+	}
+
+	for my $pkg ( @GTK ) {
 		last if eval {
 			require $pkg.'.pm';
 			$pkg->import();
