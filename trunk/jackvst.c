@@ -17,6 +17,7 @@ JackVST* jvst_new() {
 
 	pthread_mutex_init (&jvst->sysex_lock, NULL);
 	pthread_cond_init (&jvst->sysex_sent, NULL);
+
 	jvst->with_editor = WITH_EDITOR_SHOW;
 	jvst->volume = 1;
 	jvst->tempo = -1; // -1 here mean get it from Jack
@@ -28,7 +29,7 @@ JackVST* jvst_new() {
 	for(i=0; i<128;++i) jvst->midi_map[i] = -1;
 	jvst->midi_pc = MIDI_PC_PLUG; // mean that plugin take care of Program Change
 
-	// Little trick (const enrties)
+	// Little trick (const entries)
 	SysExIdentReply sxir = SYSEX_IDENT_REPLY;
 	memcpy(&jvst->sysex_ident_reply, &sxir, sizeof(SysExIdentReply));
 

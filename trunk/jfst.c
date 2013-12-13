@@ -347,7 +347,7 @@ static inline void process_ctrl_output(JackVST* jvst, jack_nframes_t nframes) {
 	if (jvst->sysex_want == SYSEX_WANT_NO) return;
 
 	// Are our lock is ready for us ?
-	// If not then we try next time if no - try next time
+	// If not then we try next time
 	if (pthread_mutex_trylock(&jvst->sysex_lock) != 0) return;
 
 	size_t sysex_size;
@@ -361,7 +361,7 @@ static inline void process_ctrl_output(JackVST* jvst, jack_nframes_t nframes) {
 		sysex_data = (jack_midi_data_t*) &jvst->sysex_dump;
 		sysex_size = sizeof(SysExDumpV1);
 		break;
-	default: return; // error - skip processing for now
+	default: goto pco_ret; // error - skip processing for now
 	}
 
 	/* Note: we always send sysex on first frame */
@@ -369,6 +369,7 @@ static inline void process_ctrl_output(JackVST* jvst, jack_nframes_t nframes) {
 		fst_error("SysEx error: jack_midi_event_write failed.");
 	jvst->sysex_want = SYSEX_WANT_NO;
 	
+pco_ret:
 	pthread_cond_signal(&jvst->sysex_sent);
 	pthread_mutex_unlock(&jvst->sysex_lock);
 }
@@ -499,12 +500,13 @@ static int process_callback( jack_nframes_t nframes, void* data) {
 	JackVST* jvst = (JackVST*) data;
 	AEffect* plugin = jvst->fst->plugin;
 
-	// Initialize input buffers
+	// Get addresses of input buffers
 	for (i = 0; i < jvst->numIns; ++i)
 		jvst->ins[i]  = (float*) jack_port_get_buffer (jvst->inports[i], nframes);
 
 	// Initialize output buffers
 	for (i = 0; i < jvst->numOuts; ++i) {
+		// Get address
 		jvst->outs[i]  = (float*) jack_port_get_buffer (jvst->outports[i], nframes);
 	
 		// If bypassed then copy In's to Out's
@@ -562,22 +564,24 @@ static bool session_callback( JackVST* jvst ) {
 
 	jack_session_event_t *event = jvst->session_event;
 
-	char retval[256];
+	// Save state
 	char filename[MAX_PATH];
-
 	snprintf( filename, sizeof(filename), "%sstate.fps", event->session_dir );
 	if ( ! jvst_save_state( jvst, filename ) ) {
 		puts("SAVE ERROR");
 		event->flags |= JackSessionSaveError;
 	}
 
+	// Reply to session manager
+	char retval[256];
 	snprintf( retval, sizeof(retval), "%s -u %s -s \"${SESSION_DIR}state.fps\"", APPNAME_ARCH, event->client_uuid);
-	event->command_line = strndup( retval, sizeof(retval) );
+	event->command_line = strndup( retval, strlen(retval) + 1  );
 
 	jack_session_reply(jvst->client, event);
 
 	if (event->type == JackSessionSaveAndQuit) {
 		puts("JackSession manager ask for quit");
+		jack_session_event_free(event);
 		jvst_quit(jvst);
 	}
 
@@ -720,18 +724,15 @@ static bool jvst_idle(JackVST* jvst) {
 }
 
 static void cmdline2arg(int *argc, char ***pargv, LPSTR cmdline) {
-	LPWSTR*		szArgList;
-	short		i;
-	char**		argv;
-
-	szArgList = CommandLineToArgvW(GetCommandLineW(), argc);
+	LPWSTR* szArgList = CommandLineToArgvW(GetCommandLineW(), argc);
 	if (!szArgList) {
 		fputs("Unable to parse command line", stderr);
 		*argc = -1;
 		return;
 	}
 
-    	argv = malloc(*argc * sizeof(char*));
+	char** argv = malloc(*argc * sizeof(char*));
+	short i;
 	for (i=0; i < *argc; ++i) {
 		int nsize = WideCharToMultiByte(CP_UNIXCP, 0, szArgList[i], -1, NULL, 0, NULL, NULL);
 		
@@ -784,12 +785,12 @@ static void usage(char* appname) {
 
 static bool jvst_jack_init( JackVST* jvst ) {
 	int32_t i;
-	jack_status_t	status;
 
 	jack_set_info_function(jvst_log);
 	jack_set_error_function(jvst_log);
 
 	printf("Starting Jack thread ... ");
+	jack_status_t status;
 	jvst->client = jack_client_open(jvst->client_name,JackSessionID,&status,jvst->uuid);
 	if (! jvst->client) {
 		fst_error ("can't connect to JACK");
@@ -906,11 +907,8 @@ bool handle_server_connection (GIOChannel *source, GIOCondition condition, gpoin
 
 int WINAPI
 WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
-	HANDLE*		h_thread;
 	int		argc = -1;
 	char**		argv = NULL;
-	FST*		fst;
-	AEffect*	plugin;
 	short		i;
 	int32_t		opt_numIns = -1;
 	int32_t		opt_numOuts = -1;
@@ -988,14 +986,15 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 		return 1;
 	}
 
-	fst = jvst->fst;
-	plugin = fst->plugin;
+	// Our shourcuts
+	FST* fst = jvst->fst;
+	AEffect* plugin = fst->plugin;
 
 	// Set client name (if user did not provide own)
 	if (!jvst->client_name) jvst->client_name = jvst->fst->handle->name;
 
 	// Set Thread policy - usefull only with WineRT/LPA patch
-	h_thread = GetCurrentThread();
+	HANDLE* h_thread = GetCurrentThread();
 	//SetPriorityClass ( h_thread, REALTIME_PRIORITY_CLASS);
 	SetPriorityClass ( h_thread, ABOVE_NORMAL_PRIORITY_CLASS);
 	//SetThreadPriority ( h_thread, THREAD_PRIORITY_TIME_CRITICAL);

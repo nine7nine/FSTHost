@@ -108,15 +108,13 @@ static VstTimeInfo* jvstamc_get_time ( AMC* amc, int32_t mask ) {
 
 static void
 queue_midi_message(JackVST* jvst, uint8_t status, uint8_t d1, uint8_t d2, jack_nframes_t delta ) {
-	jack_ringbuffer_t* ringbuffer;
-	size_t	written;
 	uint8_t statusHi = (status >> 4) & 0xF;
 	uint8_t statusLo = status & 0xF;
-	struct  MidiMessage ev;
 
 	/* fst_error("queue_new_message = 0x%hhX, %d, %d", status, d1, d2);*/
 	/* fst_error("statusHi = %d, statusLo = %d", statusHi, statusLo);*/
 
+	struct  MidiMessage ev;
 	ev.data[0] = status;
 	if (statusHi == 0xC || statusHi == 0xD) {
 		ev.len = 2;
@@ -138,13 +136,13 @@ queue_midi_message(JackVST* jvst, uint8_t status, uint8_t d1, uint8_t d2, jack_n
 
 	ev.time = jack_frame_time(jvst->client) + delta;
 
-	ringbuffer = jvst->ringbuffer;
+	jack_ringbuffer_t* ringbuffer = jvst->ringbuffer;
 	if (jack_ringbuffer_write_space(ringbuffer) < sizeof(ev)) {
 		fst_error("Not enough space in the ringbuffer, NOTE LOST.");
 		return;
 	}
 
-	written = jack_ringbuffer_write(ringbuffer, (char*)&ev, sizeof(ev));
+	size_t written = jack_ringbuffer_write(ringbuffer, (char*)&ev, sizeof(ev));
 	if (written != sizeof(ev)) fst_error("jack_ringbuffer_write failed, NOTE LOST.");
 }
 
@@ -212,14 +210,14 @@ static bool jvstamc_update_display ( struct _AMC* amc ) {
 }
 
 void jvstamc_init ( JackVST* jvst, AMC* amc ) {
-	amc->user_ptr = jvst;
-	amc->Automate = &jvstamc_automate;
-	amc->GetTime = &jvstamc_get_time;
-	amc->ProcessEvents = &jvstamc_process_events;
-	amc->TempoAt = &jvstamc_tempo;
-	amc->NeedIdle = &jvstamc_need_idle;
-	amc->SizeWindow = &jvstamc_window_resize;
-	amc->GetSampleRate = &jvstamc_get_sample_rate;
-	amc->GetBlockSize = &jvstamc_get_buffer_size;
-	amc->UpdateDisplay = jvstamc_update_display;
+	amc->user_ptr		= jvst;
+	amc->Automate		= &jvstamc_automate;
+	amc->GetTime		= &jvstamc_get_time;
+	amc->ProcessEvents	= &jvstamc_process_events;
+	amc->TempoAt		= &jvstamc_tempo;
+	amc->NeedIdle		= &jvstamc_need_idle;
+	amc->SizeWindow		= &jvstamc_window_resize;
+	amc->GetSampleRate	= &jvstamc_get_sample_rate;
+	amc->GetBlockSize	= &jvstamc_get_buffer_size;
+	amc->UpdateDisplay	= &jvstamc_update_display;
 }
