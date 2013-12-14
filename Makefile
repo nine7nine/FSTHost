@@ -47,6 +47,7 @@ INCLUDE_PATH        = -I. -I/usr/include -I/usr/include -I/usr/include/wine -I/u
 DESTDIR             =
 PREFIX              = /usr
 MANDIR              = $(PREFIX)/man/man1
+ICONDIR             = $(PREFIX)/usr/share/icons/hicolor/scalable/apps
 LIB32_INST_PATH     = $(PREFIX)/lib/i386-linux-gnu/wine
 LIB64_INST_PATH     = $(PREFIX)/lib/x86_64-linux-gnu/wine
 BIN_INST_PATH       = $(PREFIX)/bin
@@ -115,8 +116,11 @@ install-man: man
 	install -Dm 0644 fsthost.1 $(DESTDIR)$(MANDIR)/fsthost.1
 	install -Dm 0644 fsthost_menu.1 $(DESTDIR)$(MANDIR)/fsthost_menu.1
 
+install-icon:
+	install -Dm 0644 fsthost.xpm $(DESTDIR)$(ICONDIR)/fsthost.xpm
+
 # Rules for install
-install: $(EXES) install-man
+install: $(EXES) install-man install-icon
 	install -Dm 0644 fsthost32.so $(DESTDIR)$(LIB32_INST_PATH)/fsthost32.so
 	install -Dm 0755 fsthost32 $(DESTDIR)$(BIN_INST_PATH)/fsthost32
 ifeq ($(LBITS), 64)
