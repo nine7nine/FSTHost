@@ -42,12 +42,13 @@ Getting Started
 
 3) Type 'make GTK2=1' to force GTK+2 GUI
 
-4) On 64bit it may fail with a link error, when it cant find a 32bit lash
-   but the 64bit stuff is in place. 
-   build yourself a 32bit lash, or:
-   make LASH_EXISTS=no
+4) Type 'make LASH_EXISTS=no' to build without lash.
+   This is default if lash libs are not available
 
-5) To run your vst plugins:
+5) Type 'make PLAT=64' to build only 64bit version and respectively
+        'make PLAT=32' to build only 32bit version
+
+6) To run your vst plugins:
    
       ./fsthost32 /path/to/someplugin.dll
    or
@@ -56,7 +57,7 @@ Getting Started
    and set up the inputs and outputs, eg. using qjackctl's
    'Connections' window.
 
-6) To install type 'make install'
+7) To install type 'make install'
 
 XML Database and simple plugin menu
 -----
