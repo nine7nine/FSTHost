@@ -1,7 +1,32 @@
 #!/usr/bin/perl
 
-# Written by Pawel Piatek <xj@wp.pl>
-# this is part of FSTHost
+=head1 NAME
+
+B<FSTHost menu>
+
+=head1 DESCRIPTION
+
+FSTHost menu. Support for Gtk2 and Gtk3
+
+=head1 EXAMPLES
+
+C<fsthost_menu.pl>
+
+or
+
+C<fsthost_menu.pl hide>
+
+=head1 ENVIRONMENT
+
+To force Gtk version use:
+
+export FSTMENU_GTK=ver # where I<ver> is 2 or 3
+
+=head1 AUTHOR
+
+Pawel Piatek <xj@wp.pl>
+
+=cut
 
 use strict;
 use warnings;
