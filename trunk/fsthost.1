@@ -54,8 +54,15 @@ Supports:
 - plugins which not handling MIDI Program Change messages
 .br
 - easily plugin discovering (-g option)
+.br
+- GTK2/GTK3
 .P
-There is also fsthost_menu - a zenity script for help to start plugins, which get input from VST_PATH or fsthost_list tool.
+
+There are also:
+.br
+- fsthost_menu.sh - zenity script for help to start plugins
+.br
+- fsthost_menu.pl (default on make install) - Perl GTK2 / GTK3 menu to startup plugins
 
 .SH OPTIONS
 .TP
@@ -121,6 +128,9 @@ SysEx ID (1-127). 0 is default (do not use it)
 .TP
 .B \-V
 Disable Volume control / filtering CC7 messages
+.TP
+.B \-z
+Zeroize output buffers
 
 .SH SEE ALSO
 .BR jackd (1).
