@@ -297,8 +297,7 @@ $menu->append ( $menu_item );
 $menu->show_all();
 
 # Tray (status) icon
-#my $tray_icon = ( $Gtk.'::StatusIcon' )->new_from_stock ( 'gtk-edit' );
-my $tray_icon = ( $Gtk.'::StatusIcon' )->new_from_file ( 'fsthost.xpm' );
+my $tray_icon = ( $Gtk.'::StatusIcon' )->new_from_icon_name ( 'fsthost' );
 $tray_icon->set_tooltip_text ( 'FSTHost Menu' );
 $tray_icon->signal_connect( 'activate', \&tray_icon_activate, \%fst );
 $tray_icon->signal_connect( 'popup-menu', \&tray_icon_menu, $menu );
