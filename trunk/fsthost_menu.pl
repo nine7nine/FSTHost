@@ -67,7 +67,7 @@ use constant {
 our $FSTHOST_GUI = GUI_NORMAL; # default
 our %FSTHOST_OPTIONS = (
 	'p' => '',
-	'j' => 'system'
+	'j' => '""'
 );
 our $filename = $ENV{'HOME'} . '/.fsthost.xml';
 
@@ -123,7 +123,7 @@ sub ctp_button_toggle {
 sub connect_button_toggle {
 	my ( $b, $data ) = @_;
 	if ( $b->get_active() ) {
-		$FSTHOST_OPTIONS{'j'} = 'system';
+		$FSTHOST_OPTIONS{'j'} = '""';
 	} else {
 		delete $FSTHOST_OPTIONS{'j'};
 	}
@@ -219,7 +219,7 @@ sub show_it {
 	# Connect button
 	my $connect_button = ($Gtk.'::ToggleToolButton')->new_from_stock('gtk-execute');
 	$connect_button->set_active(1);
-	$connect_button->set_tooltip_text ( 'Connect to "system" ports' );
+	$connect_button->set_tooltip_text ( 'Connect to the first audio ports' );
 	$connect_button->signal_connect ( 'toggled' => \&connect_button_toggle, { label => $label, tv => $tree_view } );
 	$toolbar->insert ( $connect_button, 0 );
 
