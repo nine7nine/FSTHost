@@ -759,7 +759,7 @@ idle_cb(JackVST *jvst) {
 	if ( ! jvst_lash_idle(jvst) ) {
 		gtk_main_quit();
 		return FALSE;
-	
+	}
 #endif
 	return TRUE;
 }
