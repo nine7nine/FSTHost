@@ -96,9 +96,8 @@ learn_handler (GtkToggleButton *but, gpointer ptr) {
 		return;
 	}
 
+	jvst->midi_learn_CC = jvst->midi_learn_PARAM = -1;
 	jvst->midi_learn = TRUE;
-	jvst->midi_learn_CC = -1;
-	jvst->midi_learn_PARAM = -1;
 }
 
 static void
@@ -661,6 +660,7 @@ channel_change (GtkComboBox *combo, JackVST *jvst) {
 static gboolean
 idle_cb(JackVST *jvst) {
 	FST* fst = (FST*) jvst->fst;
+	AEffect* plugin = fst->plugin;
 
 	// If program was changed via plugin or MIDI
 	if( fst->want_program == -1 &&
@@ -672,44 +672,47 @@ idle_cb(JackVST *jvst) {
 	}
 
 	// MIDI learn support
-	if( jvst->midi_learn && jvst->midi_learn_CC != -1 && jvst->midi_learn_PARAM != -1 ) {
-		if( jvst->midi_learn_CC < 128 ) {
-			jvst->midi_map[jvst->midi_learn_CC] = jvst->midi_learn_PARAM;
-			char name[32];
-			gboolean success;
-			success = fst->plugin->dispatcher( fst->plugin, effGetParamName, jvst->midi_learn_PARAM, 0, name, 0 );
-			if (success) {
-				printf("MIDIMAP CC: %d => %s\n", jvst->midi_learn_CC, name);
-			} else {
-				printf("MIDIMAP CC: %d => %d\n", jvst->midi_learn_CC, jvst->midi_learn_PARAM);
-			}
-
-			short cc;
-			int paramIndex;
-			gboolean show_tooltip = FALSE;
-			char paramName[64];
-			char tString[96];
-			char tooltip[96 * 128];
-			tooltip[0] = 0;
-		   	for (cc = 0; cc < 128; cc++) {
-				paramIndex = jvst->midi_map[cc];
-				if ( paramIndex < 0 || paramIndex >= fst->plugin->numParams )
-					continue;
-
-				fst->plugin->dispatcher(fst->plugin, effGetParamName, paramIndex, 0, paramName, 0 );
-				if (show_tooltip) {
-					snprintf(tString, sizeof tString, "\nCC %03d => %s",cc, paramName);
-				} else {
-					snprintf(tString, sizeof tString, "CC %03d => %s",cc, paramName);
-					show_tooltip = TRUE;
-				}
-				strcat(tooltip, tString);
-			}
-
-			if (show_tooltip)
-				gtk_widget_set_tooltip_text(midi_learn_toggle, tooltip);
-		}
+	if ( jvst->midi_learn &&
+	     jvst->midi_learn_CC >= 0 &&
+	     jvst->midi_learn_PARAM >= 0
+	) {
 		jvst->midi_learn = FALSE;
+		jvst->midi_map[jvst->midi_learn_CC] = jvst->midi_learn_PARAM;
+
+		char name[32];
+		bool success = plugin->dispatcher( plugin, effGetParamName, jvst->midi_learn_PARAM, 0, name, 0 );
+		if (success) {
+			printf("MIDIMAP CC: %d => %s\n", jvst->midi_learn_CC, name);
+		} else {
+			printf("MIDIMAP CC: %d => %d\n", jvst->midi_learn_CC, jvst->midi_learn_PARAM);
+		}
+
+		bool show_tooltip = FALSE;
+		char tooltip[96 * 128];
+		tooltip[0] = '\0';
+		uint8_t cc;
+	   	for (cc = 0; cc < 128; cc++) {
+			int32_t paramIndex = jvst->midi_map[cc];
+			if ( paramIndex < 0 || paramIndex >= plugin->numParams )
+				continue;
+
+			success = plugin->dispatcher ( plugin, effGetParamName, paramIndex, 0, name, 0 );
+			if ( ! success )
+				snprintf ( name, sizeof name, "Param%d", paramIndex );
+
+			char tString[96];
+			if (show_tooltip) {
+				snprintf(tString, sizeof tString, "\nCC %03d => %s",cc, name);
+			} else {
+				snprintf(tString, sizeof tString, "CC %03d => %s",cc, name);
+				show_tooltip = TRUE;
+			}
+			strcat(tooltip, tString);
+			printf ( "Tooltip: %s\n", tooltip );
+		}
+
+		if (show_tooltip)
+			gtk_widget_set_tooltip_text(midi_learn_toggle, tooltip);
 		gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON( midi_learn_toggle ), FALSE );
 	}
 
