@@ -301,10 +301,7 @@ static inline void process_midi_output(JackVST* jvst, jack_nframes_t nframes) {
 	/* This jack ringbuffer consume code was largely taken from jack-keyboard */
 	/* written by Edward Tomasz Napierala <trasz@FreeBSD.org>                 */
 	void *port_buffer = jack_port_get_buffer(jvst->midi_outport, nframes);
-	if (! port_buffer) {
-		fst_error("jack_port_get_buffer failed, cannot send anything.");
-		return;
-	}
+	/* We need always clear buffer if port is connected someware */
 	jack_midi_clear_buffer(port_buffer);
 
 	jack_nframes_t last_frame_time = jack_last_frame_time(jvst->client);
@@ -337,10 +334,6 @@ static inline void process_ctrl_output(JackVST* jvst, jack_nframes_t nframes) {
 	if ( ! jack_port_connected ( jvst->ctrl_outport ) ) return;
 
 	void *port_buffer = jack_port_get_buffer(jvst->ctrl_outport, nframes);
-	if (! port_buffer) {
-		fst_error("SysEx: jack_port_get_buffer failed, cannot send anything.");
-		return;
-	}
 	/* We need always clear buffer if port is connected someware */
 	jack_midi_clear_buffer(port_buffer);
 
@@ -380,10 +373,9 @@ static inline void process_ctrl_input(JackVST* jvst, jack_nframes_t nframes) {
 	
 	void *port_buffer = jack_port_get_buffer( jvst->ctrl_inport, nframes );
 	jack_nframes_t num_jackevents = jack_midi_get_event_count( port_buffer );
-	jack_midi_event_t jackevent;
-
 	jack_nframes_t i;
 	for( i=0; i < num_jackevents; i++ ) {
+		jack_midi_event_t jackevent;
 		if ( jack_midi_event_get( &jackevent, port_buffer, i ) ) break;
 		/* Drop all not SysEx messages */
 		if ( jackevent.buffer[0] != SYSEX_BEGIN) continue;
@@ -401,15 +393,13 @@ static inline void process_midi_input(JackVST* jvst, jack_nframes_t nframes) {
 	// Do not process anything if MIDI IN port is not connected
 	if ( ! jack_port_connected ( jvst->midi_inport ) ) return;
 
+	AEffect* plugin = jvst->fst->plugin;
+	unsigned short stuffed_events = 0;
 	void *port_buffer = jack_port_get_buffer( jvst->midi_inport, nframes );
 	jack_nframes_t num_jackevents = jack_midi_get_event_count( port_buffer );
-	jack_midi_event_t jackevent;
 	jack_nframes_t i;
-	unsigned short j, stuffed_events = 0;
-	AEffect* plugin = jvst->fst->plugin;
-
-	if ( num_jackevents >= MIDI_EVENT_MAX ) num_jackevents = MIDI_EVENT_MAX;
 	for( i=0; i < num_jackevents; i++ ) {
+		jack_midi_event_t jackevent;
 		if ( jack_midi_event_get( &jackevent, port_buffer, i ) ) break;
 
 		/* SysEx TODO:
@@ -482,6 +472,7 @@ static inline void process_midi_input(JackVST* jvst, jack_nframes_t nframes) {
 		jvst->event_array[stuffed_events].byteSize = 24;
 		jvst->event_array[stuffed_events].deltaFrames = jackevent.time;
 
+		unsigned short j;
 		for (j=0; j < 3; j++) { /* event_array[3] remain 0 (according to VST Spec) */
 			jvst->event_array[stuffed_events].midiData[j] = 
 				(j < jackevent.size) ? buf[j] : 0;
