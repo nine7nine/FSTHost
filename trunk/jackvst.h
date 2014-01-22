@@ -73,9 +73,9 @@ typedef struct _JackVST {
 
     int32_t         midi_map[128];
     bool            midi_learn;
-    short           midi_learn_CC;
-    int             midi_learn_PARAM;
-    short           midi_pc;
+    int8_t          midi_learn_CC;
+    int32_t         midi_learn_PARAM;
+    int8_t          midi_pc;
     MIDIFILTER*     filters;
     MIDIFILTER*     transposition;
     OCH_FILTERS     channel;
