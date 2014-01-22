@@ -708,7 +708,6 @@ idle_cb(JackVST *jvst) {
 				show_tooltip = TRUE;
 			}
 			strcat(tooltip, tString);
-			printf ( "Tooltip: %s\n", tooltip );
 		}
 
 		if (show_tooltip)
