@@ -29,7 +29,7 @@
 #include <jack/thread.h>
 
 #define CTRLAPP "FHControl"
-#define VERSION "1.5.3"
+#define VERSION "1.5.4"
 #ifdef __x86_64__
 #define ARCH "64"
 #else
