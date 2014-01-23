@@ -75,9 +75,9 @@ static void sysex_makeASCII(uint8_t* ascii_midi_dest, char* name, size_t size_de
 }
 
 static void jvst_generate_random_id(JackVST* jvst) {
-	short g;
 	srand(GetTickCount()); /* Init ramdom generator */
 	printf("Random SysEx ID:");
+	unsigned short g;
 	for(g=0; g < sizeof(jvst->sysex_ident_reply.version); g++) {
 		jvst->sysex_ident_reply.version[g] = rand() % 128;
 		printf(" %02X", jvst->sysex_ident_reply.version[g]);
@@ -178,7 +178,7 @@ static void jvst_parse_sysex_input(JackVST* jvst, jack_midi_data_t* data, size_t
 				SysExIdOffer* sysex_id_offer = (SysExIdOffer*) data;
 				printf("ID OFFER - %X - ", sysex_id_offer->uuid);
 				printf("RndID:");
-				short g = 0;
+				unsigned short g = 0;
 				while ( g < sizeof(sysex_id_offer->rnid) ) printf(" %02X", sysex_id_offer->rnid[g++]);
 				printf(" - ");
 
@@ -597,8 +597,8 @@ static void jvst_connect(JackVST *jvst, const char *audio_to) {
 		return;
 	}
 
-	unsigned short i;
 	const char *pname;
+	unsigned short i;
 	for (i=0; jports[i] && i < jvst->numOuts; i++) {
 		pname = jack_port_name(jvst->outports[i]);
 		jack_connect(jvst->client, pname, jports[i]);
@@ -611,8 +611,8 @@ static void jvst_connect_midi_to_physical(JackVST* jvst) {
 	const char **jports = jack_get_ports(jvst->client, NULL, JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput|JackPortIsPhysical);
         if (!jports) return;
 
-	unsigned short i;
 	const char *pname = jack_port_name(jvst->midi_inport);
+	unsigned short i;
         for (i=0; jports[i]; i++) {
 		if (jack_port_connected_to(jvst->midi_inport, jports[i]))
 			continue;
@@ -648,9 +648,9 @@ static inline void jvst_connect_to_ctrl_app(JackVST* jvst) {
 	if (!jports) return;
 
 	bool done = false;
-	unsigned short i;
 	const char *src, *dst;
 	jack_port_t* port;
+	unsigned short i;
 	for (i=0; jports[i]; i++) {
 		// Skip mine port
 		port = jack_port_by_name(jvst->client, jports[i]);
@@ -723,7 +723,7 @@ static void cmdline2arg(int *argc, char ***pargv, LPSTR cmdline) {
 	}
 
 	char** argv = malloc(*argc * sizeof(char*));
-	short i;
+	unsigned short i;
 	for (i=0; i < *argc; ++i) {
 		int nsize = WideCharToMultiByte(CP_UNIXCP, 0, szArgList[i], -1, NULL, 0, NULL, NULL);
 		
@@ -805,7 +805,7 @@ static bool jvst_jack_init( JackVST* jvst ) {
 	jvst->sample_rate = jack_get_sample_rate(jvst->client);
 	jvst->buffer_size = jack_get_buffer_size(jvst->client);
 
-	// Register input ports	or allocate swap area
+	// Register input ports
 	jvst->inports = malloc(sizeof(jack_port_t*) * jvst->numIns); // jack_port_t**
 	for (i = 0; i < jvst->numIns; ++i) {
 		char buf[6];
@@ -819,13 +819,11 @@ static bool jvst_jack_init( JackVST* jvst ) {
 		char buf[7];
 		snprintf (buf, sizeof(buf), "out%d", i+1);
 		jvst->outports[i] = jack_port_register (jvst->client, buf, JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
-
 	}
 
 	// Register MIDI input port (if needed)
-	if ( jvst->want_midi_in ) {
+	if ( jvst->want_midi_in )
 		jvst->midi_inport = jack_port_register(jvst->client, "midi-in", JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
-	}
 
 	// Register MIDI output port (if needed)
 	if ( jvst->want_midi_out ) {
@@ -856,16 +854,79 @@ static bool jvst_jack_init( JackVST* jvst ) {
 	return true;
 }
 
-void jvst_cleanup ( JackVST* jvst ) {
-	int32_t i;
+static void jvst_init_midi ( JackVST* jvst ) {
+	FST* fst = jvst->fst;
+	if (fst->vst_version < 2) return; /* No MIDI at all - very old/rare v1 plugins */
 
+	/**************** MIDI IN ***********************/
+	if (fst->isSynth || fst->canReceiveVstEvents || fst->canReceiveVstMidiEvent) {
+		jvst->want_midi_in = true;
+
+		/* The VstEvents structure already contains an array of 2    */
+		/* pointers to VstEvent so I guess that this malloc actually */
+		/* gives enough  space for MIDI_EVENT_MAX ....               */
+		jvst->events = malloc(sizeof(VstEvents) + ((MIDI_EVENT_MAX - 2) * sizeof(VstMidiEvent*))); // VstEvents*
+		jvst->events->numEvents = 0;
+		jvst->events->reserved = 0;
+
+		/* Initialise dynamic array of MIDI_EVENT_MAX VstMidiEvents */
+		/* and point the VstEvents events array of pointers to it   */
+		jvst->event_array = calloc(MIDI_EVENT_MAX, sizeof (VstMidiEvent)); // VstMidiEvent*
+		unsigned short i;
+		for (i = 0; i < MIDI_EVENT_MAX; i++)
+			jvst->events->events[i] = (VstEvent*)&(jvst->event_array[i]);
+	}
+
+	/**************** MIDI OUT **********************/
+	if (fst->canSendVstEvents || fst->canSendVstMidiEvent)
+		jvst->want_midi_out = true;
+}
+
+static bool jvst_fst_init( JackVST* jvst ) {
+	AEffect* plugin = jvst->fst->plugin;
+
+	// MIDI
+	jvst_init_midi ( jvst );
+
+	// Jack Audio
+	if ( ! jvst_jack_init ( jvst ) ) return false;
+
+	// Set block size / sample rate
+	plugin->dispatcher (plugin, effSetSampleRate, 0, 0, NULL, (float) jvst->sample_rate);
+	plugin->dispatcher (plugin, effSetBlockSize, 0, (intptr_t) jvst->buffer_size, NULL, 0.0f);
+	printf("Sample Rate: %d | Block Size: %d\n", jvst->sample_rate, jvst->buffer_size);
+
+	// Allocate buffer pointers ( both for ports and swap area )
+	jvst->ins = malloc (sizeof(float*) * plugin->numInputs); // float**
+	jvst->outs = malloc (sizeof (float*) * plugin->numOutputs); // float**
+
+	// Allocate swap area ( nonused ports )
+	int32_t swap_size = ( plugin->numInputs - jvst->numIns ) + ( plugin->numOutputs - jvst->numOuts );
+	if ( swap_size > 0 ) {
+		jvst->swap = malloc ( sizeof(float) * jvst->buffer_size * swap_size ); // float*
+
+		// Assign pointers
+		int32_t i, s = 0;
+		for ( i = jvst->numIns; i < plugin->numInputs; ++i, s+=jvst->buffer_size)
+			jvst->ins[i] = jvst->swap + s;
+
+		for ( i = jvst->numOuts; i < plugin->numOutputs; ++i, s+=jvst->buffer_size)
+			jvst->outs[i] = jvst->swap + s;
+	}
+
+	return true;
+}
+
+void jvst_cleanup ( JackVST* jvst ) {
 	free ( jvst->inports );
 	free ( jvst->outports );
-	for ( i = jvst->numIns; i < jvst->fst->plugin->numInputs; ++i) free( jvst->ins[i] );
-	for ( i = jvst->numOuts; i < jvst->fst->plugin->numOutputs; ++i) free ( jvst->outs[i] );
 	free ( jvst->ins );
 	free ( jvst->outs );
-	if ( jvst->want_midi_in ) free ( jvst->events );
+	if ( jvst->swap ) free ( jvst->swap );
+	if ( jvst->want_midi_in ) {
+		free ( jvst->events );
+		free ( jvst->event_array );
+	}
 }
 
 #ifdef SOCKET_STUFF
@@ -916,6 +977,10 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	jvst_first = jvst;
 
 	jvst->dbinfo_file = fst_info_default_path(APPNAME);
+
+	// Handle FSTHOST_GUI environment
+	char* menv = getenv("FSTHOST_GUI");
+	if ( menv ) jvst->with_editor = strtol(menv, NULL, 10);
 
         // Parse command line options
 	cmdline2arg(&argc, &argv, cmdline);
@@ -993,63 +1058,14 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
         printf("Main Thread W32ID: %d | LWP: %d | W32 Class: %d | W32 Priority: %d\n",
 		GetCurrentThreadId (), (int) syscall (SYS_gettid), GetPriorityClass (h_thread), GetThreadPriority(h_thread));
 
-	// Handle FSTHOST_GUI environment
-	char* menv = getenv("FSTHOST_GUI");
-	if ( menv ) jvst->with_editor = strtol(menv, NULL, 10);
-
 	// Count audio ports
 	jvst->numIns = (opt_numIns >= 0 && opt_numIns < plugin->numInputs) ? opt_numIns : plugin->numInputs;
 	jvst->numOuts = (opt_numOuts >= 0 && opt_numOuts < plugin->numOutputs) ? opt_numOuts : plugin->numOutputs;
 	printf("Port Layout (FSTHost/plugin) IN: %d/%d OUT: %d/%d\n", 
 		jvst->numIns, plugin->numInputs, jvst->numOuts, plugin->numOutputs);
 
-	/**************** MIDI ports ***********************/
-	if (fst->vst_version < 2) goto no_midi; /* Very old/rare v1 plugins */
-
-	/* should we send the plugin VST events (i.e. MIDI) */
-	if (fst->isSynth || fst->canReceiveVstEvents || fst->canReceiveVstMidiEvent) {
-		jvst->want_midi_in = true;
-
-		/* The VstEvents structure already contains an array of 2    */
-		/* pointers to VstEvent so I guess that this malloc actually */
-		/* gives enough  space for MIDI_EVENT_MAX ....               */
-		jvst->events = malloc(sizeof(VstEvents) + ((MIDI_EVENT_MAX - 2) * sizeof(VstMidiEvent*))); // VstEvents*
-		jvst->events->numEvents = 0;
-		jvst->events->reserved = 0;
-
-		/* Initialise dynamic array of MIDI_EVENT_MAX VstMidiEvents */
-		/* and point the VstEvents events array of pointers to it   */
-		jvst->event_array = calloc(MIDI_EVENT_MAX, sizeof (VstMidiEvent)); // VstMidiEvent*
-		for (i = 0; i < MIDI_EVENT_MAX; i++) {
-			jvst->events->events[i] = (VstEvent*)&(jvst->event_array[i]);
-		}
-	}
-
-	/* Can the plugin send VST events (i.e. MIDI) */
-	if (fst->canSendVstEvents || fst->canSendVstMidiEvent) jvst->want_midi_out = true;
-
-no_midi:
-	/****************** Jack setup *************************/
-	if ( ! jvst_jack_init ( jvst ) ) return 1;
-
-	// Set block size / sample rate
-	plugin->dispatcher (plugin, effSetSampleRate, 0, 0, NULL, (float) jvst->sample_rate);
-	plugin->dispatcher (plugin, effSetBlockSize, 0, (intptr_t) jvst->buffer_size, NULL, 0.0f);
-	printf("Sample Rate: %d | Block Size: %d\n", jvst->sample_rate, jvst->buffer_size);
-
-	// Allocate buffer pointers ( both for ports and swap area )
-	jvst->ins = malloc (sizeof(float*) * plugin->numInputs); // float**
-	jvst->outs = malloc (sizeof (float*) * plugin->numOutputs); // float**
-
-	// Allocate swap area ( for unused plugin inputs )
-	for ( i = jvst->numIns; i < plugin->numInputs; ++i) {
-		jvst->ins[i] = malloc(sizeof(float) * jvst->buffer_size); // float*
-	}
-
-	// Allocate swap area ( for unused plugin outputs )
-	for ( i = jvst->numOuts; i < plugin->numOutputs; ++i) {
-		jvst->outs[i] = malloc(sizeof(float) * jvst->buffer_size); // float*
-	}
+	// Init Jack
+	if ( ! jvst_fst_init ( jvst ) ) return 1;
 
 	// Handling SIGINT for clean quit
 	struct sigaction sa;
