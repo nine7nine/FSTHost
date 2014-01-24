@@ -228,7 +228,7 @@ int fst_save_fxfile ( FST *fst, const char *filename, enum FxFileType fileType )
         void * chunk = NULL;
 	size_t chunkSize;
 	size_t swapedChunkSize;
-	char prgName[28];
+	char prgName[32];
 	short p;
 
 	bool isBank = (fileType == FXBANK) ? TRUE : FALSE;

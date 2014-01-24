@@ -207,11 +207,11 @@ save_handler (GtkToggleButton *but, gpointer ptr) {
 static int
 create_preset_store( GtkListStore* store, FST *fst ) {
 	short i;
-	char progName[24];
-
 	for( i = 0; i < fst->plugin->numPrograms; i++ ) {
 		GtkTreeIter new_row_iter;
 
+		/* VST standard says that progName is 24 bytes but some plugs use more characters */
+		char progName[32];
 		if ( fst->vst_version >= 2 ) {
 			fst_get_program_name(fst, i, progName, sizeof(progName));
 		} else {
