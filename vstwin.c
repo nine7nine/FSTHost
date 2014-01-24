@@ -37,13 +37,12 @@ fst_canDo(FST* fst, char* feature) {
 
 static inline void
 fst_update_current_program(FST* fst) {
-	short newProg;
-	char progName[24];
-
-	newProg = fst->plugin->dispatcher( fst->plugin, effGetProgram, 0, 0, NULL, 0.0f );
+	int32_t newProg = fst->plugin->dispatcher( fst->plugin, effGetProgram, 0, 0, NULL, 0.0f );
 	if (newProg != fst->current_program || fst->program_changed) {
 		fst->program_changed = FALSE;
 		fst->current_program = newProg;
+		/* VST standard says that progName is 24 bytes but some plugs use more characters */
+		char progName[32];
 		fst_get_program_name(fst, fst->current_program, progName, sizeof(progName));
 		fst_error("Program: %d : %s", newProg, progName);
 	}
@@ -301,8 +300,6 @@ void
 fst_program_change (FST *fst, short want_program) {
 	// if we in main thread then call directly
 	if (GetCurrentThreadId() == MainThreadId) {
-		char progName[24];
-
 		pthread_mutex_lock (&fst->lock);
 
 		fst->plugin->dispatcher (fst->plugin, effBeginSetProgram, 0, 0, NULL, 0);
@@ -310,6 +307,8 @@ fst_program_change (FST *fst, short want_program) {
 		fst->plugin->dispatcher (fst->plugin, effEndSetProgram, 0, 0, NULL, 0);
 		fst->current_program = want_program;
 
+		/* VST standard says that progName is 24 bytes but some plugs use more characters */
+		char progName[32];
 		fst_get_program_name(fst, fst->current_program, progName, sizeof(progName));
 		fst_error("Program: %d : %s", fst->current_program, progName);
 

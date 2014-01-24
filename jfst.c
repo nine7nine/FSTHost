@@ -94,7 +94,7 @@ void jvst_send_sysex(JackVST* jvst, enum SysExWant sysex_want) {
 
 	uint8_t id;
 	if (sysex_want == SYSEX_WANT_DUMP) {
-		char progName[24];
+		char progName[32];
 		SysExDumpV1* sxd = &jvst->sysex_dump;
 		fst_get_program_name(jvst->fst, jvst->fst->current_program, progName, sizeof(progName));
 
