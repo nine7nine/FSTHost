@@ -9,7 +9,7 @@ LBITS              := $(shell getconf LONG_BIT)
 LASH_EXISTS        := $(shell if pkg-config --exists lash-1.0; then echo yes; else echo no; fi)
 #LAST_EXISTS := 'no'
 
-### Common settings
+# Modules
 PKG_CONFIG_MODULES := glib-2.0
 PKG_CONFIG_MODULES += jack
 PKG_CONFIG_MODULES += libxml-2.0
@@ -21,6 +21,10 @@ else
 PKG_CONFIG_MODULES += gtk+-3.0
 endif
 
+ifeq ($(LASH_EXISTS),yes)
+PKG_CONFIG_MODULES += lash-1.0
+endif
+
 # Shared GCC flags
 CEXTRA             := $(shell pkg-config --cflags $(PKG_CONFIG_MODULES))
 CEXTRA             += -g -O2 -Wall -Wno-deprecated-declarations -Wno-multichar -frounding-math -fsignaling-nans -mfpmath=sse -msse2
@@ -30,7 +34,6 @@ CEXTRA             += -DNO_VUMETER
 endif
 
 ifeq ($(LASH_EXISTS),yes)
-PKG_CONFIG_MODULES += lash-1.0
 CEXTRA             += -DHAVE_LASH
 endif
 
