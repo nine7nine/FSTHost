@@ -369,13 +369,13 @@ editor_handler (GtkToggleButton *but, gpointer ptr) {
 		gtk_widget_show(socket_align);
 		gtk_widget_show(gtk_socket);
 	} else if (! jvst->fst->editor_popup) {
-		fst_destroy_editor(jvst->fst);
+		fst_call ( jvst->fst, EDITOR_CLOSE );
 	} else {
 		// For some reason window was closed before we reach this function
 		// That's mean GtkSocket is already destroyed
 		if ( jvst->fst->window ) {
 			gtk_widget_hide(gtk_socket);
-			fst_destroy_editor(jvst->fst);
+			fst_call ( jvst->fst, EDITOR_CLOSE );
 			gtk_widget_set_size_request(gtk_socket, -1, -1);
 			gtk_widget_destroy(gtk_socket);
 		}
@@ -624,7 +624,7 @@ destroy_handler (GtkWidget* widget, GdkEventAny* ev, gpointer ptr) {
 
 	printf("GTK destroy_handler\n");
 
-	fst_destroy_editor(jvst->fst);
+	fst_call ( jvst->fst, EDITOR_CLOSE );
 
 	gtk_main_quit();
 	

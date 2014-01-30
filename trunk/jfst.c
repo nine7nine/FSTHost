@@ -883,8 +883,6 @@ static void jvst_init_midi ( JackVST* jvst ) {
 }
 
 static bool jvst_fst_init( JackVST* jvst ) {
-	AEffect* plugin = jvst->fst->plugin;
-
 	// MIDI
 	jvst_init_midi ( jvst );
 
@@ -892,11 +890,13 @@ static bool jvst_fst_init( JackVST* jvst ) {
 	if ( ! jvst_jack_init ( jvst ) ) return false;
 
 	// Set block size / sample rate
-	plugin->dispatcher (plugin, effSetSampleRate, 0, 0, NULL, (float) jvst->sample_rate);
-	plugin->dispatcher (plugin, effSetBlockSize, 0, (intptr_t) jvst->buffer_size, NULL, 0.0f);
+	FST* fst = jvst->fst;
+	fst_call_dispatcher (fst, effSetSampleRate, 0, 0, NULL, (float) jvst->sample_rate);
+	fst_call_dispatcher (fst, effSetBlockSize, 0, (intptr_t) jvst->buffer_size, NULL, 0.0f);
 	printf("Sample Rate: %d | Block Size: %d\n", jvst->sample_rate, jvst->buffer_size);
 
 	// Allocate buffer pointers ( both for ports and swap area )
+	AEffect* plugin = fst->plugin;
 	jvst->ins = malloc (sizeof(float*) * plugin->numInputs); // float**
 	jvst->outs = malloc (sizeof (float*) * plugin->numOutputs); // float**
 
@@ -1083,7 +1083,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 #endif
 
 	// Activate plugin
-	if (! jvst->bypassed) fst_resume(jvst->fst);
+	if (! jvst->bypassed) fst_call ( jvst->fst, RESUME );
 
 	puts("Jack Activate");
 	jack_activate(jvst->client);
