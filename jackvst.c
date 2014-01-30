@@ -88,9 +88,9 @@ void jvst_bypass(JackVST* jvst, bool bypass) {
 	jvst->want_state = WANT_STATE_NO;
 	if (bypass & !jvst->bypassed) {
 		jvst->bypassed = TRUE;
-		fst_suspend(jvst->fst);
+		fst_call ( jvst->fst, SUSPEND );
 	} else if (!bypass & jvst->bypassed) {
-		fst_resume(jvst->fst);
+		fst_call ( jvst->fst, RESUME );
 		jvst->bypassed = FALSE;
 	}
 }

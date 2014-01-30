@@ -140,30 +140,23 @@ struct _FXHeader {
 
 void fst_error (const char *fmt, ...);
 
-FSTHandle* fst_load (const char * );
+FSTHandle* fst_load (const char * path );
 bool fst_unload (FSTHandle*);
-
-void fst_event_loop();
-bool fst_event_callback();
-
-void fst_suspend (FST *fst);
-void fst_resume (FST *fst);
-
 FST* fst_open (FSTHandle*);
 FST* fst_load_open (const char* path);
 void fst_close (FST*);
 
+void fst_event_loop();
+bool fst_event_callback();
+
+void fst_call (FST *fst, enum EventCall type);
+int  fst_call_dispatcher (FST *fst, int opcode, int index, int val, void *ptr, float opt );
 void fst_program_change (FST *fst, short want_program);
 bool fst_get_program_name (FST *fst, short program, char* name, size_t size);
 bool fst_set_program_name (FST *fst, const char* name);
 
 bool fst_run_editor (FST*, bool popup);
 bool fst_show_editor (FST *fst);
-void fst_destroy_editor (FST*);
-
-//extern FSTInfo *fst_get_info (char *dllpathname);
-//extern void fst_free_info (FSTInfo *info);
-int fst_call_dispatcher(FST *fst, int opcode, int index, int val, void *ptr, float opt );
 
 /* Support for FXB/FXP files (fxb.c) */
 int fst_load_fxfile ( FST *fst, const char *filename );
