@@ -522,7 +522,7 @@ static inline void fst_event_handler(FST* fst) {
 		plugin->dispatcher(plugin, effClose, 0, 0, NULL, 0.0f);
 		fst_event_loop_remove_plugin(fst);
 		fst_error("Plugin closed");
-		return;
+		break;
 	case SUSPEND:
 		fst_suspend (fst);
 		break;
@@ -584,12 +584,12 @@ static void fst_event_dispatcher() {
 			}
 		}
 
+		fst_update_current_program(fst);
+
 		if (fst->event_call != RESET) {
 			fst_event_handler(fst);
 			pthread_cond_signal (&fst->event_called);
 		}
-
-		fst_update_current_program(fst);
 	}
 }
 
@@ -609,7 +609,6 @@ bool fst_event_callback() {
 
 // ----------- NOT USED ----------------
 void fst_event_loop (HMODULE hInst) {
- 	MSG msg;
 	//DWORD gui_thread_id;
 	HANDLE* h_thread = GetCurrentThread ();
 
@@ -628,6 +627,7 @@ void fst_event_loop (HMODULE hInst) {
 		return;
 	}
 
+ 	MSG msg;
 	while (GetMessageA (&msg, NULL, 0,0) != 0) {
  		TranslateMessage(&msg);
  		DispatchMessageA(&msg);
@@ -636,6 +636,6 @@ void fst_event_loop (HMODULE hInst) {
 
 		fst_event_dispatcher();
 	}
- 
+
 	fst_error( "GUI EVENT LOOP: THE END" );
 }
