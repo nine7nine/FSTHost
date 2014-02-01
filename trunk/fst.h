@@ -97,17 +97,22 @@ typedef struct _FST {
 	struct _FST*		next;
 
 	char*			name;
+	pthread_mutex_t		lock;
+	bool			wantIdle;
+	int			MainThreadId;
+
+	/* GUI */
 	bool			editor_popup;
 	void*			window; /* win32 HWND */
 	void*			xid;    /* X11 XWindow */
 	int			width;
 	int			height;
 	bool			wantResize;
-	bool			wantIdle;
 
-	bool			program_changed;
 	int32_t			current_program;
+	bool			program_changed;
 
+	/* Info */
 	intptr_t		vst_version;
 	bool			isSynth;
 	bool			canReceiveVstEvents;
@@ -117,8 +122,6 @@ typedef struct _FST {
 
 	/* This is needed only audioMasterGetTime - but we don't know how long plugin want to use it */
 	struct VstTimeInfo	timeInfo;
-
-	pthread_mutex_t		lock;
 } FST;
 
 enum FxFileType {

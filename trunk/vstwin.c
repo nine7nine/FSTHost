@@ -7,7 +7,6 @@
 #include "fst.h"
 
 static FST* fst_first = NULL;
-static int MainThreadId;
 static bool WindowClassRegistered = FALSE;
 
 static void fst_event_handler(FST* fst);
@@ -183,7 +182,7 @@ bool fst_show_editor (FST *fst) {
 static void fst_event_call (FST *fst, FSTEventTypes type) {
 	FSTEventCall* ec = fst->event_call;
 	ec->type = type;
-	if (GetCurrentThreadId() == MainThreadId) {
+	if (GetCurrentThreadId() == fst->MainThreadId) {
 		fst_event_handler ( fst );
 	} else {
 		pthread_mutex_lock (&fst->lock);
@@ -411,7 +410,7 @@ FST* fst_open (FSTHandle* fhandle) {
 	// Bind to plugin list
 	fst_event_loop_add_plugin(fst);
 
-	MainThreadId = GetCurrentThreadId();
+	fst->MainThreadId = GetCurrentThreadId();
 
 	return fst;
 }

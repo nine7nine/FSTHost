@@ -41,6 +41,7 @@
 #define RINGBUFFER_SIZE 16 * sizeof(struct MidiMessage)
 #define SYSEX_RINGBUFFER_SIZE 16 * SYSEX_MAX_SIZE
 #define MIDI_EVENT_MAX 16 /* Max counts of events in one process */
+//#define SEP_THREAD
 
 /* gtk.c */
 extern void gtk_gui_init (int* argc, char** argv[]);
@@ -957,6 +958,7 @@ bool handle_server_connection (GIOChannel *source, GIOCondition condition, gpoin
 }
 #endif
 
+#ifdef SEP_THREAD
 const char* kibel;
 sem_t chuj;
 static DWORD WINAPI
@@ -969,6 +971,7 @@ sep_thread ( LPVOID arg ) {
 	fst_event_loop();
 	return 0;
 }
+#endif
 
 int WINAPI
 WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
@@ -1040,13 +1043,15 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 		return ret;
 	}
 
-	/* User provided plugin that want to load (as name or full path) */
-//	if ( custom_path ) jvst_load( jvst, custom_path );
-
+#ifdef SEP_THREAD
 	kibel = custom_path;
 	sem_init( &chuj, 0, 0 );
 	CreateThread( NULL, 0, sep_thread, jvst, 0, 0 );
 	sem_wait ( &chuj );
+#else
+	/* User provided plugin that want to load (as name or full path) */
+	if ( custom_path ) jvst_load( jvst, custom_path );
+#endif
 
         /* load state if requested - state file may contain plugin path */
 	if ( jvst->default_state_file ) {
@@ -1117,8 +1122,11 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	// Generate random SysEx ID
 	jvst_generate_random_id(jvst);
 
+#ifndef SEP_THREAD
 	// Add FST event callback to Gblib main loop
-	// g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 100, (GSourceFunc) fst_event_callback, NULL, NULL);
+	g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 100, (GSourceFunc) fst_event_callback, NULL, NULL);
+#endif
+
 #ifdef SOCKET_STUFF
 	/* Socket stuff */
 	int fd = 0;
