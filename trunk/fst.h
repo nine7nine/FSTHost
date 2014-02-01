@@ -27,13 +27,8 @@ extern void (*fst_error_callback)(const char *msg);
  */
 void fst_set_error_function (void (*func)(const char *));
 
-typedef struct _FST FST;
-typedef struct _FSTHandle FSTHandle;
-//typedef struct _FSTInfo FSTInfo;
-typedef struct _FXHeader FXHeader;
-
 /*
-struct _FSTInfo 
+typedef struct _FSTInfo 
 {
     char *name;
     int UniqueID;
@@ -52,29 +47,28 @@ struct _FSTInfo
     // struct VstParameterInfo *infos;
     char **ParamNames;
     char **ParamLabels;
-};
+} FSTInfo;
 */
 
 typedef AEffect* (VSTCALLBACK *main_entry_t)(audioMasterCallback);
 
-struct _FSTHandle
-{
+typedef struct {
     void*		dll;
     char*		name;
     char*		path;
     main_entry_t	main_entry;
-};
+} FSTHandle;
 
-struct FSTDispatcher {
-	int	opcode;
-	int	index;
-	int	val;
-	void*	ptr;
-	float	opt;
-	int	retval;
-};
+typedef struct {
+	int32_t		opcode;
+	int32_t		index;
+	intptr_t	val;
+	void*		ptr;
+	float		opt;
+	intptr_t	retval;
+} FSTDispatcher;
 
-enum EventCall {
+typedef enum {
 	RESET,
 	CLOSE,
 	SUSPEND,
@@ -83,19 +77,26 @@ enum EventCall {
 	EDITOR_OPEN,
 	EDITOR_CLOSE,
 	PROGRAM_CHANGE
-};
+} FSTEventTypes;
 
-struct _FST 
-{
+typedef struct {
+	FSTEventTypes	type;
+	pthread_mutex_t	lock;
+	pthread_cond_t	called;
+	union { /* Data */
+		FSTDispatcher* dispatcher;	/* DISPATCHER */
+		int32_t program;		/* PROGRAM_CHANGE */
+	};
+} FSTEventCall;
+
+typedef struct _FST {
 	AEffect*		plugin;
 	FSTHandle*		handle;
 	AMC*			amc;
+	FSTEventCall*		event_call;
 	struct _FST*		next;
 
 	char*			name;
-	enum EventCall		event_call;
-	struct FSTDispatcher*	dispatcher;
-
 	bool			editor_popup;
 	void*			window; /* win32 HWND */
 	void*			xid;    /* X11 XWindow */
@@ -105,10 +106,9 @@ struct _FST
 	bool			wantIdle;
 
 	bool			program_changed;
-	short			want_program;
-	short			current_program;
+	int32_t			current_program;
 
-	unsigned short		vst_version;
+	intptr_t		vst_version;
 	bool			isSynth;
 	bool			canReceiveVstEvents;
 	bool			canReceiveVstMidiEvent;
@@ -119,16 +119,14 @@ struct _FST
 	struct VstTimeInfo	timeInfo;
 
 	pthread_mutex_t		lock;
-	pthread_mutex_t		event_call_lock;
-	pthread_cond_t		event_called;
-};
+} FST;
 
 enum FxFileType {
 	FXBANK		= 0,
 	FXPROGRAM	= 1
 };
 
-struct _FXHeader {
+typedef struct {
         unsigned int chunkMagic;
         unsigned int byteSize;
         unsigned int fxMagic;
@@ -136,7 +134,7 @@ struct _FXHeader {
         unsigned int fxID;
         unsigned int fxVersion;
         unsigned int numPrograms;
-};
+} FXHeader;
 
 void fst_error (const char *fmt, ...);
 
@@ -149,9 +147,9 @@ void fst_close (FST*);
 void fst_event_loop();
 bool fst_event_callback();
 
-void fst_call (FST *fst, enum EventCall type);
-int  fst_call_dispatcher (FST *fst, int opcode, int index, int val, void *ptr, float opt );
-void fst_program_change (FST *fst, short want_program);
+void fst_call (FST *fst, FSTEventTypes type);
+intptr_t fst_call_dispatcher (FST *fst, int32_t opcode, int32_t index, intptr_t val, void *ptr, float opt );
+void fst_program_change (FST *fst, int32_t program);
 bool fst_get_program_name (FST *fst, short program, char* name, size_t size);
 bool fst_set_program_name (FST *fst, const char* name);
 
