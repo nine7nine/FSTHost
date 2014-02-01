@@ -17,11 +17,11 @@ fst_new () {
 	FST* fst = calloc (1, sizeof (FST));
 
 	pthread_mutex_init (&fst->lock, NULL);
-	pthread_mutex_init (&fst->event_call_lock, NULL);
-	pthread_cond_init (&fst->event_called, NULL);
-	fst->want_program = -1;
 	//fst->current_program = 0; - calloc done this
-	fst->event_call = RESET;
+	fst->event_call = malloc(sizeof(FSTEventCall));
+	fst->event_call->type = RESET;
+	pthread_mutex_init (&fst->event_call->lock, NULL);
+	pthread_cond_init (&fst->event_call->called, NULL);
 //	fst->editor_popup = TRUE;
 	fst->amc = calloc (1, sizeof (AMC));
 
@@ -180,44 +180,52 @@ bool fst_show_editor (FST *fst) {
 
 /*************************** Event call routines *****************************************/
 /* Assume that fst->event_call_lock is held */
-static void fst_event_call (FST *fst, enum EventCall type) {
-	fst->event_call = type;
+static void fst_event_call (FST *fst, FSTEventTypes type) {
+	FSTEventCall* ec = fst->event_call;
+	ec->type = type;
 	if (GetCurrentThreadId() == MainThreadId) {
 		fst_event_handler ( fst );
 	} else {
 		pthread_mutex_lock (&fst->lock);
-		pthread_cond_wait (&fst->event_called, &fst->lock);
+		pthread_cond_wait (&ec->called, &fst->lock);
 		pthread_mutex_unlock (&fst->lock);
 	}
 }
 
-void fst_call (FST *fst, enum EventCall type) {
-	pthread_mutex_lock ( &fst->event_call_lock );
+void fst_call (FST *fst, FSTEventTypes type) {
+	FSTEventCall* ec = fst->event_call;
+	pthread_mutex_lock ( &ec->lock );
 	fst_event_call ( fst, type );
-	pthread_mutex_unlock ( &fst->event_call_lock );
+	pthread_mutex_unlock ( &ec->lock );
 }
 
-void fst_program_change (FST *fst, short want_program) {
-	pthread_mutex_lock (&fst->event_call_lock);
-	if (fst->current_program != want_program) {
-		fst->want_program = want_program;
+void fst_program_change (FST *fst, int32_t program) {
+	FSTEventCall* ec = fst->event_call;
+	pthread_mutex_lock (&ec->lock);
+	if (fst->current_program != program) {
+		ec->program = program;
 		fst_event_call ( fst, PROGRAM_CHANGE );
 	}
-	pthread_mutex_unlock (&fst->event_call_lock);
+	pthread_mutex_unlock (&ec->lock);
 }
 
-int fst_call_dispatcher(FST *fst, int opcode, int index, int val, void *ptr, float opt ) {
-	struct FSTDispatcher dp;
+intptr_t
+fst_call_dispatcher (FST *fst, int32_t opcode, int32_t index, 
+			intptr_t val, void *ptr, float opt )
+{
+	FSTEventCall* ec = fst->event_call;
+
+	FSTDispatcher dp;
 	dp.opcode = opcode;
 	dp.index = index;
 	dp.val = val;
 	dp.ptr = ptr;
 	dp.opt = opt;
 
-	pthread_mutex_lock ( &fst->event_call_lock );
-	fst->dispatcher = &dp;
+	pthread_mutex_lock ( &ec->lock );
+	ec->dispatcher = &dp;
 	fst_event_call ( fst, DISPATCHER );
-	pthread_mutex_unlock ( &fst->event_call_lock );
+	pthread_mutex_unlock ( &ec->lock );
 
 	return dp.retval;
 }
@@ -258,7 +266,6 @@ bool fst_set_program_name (FST *fst, const char* name) {
 
 	return TRUE;
 }
-
 
 static main_entry_t
 fst_get_main_entry(HMODULE dll) {
@@ -508,13 +515,16 @@ static inline void fst_suspend ( FST* fst ) {
 	plugin->dispatcher (plugin, effMainsChanged, 0, 0, NULL, 0.0f);
 }
 
-static inline void fst_event_handler(FST* fst) {
-	pthread_mutex_lock (&fst->lock);
+static inline void fst_event_handler (FST* fst) {
+	FSTEventCall* ec = fst->event_call;
+	if ( ec->type == RESET ) return;
+
 
 	AEffect* plugin = fst->plugin;
-	struct FSTDispatcher* dp = fst->dispatcher;
+	FSTDispatcher* dp = ec->dispatcher;
 
-	switch (fst->event_call) {
+	pthread_mutex_lock (&fst->lock);
+	switch ( ec->type ) {
 	case CLOSE:
 		fst_error("Closing plugin: %s", fst->name);
 		fst_suspend(fst);
@@ -539,10 +549,11 @@ static inline void fst_event_handler(FST* fst) {
 		break;
 	case PROGRAM_CHANGE:
 		plugin->dispatcher (plugin, effBeginSetProgram, 0, 0, NULL, 0);
-		plugin->dispatcher (plugin, effSetProgram, 0,(int32_t) fst->want_program, NULL, 0);
+		plugin->dispatcher (plugin, effSetProgram, 0, ec->program, NULL, 0);
 		plugin->dispatcher (plugin, effEndSetProgram, 0, 0, NULL, 0);
-		fst->current_program = fst->want_program; /* FIXME: ask plugin ? */
-		fst->want_program = -1;
+		/* NOTE: Can't ask plugin (effGetProgram) here cause some plugs
+		         need idle call first */
+		fst->current_program = ec->program;
 		fst->program_changed = TRUE;
 		break;
 	case DISPATCHER:
@@ -551,9 +562,10 @@ static inline void fst_event_handler(FST* fst) {
 	case RESET:
 		break;
 	}
-	fst->event_call = RESET;
-
+	ec->type = RESET;
 	pthread_mutex_unlock (&fst->lock);
+
+	pthread_cond_signal (&ec->called);
 }
 
 static inline void
@@ -586,10 +598,7 @@ static void fst_event_dispatcher() {
 
 		fst_update_current_program(fst);
 
-		if (fst->event_call != RESET) {
-			fst_event_handler(fst);
-			pthread_cond_signal (&fst->event_called);
-		}
+		fst_event_handler(fst);
 	}
 }
 

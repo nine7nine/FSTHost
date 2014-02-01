@@ -631,7 +631,7 @@ static int graph_order_callback( void *arg ) {
 
 static inline void jvst_sysex_notify(JackVST* jvst) {
 	// Wait until program change
-	if (jvst->fst->want_program != -1) return;
+	if (jvst->fst->event_call->type != PROGRAM_CHANGE) return;
 	// Do not notify if have not SysEx ID
 	if (jvst->sysex_ident_reply.model[0] == SYSEX_AUTO_ID) return;
 
@@ -957,6 +957,19 @@ bool handle_server_connection (GIOChannel *source, GIOCondition condition, gpoin
 }
 #endif
 
+const char* kibel;
+sem_t chuj;
+static DWORD WINAPI
+sep_thread ( LPVOID arg ) {
+	JackVST* jvst = (JackVST*) arg;
+	jvst_load( jvst, kibel );
+
+	sem_post( &chuj );
+
+	fst_event_loop();
+	return 0;
+}
+
 int WINAPI
 WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	int		argc = -1;
@@ -1028,7 +1041,12 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	}
 
 	/* User provided plugin that want to load (as name or full path) */
-	if ( custom_path ) jvst_load( jvst, custom_path );
+//	if ( custom_path ) jvst_load( jvst, custom_path );
+
+	kibel = custom_path;
+	sem_init( &chuj, 0, 0 );
+	CreateThread( NULL, 0, sep_thread, jvst, 0, 0 );
+	sem_wait ( &chuj );
 
         /* load state if requested - state file may contain plugin path */
 	if ( jvst->default_state_file ) {
@@ -1100,7 +1118,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	jvst_generate_random_id(jvst);
 
 	// Add FST event callback to Gblib main loop
-	g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 100, (GSourceFunc) fst_event_callback, NULL, NULL);
+	// g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 100, (GSourceFunc) fst_event_callback, NULL, NULL);
 #ifdef SOCKET_STUFF
 	/* Socket stuff */
 	int fd = 0;
