@@ -6,6 +6,9 @@
 
 #include "fst.h"
 
+/* VST standard says that progName is 24 bytes but some plugs use more characters */
+#define MAX_PROG_NAME 32
+
 static FST* fst_first = NULL;
 static bool WindowClassRegistered = FALSE;
 
@@ -246,11 +249,14 @@ bool fst_run_editor (FST* fst, bool popup) {
 }
 
 bool fst_get_program_name (FST *fst, short program, char* name, size_t size) {
+	/* VST standard says that progName is 24 bytes but some plugs use more characters */
+	char progName[MAX_PROG_NAME];
 	if (program == fst->current_program) {
-		fst_call_dispatcher(fst, effGetProgramName, 0, 0, name, 0.0f);
+		fst_call_dispatcher(fst, effGetProgramName, 0, 0, progName, 0);
 	} else {
-		fst_call_dispatcher(fst, effGetProgramNameIndexed, program, 0, name, 0.0 );
+		fst_call_dispatcher(fst, effGetProgramNameIndexed, program, 0, progName, 0);
 	}
+	strncpy ( name, progName, size - 1 );
 	valid_program_name ( name, size );
 
 	return TRUE; 
@@ -574,8 +580,7 @@ fst_update_current_program(FST* fst) {
 	if (newProg != fst->current_program || fst->program_changed) {
 		fst->program_changed = FALSE;
 		fst->current_program = newProg;
-		/* VST standard says that progName is 24 bytes but some plugs use more characters */
-		char progName[32];
+		char progName[MAX_PROG_NAME];
 		plugin->dispatcher ( plugin, effGetProgramName, 0, 0, progName, 0 );
 		fst_error ("Program: %d : %s", newProg, progName);
 	}

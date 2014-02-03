@@ -130,13 +130,13 @@ enum FxFileType {
 };
 
 typedef struct {
-        unsigned int chunkMagic;
-        unsigned int byteSize;
-        unsigned int fxMagic;
-        unsigned int version;
-        unsigned int fxID;
-        unsigned int fxVersion;
-        unsigned int numPrograms;
+	int32_t chunkMagic;
+	int32_t byteSize;
+	int32_t fxMagic;
+	int32_t version;
+	int32_t fxID;
+	int32_t fxVersion;
+	int32_t numPrograms;
 } FXHeader;
 
 void fst_error (const char *fmt, ...);
