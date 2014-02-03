@@ -189,20 +189,16 @@ fps_process_node(JackVST* jvst, xmlNode *a_node) {
              continue;
           }
 
-          gsize out_len;
-          int  chunk_size;
-          void *chunk_data;
-          char *chunk_base64;
-
-          chunk_size = strtoul((const char*) xmlGetProp(cur_node, BAD_CAST "size"), NULL, 0);
+          int chunk_size = strtoul((const char*) xmlGetProp(cur_node, BAD_CAST "size"), NULL, 0);
           if ( ! chunk_size > 0 ) {
              printf("Error: chunk size: %d", chunk_size);
              return FALSE;
           }
 
           printf("Loading %dB chunk into plugin ... ", chunk_size);
-          chunk_base64 = trim((char *) cur_node->children->content);
-          chunk_data = g_base64_decode(chunk_base64, &out_len);
+          char *chunk_base64 = trim((char *) cur_node->children->content);
+          gsize out_len;
+          void *chunk_data = g_base64_decode(chunk_base64, &out_len);
 
           if (chunk_size != out_len) {
              printf("[ERROR]\n");
@@ -251,7 +247,6 @@ bool fps_load(JackVST* jvst, const char* filename) {
 
 // SAVE --------------
 bool fps_save (JackVST* jvst, const char* filename) {
-   int paramIndex;
    unsigned int cc;
    xmlChar tString[64];
    xmlNode *cur_node;
@@ -278,10 +273,10 @@ bool fps_save (JackVST* jvst, const char* filename) {
 
    // MIDI Map
    for (cc = 0; cc < 128; cc++ ) {
-      paramIndex = jvst->midi_map[cc];
+      int32_t paramIndex = jvst->midi_map[cc];
       if ( paramIndex < 0 || paramIndex >= fst->plugin->numParams ) continue;
 
-      fst->plugin->dispatcher( fst->plugin, effGetParamName, paramIndex, 0, tString, 0 );
+      fst_call_dispatcher( fst, effGetParamName, paramIndex, 0, tString, 0 );
 
       cur_node = xmlNewChild(plugin_state_node, NULL, BAD_CAST "map", NULL);
       xmlNewProp(cur_node, BAD_CAST "name", tString);
@@ -345,11 +340,10 @@ bool fps_save (JackVST* jvst, const char* filename) {
 
    // Chunk
    if ( fst->plugin->flags & effFlagsProgramChunks ) {
-      int chunk_size;
-      void * chunk_data;
       printf( "getting chunk ... " );
-      chunk_size = fst_call_dispatcher( fst, effGetChunk, 0, 0, &chunk_data, 0 );
-      printf( "%d B [DONE]\n", chunk_size );
+      void * chunk_data;
+      intptr_t chunk_size = fst_call_dispatcher( fst, effGetChunk, 0, 0, &chunk_data, 0 );
+      printf( "%d B [DONE]\n", (int) chunk_size );
 
       if ( chunk_size <= 0 ) {
          printf( "Chunke len =< 0 !!! Not saving chunk.\n" );
@@ -362,9 +356,9 @@ bool fps_save (JackVST* jvst, const char* filename) {
       g_free( encoded );
    // Params
    } else {
-      float val;
+      int32_t paramIndex;
       for ( paramIndex=0; paramIndex < fst->plugin->numParams; paramIndex++ ) {
-         val = fst->plugin->getParameter( fst->plugin, paramIndex );
+         float val = fst->plugin->getParameter( fst->plugin, paramIndex );
          cur_node = xmlNewChild(plugin_state_node, NULL, BAD_CAST "param", NULL);
          xmlNewProp(cur_node, BAD_CAST "index", int2str(tString, sizeof tString, paramIndex));
          xmlNewProp(cur_node, BAD_CAST "value", float2str(tString, sizeof tString, val));
