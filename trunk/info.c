@@ -168,6 +168,15 @@ free_p_cont:	xmlFree ( p );
 	return path;
 }
 
+FST* fst_info_load_open ( const char* dbpath, const char* plug_spec ) {
+	char *p = fst_info_get_plugin_path ( dbpath, plug_spec );
+	if (!p) return NULL;
+
+	FST* fst = fst_load_open (p);
+	free(p);
+	return fst; /* Could be NULL */
+}
+
 int fst_info_update(const char *dbpath, const char *fst_path) {
 	xmlDoc*  xml_db = NULL;
 	xmlNode* xml_rn = NULL;

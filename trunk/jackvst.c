@@ -9,7 +9,7 @@ bool fps_load(JackVST* jvst, const char* filename);
 extern void jvstamc_init ( JackVST* jvst, AMC* amc );
 
 /* info.c */
-char* fst_info_get_plugin_path(const char* dbpath, const char* filename);
+FST* fst_info_load_open ( const char* dbpath, const char* plug_spec );
 
 JackVST* jvst_new() {
 	JackVST* jvst = calloc (1, sizeof (JackVST));
@@ -44,20 +44,19 @@ JackVST* jvst_new() {
 
 /* plug_spec could be path, dll name or eff/plug name */
 bool jvst_load (JackVST* jvst, const char* plug_spec) {
-	printf( "yo... lets see...\n" );
-	jvst->fst = fst_load_open (plug_spec);
-	if (jvst->fst) goto got_plug;
+	/* Try load directly */
+	printf( "yo... lets see... ( try load directly)\n" );
+	jvst->fst = fst_load_open ( plug_spec );
+	if ( ! jvst->fst ) {
+		printf ( "... and now for something completely differenti ... try load using XML DB\n" );
+		if ( ! jvst->dbinfo_file ) return false;
+		jvst->fst = fst_info_load_open ( jvst->dbinfo_file, plug_spec );
+		if ( ! jvst->fst ) return false;
+	}
 
-	if (! jvst->dbinfo_file) return false;
-	char *p = fst_info_get_plugin_path(jvst->dbinfo_file, plug_spec);
-	if (!p) return false;
-
-	jvst->fst = fst_load_open (p);
-	free(p);
-	if (! jvst->fst) return false;
-
-got_plug:
+	/* Plugin loaded - bin Jack to Audio Master Callback */
 	jvstamc_init ( jvst, jvst->fst->amc );
+
 	return true;
 }
 
