@@ -649,14 +649,10 @@ static inline void jvst_connect_to_ctrl_app(JackVST* jvst) {
 	if (!jports) return;
 
 	bool done = false;
-	const char *src, *dst;
-	jack_port_t* port;
 	unsigned short i;
 	for (i=0; jports[i]; i++) {
-		// Skip mine port
-		port = jack_port_by_name(jvst->client, jports[i]);
-		if ( jack_port_is_mine(jvst->client, port) ) continue;
-
+		const char *src, *dst;
+		jack_port_t* port = jack_port_by_name(jvst->client, jports[i]);
 		if (jack_port_flags(port) & JackPortIsInput) {
 			/* Do not connect to forward input port */
 			if ( strstr( jports[i], "forward" ) != NULL ) continue;
