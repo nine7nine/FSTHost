@@ -678,8 +678,7 @@ static inline void jvst_connect_to_ctrl_app(JackVST* jvst) {
         jack_free(jports);
 
 	/* Now we are connected to CTRL APP - send announce */
-	if (done && jvst->sysex_ident_reply.model[0] == SYSEX_AUTO_ID)
-		jvst_send_sysex(jvst, SYSEX_WANT_IDENT_REPLY);
+	if (done) jvst_send_sysex(jvst, SYSEX_WANT_IDENT_REPLY);
 }
 
 static bool jvst_idle(JackVST* jvst) {
