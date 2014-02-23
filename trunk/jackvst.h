@@ -60,7 +60,6 @@ typedef struct _JackVST {
     jack_port_t**   inports;
     jack_port_t**   outports;
     bool            bypassed;
-    bool            zeroize;
     enum WantState  want_state;
     short           want_state_cc;
     enum WithEditor with_editor;

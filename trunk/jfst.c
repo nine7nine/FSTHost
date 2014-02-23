@@ -505,7 +505,7 @@ static int process_callback( jack_nframes_t nframes, void* data) {
 		if ( jvst->bypassed && i < jvst->numIns ) {
 			memcpy (jvst->outs[i], jvst->ins[i], sizeof (float) * nframes);
 		// Zeroing output buffers
-		} else if ( jvst->zeroize ) {
+		} else {
 			memset (jvst->outs[i], 0, sizeof (float) * nframes);
 		}
 	}
@@ -767,7 +767,6 @@ static void usage(char* appname) {
 	fprintf(stderr, format, "-u uuid", "JackSession UUID");
 	fprintf(stderr, format, "-U SysExID", "SysEx ID (1-127). 0 is default (do not use it)");
 	fprintf(stderr, format, "-V", "Disable Volume control / filtering CC7 messages");
-	fprintf(stderr, format, "-z", "Zeroize output buffers");
 }
 
 static bool jvst_jack_init( JackVST* jvst ) {
@@ -995,7 +994,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 
         // Parse command line options
 	cmdline2arg(&argc, &argv, cmdline);
-	while ( (i = getopt (argc, argv, "bBd:egs:S:c:k:i:j:lLnNm:pPo:t:u:U:Vz")) != -1) {
+	while ( (i = getopt (argc, argv, "bBd:egs:S:c:k:i:j:lLnNm:pPo:t:u:U:V")) != -1) {
 		switch (i) {
 			case 'b': jvst->bypassed = TRUE; break;
 			case 'd': free(jvst->dbinfo_file); jvst->dbinfo_file = optarg; break;
@@ -1020,7 +1019,6 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 			case 'u': jvst->uuid = optarg; break;
 			case 'U': jvst_sysex_set_uuid( jvst, strtol(optarg, NULL, 10) ); break;
 			case 'V': jvst->volume = -1; break;
-			case 'z': jvst->zeroize = true;
 			default: usage (argv[0]); return 1;
 		}
 	}
