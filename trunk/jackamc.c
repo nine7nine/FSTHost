@@ -11,7 +11,7 @@ static VstTimeInfo* jvstamc_get_time ( AMC* amc, int32_t mask ) {
 	JackVST* jvst = (JackVST*) amc->user_ptr;
 	if ( ! jvst ) return NULL;
 
-	struct VstTimeInfo* timeInfo = &jvst->fst->timeInfo;
+	struct VstTimeInfo* timeInfo = &amc->timeInfo;
 
 	// We always say that something was changed (are we lie ?)
 	timeInfo->flags = ( kVstTransportChanged | kVstTempoValid | kVstPpqPosValid );
