@@ -48,9 +48,6 @@ typedef struct _JackVST {
     char*           dbinfo_file;
     int32_t         numIns;
     int32_t         numOuts;
-    float**         ins;
-    float**         outs;
-    float*          swap;
     jack_nframes_t  buffer_size;
     jack_nframes_t  sample_rate;
     jack_port_t*    midi_inport;

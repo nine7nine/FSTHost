@@ -48,7 +48,7 @@ bool jvst_load (JackVST* jvst, const char* plug_spec) {
 	printf( "yo... lets see... ( try load directly)\n" );
 	jvst->fst = fst_load_open ( plug_spec );
 	if ( ! jvst->fst ) {
-		printf ( "... and now for something completely differenti ... try load using XML DB\n" );
+		printf ( "... and now for something completely different ... try load using XML DB\n" );
 		if ( ! jvst->dbinfo_file ) return false;
 		jvst->fst = fst_info_load_open ( jvst->dbinfo_file, plug_spec );
 		if ( ! jvst->fst ) return false;
