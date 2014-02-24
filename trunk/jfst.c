@@ -399,7 +399,7 @@ static inline void process_midi_input(JackVST* jvst, jack_nframes_t nframes) {
 	void *port_buffer = jack_port_get_buffer( jvst->midi_inport, nframes );
 	jack_nframes_t num_jackevents = jack_midi_get_event_count( port_buffer );
 	jack_nframes_t i;
-	for( i=0; i < num_jackevents; i++ ) {
+	for( i = 0; i < num_jackevents; i++ ) {
 		jack_midi_event_t jackevent;
 		if ( jack_midi_event_get( &jackevent, port_buffer, i ) ) break;
 
@@ -473,7 +473,7 @@ static inline void process_midi_input(JackVST* jvst, jack_nframes_t nframes) {
 		jvst->event_array[stuffed_events].byteSize = 24;
 		jvst->event_array[stuffed_events].deltaFrames = jackevent.time;
 
-		unsigned short j;
+		uint8_t j;
 		for (j=0; j < 3; j++) { /* event_array[3] remain 0 (according to VST Spec) */
 			jvst->event_array[stuffed_events].midiData[j] = 
 				(j < jackevent.size) ? buf[j] : 0;
@@ -492,21 +492,37 @@ static int process_callback( jack_nframes_t nframes, void* data) {
 	JackVST* jvst = (JackVST*) data;
 	AEffect* plugin = jvst->fst->plugin;
 
+	float* ins[plugin->numInputs];
+	float* outs[plugin->numOutputs];
+
+	// swap area ( nonused ports )
+	float swap[jvst->buffer_size];
+	memset ( swap, 0, jvst->buffer_size * sizeof(float) );
+
 	// Get addresses of input buffers
-	for (i = 0; i < jvst->numIns; ++i)
-		jvst->ins[i]  = (float*) jack_port_get_buffer (jvst->inports[i], nframes);
+	for (i = 0; i < plugin->numInputs; ++i) {
+		if ( i < jvst->numIns ) { 
+			ins[i] = (float*) jack_port_get_buffer (jvst->inports[i], nframes);
+		} else {
+			ins[i] = swap;
+		}
+	}
 
 	// Initialize output buffers
-	for (i = 0; i < jvst->numOuts; ++i) {
-		// Get address
-		jvst->outs[i]  = (float*) jack_port_get_buffer (jvst->outports[i], nframes);
+	for (i = 0; i < plugin->numOutputs; ++i) {
+		if ( i < jvst->numOuts ) {
+			// Get address
+			outs[i]  = (float*) jack_port_get_buffer (jvst->outports[i], nframes);
 	
-		// If bypassed then copy In's to Out's
-		if ( jvst->bypassed && i < jvst->numIns ) {
-			memcpy (jvst->outs[i], jvst->ins[i], sizeof (float) * nframes);
-		// Zeroing output buffers
+			// If bypassed then copy In's to Out's
+			if ( jvst->bypassed && i < jvst->numIns ) {
+				memcpy ( outs[i], ins[i], sizeof (float) * nframes );
+			// Zeroing output buffers
+			} else {
+				memset ( outs[i], 0, sizeof (float) * nframes );
+			}
 		} else {
-			memset (jvst->outs[i], 0, sizeof (float) * nframes);
+			outs[i] = swap;
 		}
 	}
 
@@ -520,16 +536,16 @@ static int process_callback( jack_nframes_t nframes, void* data) {
 
 	// Deal with plugin
 	if (plugin->flags & effFlagsCanReplacing) {
-		plugin->processReplacing (plugin, jvst->ins, jvst->outs, nframes);
+		plugin->processReplacing (plugin, ins, outs, nframes);
 	} else {
-		plugin->process (plugin, jvst->ins, jvst->outs, nframes);
+		plugin->process (plugin, ins, outs, nframes);
 	}
 
 	jack_nframes_t n;
 #ifndef NO_VUMETER
 	/* Compute output level for VU Meter */
 	float avg_level = 0;
-	for (n=0; n < nframes; n++) avg_level += fabs( jvst->outs[0][n] );
+	for (n=0; n < nframes; n++) avg_level += fabs( outs[0][n] );
 	avg_level /= nframes;
 
 	jvst->out_level = avg_level * 100;
@@ -541,7 +557,7 @@ static int process_callback( jack_nframes_t nframes, void* data) {
 
 	for(i=0; i < jvst->numOuts; i++)
 		for(n=0; n < nframes; n++)
-			jvst->outs[i][n] *= jvst->volume;
+			outs[i][n] *= jvst->volume;
 
 midi_out:
 	// Process MIDI Output
@@ -889,35 +905,12 @@ static bool jvst_fst_init( JackVST* jvst ) {
 	fst_call_dispatcher (fst, effSetSampleRate, 0, 0, NULL, (float) jvst->sample_rate);
 	fst_call_dispatcher (fst, effSetBlockSize, 0, (intptr_t) jvst->buffer_size, NULL, 0.0f);
 	printf("Sample Rate: %d | Block Size: %d\n", jvst->sample_rate, jvst->buffer_size);
-
-	// Allocate buffer pointers ( both for ports and swap area )
-	AEffect* plugin = fst->plugin;
-	jvst->ins = malloc (sizeof(float*) * plugin->numInputs); // float**
-	jvst->outs = malloc (sizeof (float*) * plugin->numOutputs); // float**
-
-	// Allocate swap area ( nonused ports )
-	int32_t swap_size = ( plugin->numInputs - jvst->numIns ) + ( plugin->numOutputs - jvst->numOuts );
-	if ( swap_size > 0 ) {
-		jvst->swap = malloc ( sizeof(float) * jvst->buffer_size * swap_size ); // float*
-
-		// Assign pointers
-		int32_t i, s = 0;
-		for ( i = jvst->numIns; i < plugin->numInputs; ++i, s+=jvst->buffer_size)
-			jvst->ins[i] = jvst->swap + s;
-
-		for ( i = jvst->numOuts; i < plugin->numOutputs; ++i, s+=jvst->buffer_size)
-			jvst->outs[i] = jvst->swap + s;
-	}
-
 	return true;
 }
 
 void jvst_cleanup ( JackVST* jvst ) {
 	free ( jvst->inports );
 	free ( jvst->outports );
-	free ( jvst->ins );
-	free ( jvst->outs );
-	if ( jvst->swap ) free ( jvst->swap );
 	if ( jvst->want_midi_in ) {
 		free ( jvst->events );
 		free ( jvst->event_array );

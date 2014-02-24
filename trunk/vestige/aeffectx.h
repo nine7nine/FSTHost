@@ -167,21 +167,21 @@ typedef struct VstMidiEvent
 	int32_t byteSize;
 	// 08
 	int32_t deltaFrames;
-	// 0c?
+	// 0c
 	int32_t flags;
-	// 10?
+	// 10
 	int32_t noteLength;
-	// 14?
+	// 14
 	int32_t noteOffset;
 	// 18
 	char midiData[4];
-	// 1c?
+	// 1c
 	char detune;
-	// 1d?
+	// 1d
 	char noteOffVelocity;
-	// 1e?
+	// 1e
 	char reserved1;
-	// 1f?
+	// 1f
 	char reserved2;
 } VstMidiEvent;
 
