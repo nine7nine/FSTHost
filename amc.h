@@ -5,6 +5,9 @@
 #include "vestige/aeffectx.h"
 
 typedef struct _AMC {
+	/* This is needed only audioMasterGetTime - but we don't know how long plugin want to use it */
+	struct VstTimeInfo	timeInfo;
+
 	void		(*Automate) ( struct _AMC* amc, int32_t param );
 	VstTimeInfo*	(*GetTime) ( struct _AMC* amc, int32_t mask );
 	bool		(*ProcessEvents) ( struct _AMC* amc, VstEvents* events );

@@ -119,9 +119,6 @@ typedef struct _FST {
 	bool			canReceiveVstMidiEvent;
 	bool			canSendVstEvents;
 	bool			canSendVstMidiEvent;
-
-	/* This is needed only audioMasterGetTime - but we don't know how long plugin want to use it */
-	struct VstTimeInfo	timeInfo;
 } FST;
 
 enum FxFileType {
