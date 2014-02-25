@@ -23,7 +23,6 @@ static uint32_t endian_swap(uint32_t x)
 
 static void fx_load_chunk ( FST *fst, FILE *fxfile, enum FxFileType chunkType )
 {
-	void * chunk = NULL;
 	size_t chunkSize;
 	size_t br;
 
@@ -44,7 +43,7 @@ static void fx_load_chunk ( FST *fst, FILE *fxfile, enum FxFileType chunkType )
 		fst_call_dispatcher(fst, effBeginLoadProgram, 0, 0, &chunkInfo, 0);
 	}
 
-	chunk = malloc ( chunkSize );
+	void* chunk = malloc ( chunkSize );
 	br = fread (chunk, 1, chunkSize, fxfile);
 	if (br == chunkSize) {
 		printf("SetChunk type : %d\n", chunkType);

@@ -648,7 +648,7 @@ static int graph_order_callback( void *arg ) {
 
 static inline void jvst_sysex_notify(JackVST* jvst) {
 	// Wait until program change
-	if (jvst->fst->event_call->type != PROGRAM_CHANGE) return;
+	if (jvst->fst->event_call.type != PROGRAM_CHANGE) return;
 	// Do not notify if have not SysEx ID
 	if (jvst->sysex_ident_reply.model[0] == SYSEX_AUTO_ID) return;
 

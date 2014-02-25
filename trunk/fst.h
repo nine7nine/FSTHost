@@ -92,8 +92,8 @@ typedef struct {
 typedef struct _FST {
 	AEffect*		plugin;
 	FSTHandle*		handle;
-	AMC*			amc;
-	FSTEventCall*		event_call;
+	AMC			amc;
+	FSTEventCall		event_call;
 	struct _FST*		next;
 
 	char*			name;
