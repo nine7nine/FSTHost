@@ -54,8 +54,8 @@ bool jvst_load (JackVST* jvst, const char* plug_spec) {
 		if ( ! jvst->fst ) return false;
 	}
 
-	/* Plugin loaded - bin Jack to Audio Master Callback */
-	jvstamc_init ( jvst, jvst->fst->amc );
+	/* Plugin loaded - bind Jack to Audio Master Callback */
+	jvstamc_init ( jvst, &( jvst->fst->amc ) );
 
 	return true;
 }

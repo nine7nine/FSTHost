@@ -663,7 +663,7 @@ idle_cb(JackVST *jvst) {
 	AEffect* plugin = fst->plugin;
 
 	// If program was changed via plugin or MIDI
-	if ( fst->event_call->type != PROGRAM_CHANGE &&
+	if ( fst->event_call.type != PROGRAM_CHANGE &&
 	    gtk_combo_box_get_active( GTK_COMBO_BOX( preset_listbox ) ) != fst->current_program )
 	{
 		g_signal_handler_block (preset_listbox, preset_listbox_signal);

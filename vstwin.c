@@ -20,12 +20,9 @@ fst_new () {
 
 	pthread_mutex_init (&fst->lock, NULL);
 	//fst->current_program = 0; - calloc done this
-	fst->event_call = malloc(sizeof(FSTEventCall));
-	fst->event_call->type = RESET;
-	pthread_mutex_init (&fst->event_call->lock, NULL);
-	pthread_cond_init (&fst->event_call->called, NULL);
+	pthread_mutex_init (&(fst->event_call.lock), NULL);
+	pthread_cond_init (&(fst->event_call.called), NULL);
 //	fst->editor_popup = TRUE;
-	fst->amc = calloc (1, sizeof (AMC));
 
 	return fst;
 }
@@ -183,7 +180,7 @@ bool fst_show_editor (FST *fst) {
 /*************************** Event call routines *****************************************/
 /* Assume that fst->event_call_lock is held */
 static void fst_event_call (FST *fst, FSTEventTypes type) {
-	FSTEventCall* ec = fst->event_call;
+	FSTEventCall* ec = &( fst->event_call );
 	ec->type = type;
 	if (GetCurrentThreadId() == fst->MainThreadId) {
 		fst_event_handler ( fst );
@@ -195,14 +192,14 @@ static void fst_event_call (FST *fst, FSTEventTypes type) {
 }
 
 void fst_call (FST *fst, FSTEventTypes type) {
-	FSTEventCall* ec = fst->event_call;
+	FSTEventCall* ec = &( fst->event_call );
 	pthread_mutex_lock ( &ec->lock );
 	fst_event_call ( fst, type );
 	pthread_mutex_unlock ( &ec->lock );
 }
 
 void fst_program_change (FST *fst, int32_t program) {
-	FSTEventCall* ec = fst->event_call;
+	FSTEventCall* ec = &( fst->event_call );
 	pthread_mutex_lock (&ec->lock);
 	if (fst->current_program != program) {
 		ec->program = program;
@@ -215,7 +212,7 @@ intptr_t
 fst_call_dispatcher (FST *fst, int32_t opcode, int32_t index, 
 			intptr_t val, void *ptr, float opt )
 {
-	FSTEventCall* ec = fst->event_call;
+	FSTEventCall* ec = &( fst->event_call );
 
 	FSTDispatcher dp;
 	dp.opcode = opcode;
@@ -386,7 +383,7 @@ FST* fst_open (FSTHandle* fhandle) {
 	FST* fst = fst_new ();
 	fst->plugin = plugin;
 	fst->handle = fhandle;
-	fst->plugin->resvd1 = (intptr_t*) fst->amc;
+	fst->plugin->resvd1 = (intptr_t*) &( fst->amc );
 
 	// Open Plugin
 	plugin->dispatcher (plugin, effOpen, 0, 0, NULL, 0.0f);
@@ -443,7 +440,6 @@ void fst_close (FST* fst) {
 
 	fst_unload(fst->handle);
 	free(fst->name);
-	free(fst->amc);
 	free(fst);
 }
 
@@ -521,7 +517,7 @@ static inline void fst_suspend ( FST* fst ) {
 }
 
 static inline void fst_event_handler (FST* fst) {
-	FSTEventCall* ec = fst->event_call;
+	FSTEventCall* ec = &( fst->event_call );
 	if ( ec->type == RESET ) return;
 
 

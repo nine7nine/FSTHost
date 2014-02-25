@@ -53,7 +53,7 @@ MIDIFILTER* midi_filter_add( MIDIFILTER **filters, MIDIFILTER *new ) {
 	MIDIFILTER *f = *filters;
 	MIDIFILTER *n =  malloc( sizeof(MIDIFILTER) );
 	*n = *new;
-	/* Defaule rule */
+	/* Default rule */
 	if (n->rule == 0) n->rule = CHANNEL_REDIRECT;
 
 	if (f) {
