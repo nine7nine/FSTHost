@@ -24,6 +24,7 @@
 #include <semaphore.h>
 #include <signal.h>
 #include <sys/syscall.h>
+#include <sys/mman.h>
 
 #include "jackvst.h"
 #include <jack/thread.h>
@@ -818,6 +819,7 @@ static bool jvst_jack_init( JackVST* jvst ) {
 
 	// Register input ports
 	jvst->inports = malloc(sizeof(jack_port_t*) * jvst->numIns); // jack_port_t**
+	mlock ( jvst->inports, sizeof(jack_port_t*) * jvst->numIns );
 	for (i = 0; i < jvst->numIns; ++i) {
 		char buf[6];
 		snprintf (buf, sizeof(buf), "in%d", i+1);
@@ -826,6 +828,7 @@ static bool jvst_jack_init( JackVST* jvst ) {
 
 	// Register output ports
 	jvst->outports = malloc (sizeof(jack_port_t*) * jvst->numOuts); //jack_port_t**
+	mlock ( jvst->outports, sizeof(jack_port_t*) * jvst->numOuts );
 	for (i = 0; i < jvst->numOuts; ++i) {
 		char buf[7];
 		snprintf (buf, sizeof(buf), "out%d", i+1);
@@ -876,13 +879,16 @@ static void jvst_init_midi ( JackVST* jvst ) {
 		/* The VstEvents structure already contains an array of 2    */
 		/* pointers to VstEvent so I guess that this malloc actually */
 		/* gives enough  space for MIDI_EVENT_MAX ....               */
-		jvst->events = malloc(sizeof(VstEvents) + ((MIDI_EVENT_MAX - 2) * sizeof(VstMidiEvent*))); // VstEvents*
+		size_t size = sizeof(VstEvents) + ((MIDI_EVENT_MAX - 2) * sizeof(VstMidiEvent*));
+		jvst->events = malloc( size ); // VstEvents*
+		mlock ( jvst->events, size );
 		jvst->events->numEvents = 0;
 		jvst->events->reserved = 0;
 
 		/* Initialise dynamic array of MIDI_EVENT_MAX VstMidiEvents */
 		/* and point the VstEvents events array of pointers to it   */
 		jvst->event_array = calloc(MIDI_EVENT_MAX, sizeof (VstMidiEvent)); // VstMidiEvent*
+		mlock ( jvst->event_array, sizeof (VstMidiEvent) );
 		unsigned short i;
 		for (i = 0; i < MIDI_EVENT_MAX; i++)
 			jvst->events->events[i] = (VstEvent*)&(jvst->event_array[i]);
@@ -899,6 +905,11 @@ static bool jvst_fst_init( JackVST* jvst ) {
 
 	// Jack Audio
 	if ( ! jvst_jack_init ( jvst ) ) return false;
+
+	// Lock our crucial memory ( which is used in process callback )
+	// TODO: this is not all
+	mlock ( jvst, sizeof(JackVST) );
+	mlock ( jvst->fst, sizeof(FST) );
 
 	// Set block size / sample rate
 	FST* fst = jvst->fst;
