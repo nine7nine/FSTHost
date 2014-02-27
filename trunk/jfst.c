@@ -542,10 +542,10 @@ static int process_callback( jack_nframes_t nframes, void* data) {
 		plugin->process (plugin, ins, outs, nframes);
 	}
 
-	jack_nframes_t n;
 #ifndef NO_VUMETER
 	/* Compute output level for VU Meter */
 	float avg_level = 0;
+	jack_nframes_t n;
 	for (n=0; n < nframes; n++) avg_level += fabs( outs[0][n] );
 	avg_level /= nframes;
 
@@ -553,12 +553,7 @@ static int process_callback( jack_nframes_t nframes, void* data) {
 	if (jvst->out_level > 100) jvst->out_level = 100;
 #endif
 
-	// Output volume control - if enabled
-	if (jvst->volume == -1) goto midi_out;
-
-	for(i=0; i < jvst->numOuts; i++)
-		for(n=0; n < nframes; n++)
-			outs[i][n] *= jvst->volume;
+	jvst_apply_volume ( jvst, nframes, outs );
 
 midi_out:
 	// Process MIDI Output

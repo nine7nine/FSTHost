@@ -83,6 +83,17 @@ unsigned short jvst_get_volume(JackVST* jvst) {
 	return (ret < 0) ? 0 : (ret > 127) ? 127 : ret;
 }
 
+void jvst_apply_volume ( JackVST* jvst, jack_nframes_t nframes, float** outs ) {
+	if (jvst->volume == -1) return;
+
+	int32_t i;
+	for ( i = 0; i < jvst->numOuts; i++ ) {
+		jack_nframes_t n;
+		for ( n = 0; n < nframes; n++ )
+			outs[i][n] *= jvst->volume;
+	}
+}
+
 void jvst_bypass(JackVST* jvst, bool bypass) {
 	jvst->want_state = WANT_STATE_NO;
 	if (bypass & !jvst->bypassed) {
