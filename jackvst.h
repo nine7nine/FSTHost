@@ -111,6 +111,7 @@ void jvst_bypass(JackVST* jvst, bool bypass);
 bool jvst_load_state(JackVST* jvst, const char * filename);
 bool jvst_save_state(JackVST* jvst, const char * filename);
 void jvst_set_volume(JackVST* jvst, short volume);
+void jvst_apply_volume ( JackVST* jvst, jack_nframes_t nframes, float** outs );
 void jvst_sysex_set_uuid(JackVST* jvst, uint8_t uuid);
 unsigned short jvst_get_volume(JackVST* jvst);
 
