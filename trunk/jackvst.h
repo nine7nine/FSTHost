@@ -88,16 +88,12 @@ typedef struct _JackVST {
     /* SysEx receive support */
     jack_ringbuffer_t* sysex_ringbuffer;
 
-    /* For VST/i support */
-    bool                 want_midi_in;
-    struct VstMidiEvent* event_array;
-    struct VstEvents*    events;
-
     /* Jack Session support */
     char* uuid;
     jack_session_event_t* session_event;
 
-    /* For VST midi effects & synth source (like audio to midi VSTs) support */
+    /* For VSTi support - midi effects & synth source (like audio to midi VSTs) support */
+    bool               want_midi_in;
     bool               want_midi_out;
     jack_ringbuffer_t* ringbuffer;
 } JackVST;

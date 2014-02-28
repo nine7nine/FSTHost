@@ -41,7 +41,6 @@
 
 #define RINGBUFFER_SIZE 16 * sizeof(struct MidiMessage)
 #define SYSEX_RINGBUFFER_SIZE 16 * SYSEX_MAX_SIZE
-#define MIDI_EVENT_MAX 16 /* Max counts of events in one process */
 //#define SEP_THREAD
 
 /* gtk.c */
@@ -390,102 +389,87 @@ static inline void process_ctrl_input(JackVST* jvst, jack_nframes_t nframes) {
 	}
 }
 
-static inline void process_midi_input(JackVST* jvst, jack_nframes_t nframes) {
-	if ( ! jvst->want_midi_in ) return;
-	// Do not process anything if MIDI IN port is not connected
-	if ( ! jack_port_connected ( jvst->midi_inport ) ) return;
+/* True if this message should be passed to plugin */
+static inline void process_midi_in_msg ( JackVST* jvst, jack_midi_event_t* jackevent, VstEvents* events, int32_t event_number )
+{
+	/* TODO: SysEx
+	For now we simply drop all SysEx messages because VST standard
+	require special Event type for this (kVstSysExType)
+	and this type is not supported (yet ;-)
+	*/
+	if ( jackevent->buffer[0] == SYSEX_BEGIN) return;
 
-	AEffect* plugin = jvst->fst->plugin;
-	unsigned short stuffed_events = 0;
-	void *port_buffer = jack_port_get_buffer( jvst->midi_inport, nframes );
-	jack_nframes_t num_jackevents = jack_midi_get_event_count( port_buffer );
-	jack_nframes_t i;
-	for( i = 0; i < num_jackevents; i++ ) {
-		jack_midi_event_t jackevent;
-		if ( jack_midi_event_get( &jackevent, port_buffer, i ) ) break;
+	/* Copy this MIDI event beacuse Jack gives same buffer to all clients and we cannot work on this data */
+	jack_midi_data_t buf[jackevent->size];
+	memcpy(&buf, jackevent->buffer, jackevent->size);
 
-		/* SysEx TODO:
-		For now we simply drop all SysEx messages because VST standard
-		require special Event type for this (kVstSysExType)
-		and this type is not supported (yet ;-)
-		*/
-		if ( jackevent.buffer[0] == SYSEX_BEGIN) continue;
+	/* MIDI FILTERS */
+	if ( ! midi_filter_check( &jvst->filters, (uint8_t*) &buf, jackevent->size ) ) return;
 
-		/* Copy this MIDI event beacuse Jack gives same buffer to all clients and we cannot work on this data */
-		jack_midi_data_t buf[jackevent.size];
-		memcpy(&buf, jackevent.buffer, jackevent.size);
+	switch ( (buf[0] >> 4) & 0xF ) {
+	case MM_CONTROL_CHANGE: ;
+		// CC assigments
+		uint8_t CC = buf[1];
+		uint8_t VALUE = buf[2];
 
-		/* MIDI FILTERS */
-		if ( ! midi_filter_check( &jvst->filters, (uint8_t*) &buf, jackevent.size ) ) continue;
-
-		switch ( (buf[0] >> 4) & 0xF ) {
-		case MM_CONTROL_CHANGE: ;
-			// CC assigments
-			uint8_t CC = buf[1];
-			uint8_t VALUE = buf[2];
-
-			// Want Mode
-			if (CC == jvst->want_state_cc) {
-				// 0-63 mean want bypass
-				if (VALUE >= 0 && VALUE <= 63) {
-					jvst->want_state = WANT_STATE_BYPASS;
-				// 64-127 mean want resume
-				} else if (VALUE > 63 && VALUE <= 127) {
-					jvst->want_state = WANT_STATE_RESUME;
-				// other values are wrong
-				} else {
-					jvst->want_state = WANT_STATE_NO;
-				}
-				continue;
-			// If Volume control is enabled then grab CC7 messages
-			} else if (CC == 7 && jvst->volume != -1) {
-				jvst_set_volume(jvst, VALUE);
-				continue;
+		// Want Mode
+		if (CC == jvst->want_state_cc) {
+			// 0-63 mean want bypass
+			if (VALUE >= 0 && VALUE <= 63) {
+				jvst->want_state = WANT_STATE_BYPASS;
+			// 64-127 mean want resume
+			} else if (VALUE > 63 && VALUE <= 127) {
+				jvst->want_state = WANT_STATE_RESUME;
+			// other values are wrong
+			} else {
+				jvst->want_state = WANT_STATE_NO;
 			}
-			// In bypass mode do not touch plugin
-			if (jvst->bypassed) continue;
-			// Mapping MIDI CC
-			if ( jvst->midi_learn ) {
-				jvst->midi_learn_CC = CC;
-			// handle mapped MIDI CC
-			} else if ( jvst->midi_map[CC] != -1 ) {
-				int32_t parameter = jvst->midi_map[CC];
-				float value = 1.0/127.0 * (float) VALUE;
-				plugin->setParameter( plugin, parameter, value );
-			}
-			break;
-		case MM_PROGRAM_CHANGE:
-			// Self Program Change
-			if (jvst->midi_pc != MIDI_PC_SELF) break;
-			jvst->midi_pc = buf[1];
-			// OFC don't forward this message to plugin
-			continue;
+			return;
+		// If Volume control is enabled then grab CC7 messages
+		} else if (CC == 7 && jvst->volume != -1) {
+			jvst_set_volume(jvst, VALUE);
+			return;
 		}
 
-		// ... wanna play ?
-		if ( jvst->bypassed || ! jvst->want_midi_in ) continue;
-		
-		if (stuffed_events >= MIDI_EVENT_MAX) {
-			fst_error("Error: Note dropped, no more space in buffer (max %d notes)", MIDI_EVENT_MAX);
-			continue;
-		}
-		/* Prepare MIDI events */
-		jvst->event_array[stuffed_events].type = kVstMidiType;
-		jvst->event_array[stuffed_events].byteSize = 24;
-		jvst->event_array[stuffed_events].deltaFrames = jackevent.time;
+		// In bypass mode do not touch plugin
+		if (jvst->bypassed) return;
 
-		uint8_t j;
-		for (j=0; j < 3; j++) { /* event_array[3] remain 0 (according to VST Spec) */
-			jvst->event_array[stuffed_events].midiData[j] = 
-				(j < jackevent.size) ? buf[j] : 0;
+		// Mapping MIDI CC
+		if ( jvst->midi_learn ) {
+			jvst->midi_learn_CC = CC;
+		// handle mapped MIDI CC
+		} else if ( jvst->midi_map[CC] != -1 ) {
+			int32_t parameter = jvst->midi_map[CC];
+			float value = 1.0/127.0 * (float) VALUE;
+			AEffect* plugin = jvst->fst->plugin;
+			plugin->setParameter( plugin, parameter, value );
 		}
-		++stuffed_events;
+		break;
+	case MM_PROGRAM_CHANGE:
+		// Self Program Change
+		if (jvst->midi_pc != MIDI_PC_SELF) break;
+		jvst->midi_pc = buf[1];
+		// OFC don't forward this message to plugin
+		return;
 	}
 
-	// ... let's the music play
-	if ( stuffed_events == 0 ) return;
-	jvst->events->numEvents = stuffed_events;
-	plugin->dispatcher (plugin, effProcessEvents, 0, 0, jvst->events, 0.0f);
+	// ... wanna play at all ?
+	if ( jvst->bypassed || ! jvst->want_midi_in ) return;
+	
+	/* Prepare MIDI events */
+	VstMidiEvent* midi_event = (VstMidiEvent*) events->events[event_number];
+	midi_event->type = kVstMidiType;
+	midi_event->byteSize = sizeof (VstMidiEvent);
+	midi_event->deltaFrames = jackevent->time;
+	// All our MIDI data are realtime, it's clear ?
+	midi_event->flags = kVstMidiEventIsRealtime;
+
+	uint8_t j;
+	for (j=0; j < 3; j++) midi_event->midiData[j] = ( j < jackevent->size ) ? buf[j] : 0;
+	/* event_array[3] remain 0 (according to VST Spec) */
+	midi_event->midiData[3] = 0;
+
+	events->numEvents++;
 }
 
 static int process_callback( jack_nframes_t nframes, void* data) {
@@ -493,6 +477,41 @@ static int process_callback( jack_nframes_t nframes, void* data) {
 	JackVST* jvst = (JackVST*) data;
 	AEffect* plugin = jvst->fst->plugin;
 
+	// Process MIDI Input
+	// NOTE: we process MIDI even in bypass mode bacause of want_state handling
+	if ( ! jvst->want_midi_in ) goto no_midi_in;
+
+	// Do not process anything if MIDI IN port is not connected
+	if ( ! jack_port_connected ( jvst->midi_inport ) ) goto no_midi_in;
+
+	void *port_buffer = jack_port_get_buffer( jvst->midi_inport, nframes );
+	jack_nframes_t num_jackevents = jack_midi_get_event_count( port_buffer );
+
+	// Allocate space for VST MIDI
+	// NOTE: can't use VLA here because of goto above
+	size_t size = sizeof(VstEvents) + ((num_jackevents - 2) * sizeof(VstEvent*));
+	VstEvents* events = alloca ( size );
+	VstMidiEvent* event_array = alloca ( num_jackevents * sizeof(VstMidiEvent) );
+
+	events->numEvents = 0;
+	for (i = 0; i < num_jackevents; i++) {
+		jack_midi_event_t jackevent;
+		if ( jack_midi_event_get( &jackevent, port_buffer, i ) != 0 ) break;
+
+		/* Bind MIDI event to collection */
+		events->events[i] = (VstEvent*) &( event_array[i] );
+
+		process_midi_in_msg ( jvst, &jackevent, events, i );
+	}
+
+	// ... let's the music play
+	if ( events->numEvents == 0 ) goto no_midi_in;
+	plugin->dispatcher (plugin, effProcessEvents, 0, 0, events, 0.0f);
+
+no_midi_in:
+	process_ctrl_input(jvst, nframes);
+
+	/* Process AUDIO */
 	float* ins[plugin->numInputs];
 	float* outs[plugin->numOutputs];
 
@@ -526,11 +545,6 @@ static int process_callback( jack_nframes_t nframes, void* data) {
 			outs[i] = swap;
 		}
 	}
-
-	// Process MIDI Input
-	// NOTE: we process MIDI even in bypass mode bacause of want_state handling
-	process_midi_input(jvst, nframes);
-	process_ctrl_input(jvst, nframes);
 
 	// Bypass - because all audio jobs are done  - simply return
 	if (jvst->bypassed) goto midi_out;
@@ -863,41 +877,22 @@ static bool jvst_jack_init( JackVST* jvst ) {
 	return true;
 }
 
-static void jvst_init_midi ( JackVST* jvst ) {
+static bool jvst_fst_init( JackVST* jvst ) {
 	FST* fst = jvst->fst;
-	if (fst->vst_version < 2) return; /* No MIDI at all - very old/rare v1 plugins */
+
+	// MIDI	
+	/* No MIDI at all - very old/rare v1 plugins */
+	if (fst->vst_version < 2) goto audio; 
 
 	/**************** MIDI IN ***********************/
-	if (fst->isSynth || fst->canReceiveVstEvents || fst->canReceiveVstMidiEvent) {
+	if (fst->isSynth || fst->canReceiveVstEvents || fst->canReceiveVstMidiEvent)
 		jvst->want_midi_in = true;
-
-		/* The VstEvents structure already contains an array of 2    */
-		/* pointers to VstEvent so I guess that this malloc actually */
-		/* gives enough  space for MIDI_EVENT_MAX ....               */
-		size_t size = sizeof(VstEvents) + ((MIDI_EVENT_MAX - 2) * sizeof(VstMidiEvent*));
-		jvst->events = malloc( size ); // VstEvents*
-		mlock ( jvst->events, size );
-		jvst->events->numEvents = 0;
-		jvst->events->reserved = 0;
-
-		/* Initialise dynamic array of MIDI_EVENT_MAX VstMidiEvents */
-		/* and point the VstEvents events array of pointers to it   */
-		jvst->event_array = calloc(MIDI_EVENT_MAX, sizeof (VstMidiEvent)); // VstMidiEvent*
-		mlock ( jvst->event_array, sizeof (VstMidiEvent) );
-		unsigned short i;
-		for (i = 0; i < MIDI_EVENT_MAX; i++)
-			jvst->events->events[i] = (VstEvent*)&(jvst->event_array[i]);
-	}
 
 	/**************** MIDI OUT **********************/
 	if (fst->canSendVstEvents || fst->canSendVstMidiEvent)
 		jvst->want_midi_out = true;
-}
 
-static bool jvst_fst_init( JackVST* jvst ) {
-	// MIDI
-	jvst_init_midi ( jvst );
-
+audio:
 	// Jack Audio
 	if ( ! jvst_jack_init ( jvst ) ) return false;
 
@@ -907,7 +902,6 @@ static bool jvst_fst_init( JackVST* jvst ) {
 	mlock ( jvst->fst, sizeof(FST) );
 
 	// Set block size / sample rate
-	FST* fst = jvst->fst;
 	fst_call_dispatcher (fst, effSetSampleRate, 0, 0, NULL, (float) jvst->sample_rate);
 	fst_call_dispatcher (fst, effSetBlockSize, 0, (intptr_t) jvst->buffer_size, NULL, 0.0f);
 	printf("Sample Rate: %d | Block Size: %d\n", jvst->sample_rate, jvst->buffer_size);
@@ -917,10 +911,6 @@ static bool jvst_fst_init( JackVST* jvst ) {
 void jvst_cleanup ( JackVST* jvst ) {
 	free ( jvst->inports );
 	free ( jvst->outports );
-	if ( jvst->want_midi_in ) {
-		free ( jvst->events );
-		free ( jvst->event_array );
-	}
 }
 
 #ifdef SOCKET_STUFF
