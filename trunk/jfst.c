@@ -492,6 +492,7 @@ static int process_callback( jack_nframes_t nframes, void* data) {
 	size_t size = sizeof(VstEvents) + ((num_jackevents - 2) * sizeof(VstEvent*));
 	VstEvents* events = alloca ( size );
 	VstMidiEvent* event_array = alloca ( num_jackevents * sizeof(VstMidiEvent) );
+	memset ( event_array, 0, num_jackevents * sizeof(VstMidiEvent) );
 
 	events->numEvents = 0;
 	for (i = 0; i < num_jackevents; i++) {
