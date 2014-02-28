@@ -1,5 +1,6 @@
 #include "jackvst.h"
 #include <gtk/gtk.h>
+#include <strings.h>
 
 #if (GTK_MAJOR_VERSION < 3)
 #include <gdk/gdkx.h>
