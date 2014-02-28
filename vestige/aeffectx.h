@@ -145,6 +145,7 @@
 #define kVstParameterType 4	// Depracted Parameter event
 #define kVstTriggerType 5	// Depracted Trigger event
 #define kVstSysExType 6		// SystemExclusive event
+#define kVstMidiEventIsRealtime 1
 #define kVstTransportPlaying (1 << 1)
 #define kVstTransportChanged 1
 
