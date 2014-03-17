@@ -369,29 +369,8 @@ pco_ret:
 	pthread_mutex_unlock(&jvst->sysex_lock);
 }
 
-static inline void process_ctrl_input(JackVST* jvst, jack_nframes_t nframes) {
-	// Do not process anything if MIDI IN port is not connected
-	if ( ! jack_port_connected ( jvst->ctrl_inport ) ) return;
-	
-	void *port_buffer = jack_port_get_buffer( jvst->ctrl_inport, nframes );
-	jack_nframes_t num_jackevents = jack_midi_get_event_count( port_buffer );
-	jack_nframes_t i;
-	for( i=0; i < num_jackevents; i++ ) {
-		jack_midi_event_t jackevent;
-		if ( jack_midi_event_get( &jackevent, port_buffer, i ) ) break;
-		/* Drop all not SysEx messages */
-		if ( jackevent.buffer[0] != SYSEX_BEGIN) continue;
-
-		if (jackevent.size > SYSEX_MAX_SIZE) {
-			fst_error("Sysex is too big. Skip. Requested %d, but MAX is %d", jackevent.size, SYSEX_MAX_SIZE);
-		} else {
-			jvst_queue_sysex(jvst, jackevent.buffer, jackevent.size);
-		}
-	}
-}
-
 /* True if this message should be passed to plugin */
-static inline void process_midi_in_msg ( JackVST* jvst, jack_midi_event_t* jackevent, VstEvents* events, int32_t event_number )
+static inline void process_midi_in_msg ( JackVST* jvst, jack_midi_event_t* jackevent, VstEvents* events, bool ctrl )
 {
 	/* TODO: SysEx
 	For now we simply drop all SysEx messages because VST standard
@@ -455,15 +434,14 @@ static inline void process_midi_in_msg ( JackVST* jvst, jack_midi_event_t* jacke
 	}
 
 	// ... wanna play at all ?
-	if ( jvst->bypassed || ! jvst->want_midi_in ) return;
+	if ( jvst->bypassed || ! jvst->want_midi_in || ctrl ) return;
 	
 	/* Prepare MIDI events */
-	VstMidiEvent* midi_event = (VstMidiEvent*) events->events[event_number];
+	VstMidiEvent* midi_event = (VstMidiEvent*) events->events[events->numEvents];
 	midi_event->type = kVstMidiType;
 	midi_event->byteSize = sizeof (VstMidiEvent);
 	midi_event->deltaFrames = jackevent->time;
-	// All our MIDI data are realtime, it's clear ?
-	midi_event->flags = kVstMidiEventIsRealtime;
+	midi_event->flags = kVstMidiEventIsRealtime; // All our MIDI data are realtime, it's clear ?
 
 	uint8_t j;
 	for (j=0; j < 3; j++) midi_event->midiData[j] = ( j < jackevent->size ) ? buf[j] : 0;
@@ -471,6 +449,30 @@ static inline void process_midi_in_msg ( JackVST* jvst, jack_midi_event_t* jacke
 	midi_event->midiData[3] = 0;
 
 	events->numEvents++;
+}
+
+static inline void process_ctrl_input(JackVST* jvst, jack_nframes_t nframes) {
+	// Do not process anything if MIDI IN port is not connected
+	if ( ! jack_port_connected ( jvst->ctrl_inport ) ) return;
+	
+	void *port_buffer = jack_port_get_buffer( jvst->ctrl_inport, nframes );
+	jack_nframes_t num_jackevents = jack_midi_get_event_count( port_buffer );
+	jack_nframes_t i;
+	for( i=0; i < num_jackevents; i++ ) {
+		jack_midi_event_t jackevent;
+		if ( jack_midi_event_get( &jackevent, port_buffer, i ) ) break;
+
+		process_midi_in_msg ( jvst, &jackevent, NULL, TRUE );
+
+		/* Drop all not SysEx messages */
+		if ( jackevent.buffer[0] != SYSEX_BEGIN) continue;
+
+		if (jackevent.size > SYSEX_MAX_SIZE) {
+			fst_error("Sysex is too big. Skip. Requested %d, but MAX is %d", jackevent.size, SYSEX_MAX_SIZE);
+		} else {
+			jvst_queue_sysex(jvst, jackevent.buffer, jackevent.size);
+		}
+	}
 }
 
 static int process_callback( jack_nframes_t nframes, void* data) {
@@ -503,7 +505,7 @@ static int process_callback( jack_nframes_t nframes, void* data) {
 		/* Bind MIDI event to collection */
 		events->events[i] = (VstEvent*) &( event_array[i] );
 
-		process_midi_in_msg ( jvst, &jackevent, events, i );
+		process_midi_in_msg ( jvst, &jackevent, events, FALSE );
 	}
 
 	// ... let's the music play
