@@ -23,6 +23,7 @@
 #include <glib.h>
 #include <semaphore.h>
 #include <signal.h>
+#include <errno.h>
 #include <sys/syscall.h>
 #include <sys/mman.h>
 
@@ -617,7 +618,14 @@ static void session_callback_aux( jack_session_event_t *event, void* arg ) {
         g_idle_add( (GSourceFunc) session_callback, jvst );
 }
 
-static void jvst_connect(JackVST *jvst, const char *audio_to) {
+static inline bool jack_connect_wrap ( jack_client_t* client , const char* source_port, const char* destination_port ) {
+	int ret = jack_connect( client, source_port, destination_port );
+	if ( ret == EEXIST ) return FALSE;
+	printf( "Connect: %s -> %s [ %s ]\n", source_port, destination_port, (ret==0)?"DONE":"FAIL" );
+	return (ret==0) ? TRUE : FALSE;
+}
+
+static void jvst_connect_audio(JackVST *jvst, const char *audio_to) {
 	// Connect audio port
 	const char **jports = jack_get_ports(jvst->client, audio_to, JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput);
 	if (!jports) {
@@ -629,25 +637,22 @@ static void jvst_connect(JackVST *jvst, const char *audio_to) {
 	unsigned short i;
 	for (i=0; jports[i] && i < jvst->numOuts; i++) {
 		pname = jack_port_name(jvst->outports[i]);
-		jack_connect(jvst->client, pname, jports[i]);
-		printf("Connect: %s -> %s\n", pname, jports[i]);
+		jack_connect_wrap ( jvst->client, pname, jports[i] );
 	}
 	jack_free(jports);
 }
 
 static void jvst_connect_midi_to_physical(JackVST* jvst) {
+	if ( ! jvst->want_midi_in ) return;
+
 	const char **jports = jack_get_ports(jvst->client, NULL, JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput|JackPortIsPhysical);
         if (!jports) return;
 
 	const char *pname = jack_port_name(jvst->midi_inport);
 	unsigned short i;
-        for (i=0; jports[i]; i++) {
-		if (jack_port_connected_to(jvst->midi_inport, jports[i]))
-			continue;
+        for (i=0; jports[i]; i++)
+		jack_connect_wrap (jvst->client, jports[i], pname);
 
-                jack_connect(jvst->client, jports[i], pname);
-                printf("%s -> %s\n", pname, jports[i]);
-        }
         jack_free(jports);
 }
 
@@ -689,18 +694,17 @@ static inline void jvst_connect_to_ctrl_app(JackVST* jvst) {
 		} else if (jack_port_flags(port) & JackPortIsOutput) {
 			/* forward_output -> midi_in | output -> ctrl_in */
 			if ( strstr( jports[i], "forward" ) != NULL ) {
+				if ( ! jvst->want_midi_in ) continue;
 				port = jvst->midi_inport;
 			} else {
 				port = jvst->ctrl_inport;
 			}
 			src = jports[i];
 			dst = jack_port_name(port);
-		} else { continue; }
-		/* Already connected ? */
-		if ( jack_port_connected_to(port, jports[i]) ) continue;
-		printf("Connect to: %s\n", jports[i]);
-		jack_connect(jvst->client, src, dst);
-		done = true;
+		} else continue;
+
+		if ( jack_connect_wrap (jvst->client, src, dst) )
+			done = true;
 	}
         jack_free(jports);
 
@@ -1099,7 +1103,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 750, (GSourceFunc) jvst_idle, jvst, NULL);
 
 	// Auto connect on start
-	if (connect_to) jvst_connect(jvst, connect_to);
+	if (connect_to) jvst_connect_audio(jvst, connect_to);
 	if (want_midi_physical) jvst_connect_midi_to_physical(jvst);
 
 	// Generate random SysEx ID
