@@ -58,10 +58,16 @@ static void strip_trailing ( char* string, char chr ) {
 	if ( c ) *c = '\0';
 }
 
-bool serv_client_get_data ( int client_sock ) {
+bool serv_send_client_data ( int client_sock, char* msg, int msg_len ) {
+	char data[msg_len + 2];
+	snprintf ( data, sizeof data, "%s\n", msg );
+	int write_size = write ( client_sock , data, sizeof data );
+	return ( write_size == msg_len ) ? true : false;
+}
+
+bool serv_client_get_data ( int client_sock, char* msg, int msg_max_len ) {
 	//Receive a message from client
-	char client_message[2000];
-	int read_size = recv (client_sock , client_message , sizeof client_message, 0);
+	int read_size = recv (client_sock , msg , msg_max_len, 0);
 	if (read_size == 0) {
 		puts("Client disconnected");
 		close ( client_sock );
@@ -71,18 +77,17 @@ bool serv_client_get_data ( int client_sock ) {
 		close ( client_sock );
 		return false;
 	}
-	client_message[read_size] = '\0'; /* make sure there is end */
+	msg[read_size] = '\0'; /* make sure there is end */
 
-	strip_trailing ( client_message, '\n' );
-	strip_trailing ( client_message, '\r' );
-
-	char buf[100];
-	snprintf ( buf, sizeof buf, "%s", "CMD OK\n" );
+	strip_trailing ( msg, '\n' );
+	strip_trailing ( msg, '\r' );
 
 	// send the message back to client
-	read_size = write ( client_sock , buf, strlen(buf) );
+	char buf[100];
+	snprintf ( buf, sizeof buf, "%s", "CMD OK" );
+	serv_send_client_data ( client_sock, buf, strlen(buf) );
 
-	if ( !strcmp ( client_message, "quit" ) ) {
+	if ( !strcmp ( msg, "quit" ) ) {
 		puts ( "GOT QUIT" );
 		close ( client_sock );
 		return false;

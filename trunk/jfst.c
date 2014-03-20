@@ -62,7 +62,9 @@ extern void jvst_lash_init(JackVST *jvst, int* argc, char** argv[]);
 #ifdef SOCKET_STUFF
 extern int serv_get_sock ( uint16_t );
 extern int serv_get_client ( int );
-extern bool serv_client_get_data ( int );
+bool serv_client_get_data ( int client_sock, char* msg, int msg_max_len );
+/* jvstproto.c */
+extern bool jvst_dispatch ( JackVST* jvst, int client_sock, const char* msg );
 #endif
 
 GMainLoop* glib_main_loop;
@@ -922,10 +924,15 @@ void jvst_cleanup ( JackVST* jvst ) {
 
 #ifdef SOCKET_STUFF
 bool handle_client_connection (GIOChannel *source, GIOCondition condition, gpointer data ) {
-//	JackVST* jvst = (JackVST*) data;
+	JackVST* jvst = (JackVST*) data;
 
 	int fd = g_io_channel_unix_get_fd ( source ); 
-	return serv_client_get_data ( fd  );
+	char msg[2000];
+	if ( serv_client_get_data ( fd, msg, sizeof msg ) ) {
+		jvst_dispatch ( jvst, fd, msg );
+		return true;
+	}
+	return false;
 }
 
 bool handle_server_connection (GIOChannel *source, GIOCondition condition, gpointer data ) {
