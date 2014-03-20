@@ -70,7 +70,7 @@ C_SRCS             += lash.c
 endif
 
 ifeq ($(SOCK), 1)
-C_SRCS             += serv.c
+C_SRCS             += serv.c jvstproto.c
 endif
 
 # On 64 bit platform build also fsthost64
