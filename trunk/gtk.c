@@ -333,6 +333,7 @@ load_handler (GtkToggleButton *but, gpointer ptr) {
 	gtk_spin_button_set_value(GTK_SPIN_BUTTON(transposition_spin), midi_filter_transposition_get(jvst->transposition));
 }
 
+#ifdef MOVING_WINDOWS_WORKAROUND
 /* Workaround for moving problem - some plugins menus were stay where window was opened */
 static gboolean
 configure_handler (GtkWidget* widget, GdkEventConfigure* ev, JackVST* jvst) {
@@ -343,6 +344,7 @@ configure_handler (GtkWidget* widget, GdkEventConfigure* ev, JackVST* jvst) {
 	   FALSE to propagate the event further. */
 	return FALSE;
 }
+#endif
 
 static void
 editor_handler (GtkToggleButton *but, gpointer ptr) {
@@ -364,7 +366,10 @@ editor_handler (GtkToggleButton *but, gpointer ptr) {
 
 		gtk_widget_set_size_request(gtk_socket, jvst->fst->width, jvst->fst->height);
 		gtk_socket_add_id (GTK_SOCKET (gtk_socket), GDK_POINTER_TO_XID (jvst->fst->xid) );
+
+#ifdef MOVING_WINDOWS_WORKAROUND
 		g_signal_connect (G_OBJECT(window), "configure-event", G_CALLBACK(configure_handler), jvst);
+#endif
 
 		fst_show_editor(jvst->fst);
 		gtk_widget_show(socket_align);

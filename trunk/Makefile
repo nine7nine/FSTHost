@@ -41,6 +41,10 @@ ifeq ($(SOCK),1)
 CEXTRA             += -DSOCKET_STUFF
 endif
 
+ifeq ($(MWW),1)
+CEXTRA             += -DMOVING_WINDOWS_WORKAROUND
+endif
+
 # Shared LDFlags
 LDFLAGS            := -mwindows
 LIBRARIES          := -lpthread -lX11 $(shell pkg-config --libs $(PKG_CONFIG_MODULES))
