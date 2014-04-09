@@ -21,6 +21,10 @@ int serv_get_sock ( uint16_t port ) {
 	server.sin_addr.s_addr = htonl( INADDR_ANY );
 	server.sin_port = htons( port );
 
+	// Allow reuse this port ( TIME_WAIT issue )
+	int ofc = 1;
+	setsockopt(socket_desc, SOL_SOCKET, SO_REUSEADDR, &ofc, sizeof ofc);
+
 	//Bind
 	int ret = bind (socket_desc,(struct sockaddr *) &server , sizeof(server));
 	if ( ret < 0 ) {
@@ -84,10 +88,10 @@ bool serv_client_get_data ( int client_sock, char* msg, int msg_max_len ) {
 
 	// send the message back to client
 	char buf[100];
-	snprintf ( buf, sizeof buf, "%s", "CMD OK" );
+	snprintf ( buf, sizeof buf, "%s", "OK" );
 	serv_send_client_data ( client_sock, buf, strlen(buf) );
 
-	if ( !strcmp ( msg, "quit" ) ) {
+	if ( !strcasecmp ( msg, "quit" ) ) {
 		puts ( "GOT QUIT" );
 		close ( client_sock );
 		return false;
