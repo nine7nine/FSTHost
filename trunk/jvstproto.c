@@ -1,7 +1,7 @@
-#include <jackvst.h>
 #include <stdbool.h>
 #include <string.h>
 #include <stdio.h>
+#include "jackvst.h"
 
 #define PROGRAMS "PROGRAMS"
 
@@ -32,12 +32,16 @@ static void get_programs ( JackVST* jvst, int client_sock ) {
 bool jvst_dispatch ( JackVST* jvst, int client_sock, const char* msg ) {
 	printf ( "GOT MSG: %s\n", msg );
 
-	if ( ! strcmp ( msg, "editor open" ) ) {
+	if ( ! strcasecmp ( msg, "editor open" ) ) {
 		fst_run_editor ( jvst->fst, false );
-	} else if (  ! strcmp ( msg, "editor close" ) ) {
+	} else if (  ! strcasecmp ( msg, "editor close" ) ) {
 		fst_call ( jvst->fst, EDITOR_CLOSE );
-	} else if (  ! strcmp ( msg, "get programs" ) ) {
+	} else if (  ! strcasecmp ( msg, "programs" ) ) {
 		get_programs ( jvst, client_sock );
+	} else if (  ! strcasecmp ( msg, "suspend" ) ) {
+		jvst_bypass ( jvst, true );
+	} else if (  ! strcasecmp ( msg, "resume" ) ) {
+		jvst_bypass ( jvst, false );
 	}
 
 	return true;
