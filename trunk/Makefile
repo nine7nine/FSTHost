@@ -2,7 +2,7 @@
 SRCDIR             := .
 SUBDIRS            :=
 PLAT               := 32
-GTK2               := 0
+GTK                := 3
 VUMETER            := 0
 LBITS              := $(shell getconf LONG_BIT)
 LASH_EXISTS        := $(shell if pkg-config --exists lash-1.0; then echo yes; else echo no; fi)
@@ -13,10 +13,10 @@ PKG_CONFIG_MODULES := glib-2.0
 PKG_CONFIG_MODULES += jack
 PKG_CONFIG_MODULES += libxml-2.0
 
-ifeq ($(GTK2),1)
+ifeq ($(GTK),2)
 PKG_CONFIG_MODULES += gtk+-2.0
 override VUMETER = 0
-else
+else ifeq ($(GTK),3)
 PKG_CONFIG_MODULES += gtk+-3.0
 endif
 
@@ -38,6 +38,10 @@ endif
 
 ifeq ($(MWW),1)
 CEXTRA             += -DMOVING_WINDOWS_WORKAROUND
+endif
+
+ifeq ($(GTK),0)
+CEXTRA             += -DNO_GTK
 endif
 
 # Shared LDFlags
@@ -64,7 +68,7 @@ LDFLAGS32          := -m32 $(LDFLAGS) -L/usr/lib/i386-linux-gnu/wine
 LDFLAGS64          := -m64 $(LDFLAGS)
 
 ### Global source lists
-C_SRCS              = amc.c jackamc.c fst.c gtk.c jackvst.c jfst.c fxb.c fps.c vstwin.c cpuusage.c info.c midifilter.c list.c
+C_SRCS              = amc.c jackamc.c fst.c jackvst.c jfst.c fxb.c fps.c vstwin.c cpuusage.c info.c midifilter.c list.c
 
 # JVST proto stuff
 C_SRCS             += serv.c jvstproto.c
@@ -72,6 +76,11 @@ C_SRCS             += serv.c jvstproto.c
 # Lash
 ifeq ($(LASH_EXISTS),yes)
 C_SRCS             += lash.c
+endif
+
+# GTK
+ifneq ($(GTK),0)
+C_SRCS             += gtk.c
 endif
 
 # On 64 bit platform build also fsthost64
