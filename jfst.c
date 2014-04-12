@@ -231,11 +231,15 @@ static void jvst_sysex_handler(JackVST* jvst) {
 }
 
 void jvst_quit(JackVST* jvst) {
+#ifdef NO_GTK
+	g_main_loop_quit(glib_main_loop);
+#else
 	if (jvst->with_editor == WITH_EDITOR_NO) {
 		g_main_loop_quit(glib_main_loop);
 	} else {
 		gtk_gui_quit();
 	}
+#endif
 }
 
 static void signal_handler (int signum) {
@@ -778,7 +782,9 @@ static void usage(char* appname) {
 	fprintf(stderr, format, "-b", "Start in bypass mode");
 	fprintf(stderr, format, "-n", "Disable Editor and GTK GUI");
 	fprintf(stderr, format, "-N", "Notify changes by SysEx");
+#ifndef NO_GTK
 	fprintf(stderr, format, "-e", "Hide Editor");
+#endif
 	fprintf(stderr, format, "-s <state_file>", "Load <state_file>");
 	fprintf(stderr, format, "-S <port>", "Start CTRL server on port <port>");
 	fprintf(stderr, format, "-c <client_name>", "Jack Client name");
@@ -1092,13 +1098,21 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 
 	// Create GTK or GlibMain thread
 	if (jvst->with_editor != WITH_EDITOR_NO) {
+#ifdef NO_GTK
+		puts("run editor");
+		fst_run_editor (jvst->fst, false);
+	}
+#else
 		puts( "Start GUI" );
 		gtk_gui_init(&argc, &argv);
 		gtk_gui_start(jvst);
 	} else {
+#endif
 		puts("GUI Disabled - start GlibMainLoop");
 		g_main_loop_run ( glib_main_loop );
+#ifndef NO_GTK
 	}
+#endif
 
 	/* Close CTRL socket */
 	jvst_proto_close ( jvst );
