@@ -1,9 +1,10 @@
+#include <stdbool.h>
 #include <stdio.h>
-#include <string.h>    //strlen
+#include <string.h>
+#include <stdio.h>
+#include <unistd.h>    //write
 #include <sys/socket.h>
 #include <arpa/inet.h> //inet_addr
-#include <unistd.h>    //write
-#include <stdbool.h>
 
 int serv_get_sock ( uint16_t port ) {
 	struct sockaddr_in server;
@@ -98,4 +99,8 @@ bool serv_client_get_data ( int client_sock, char* msg, int msg_max_len ) {
 	}
 
 	return true;
+}
+
+void serv_close_socket ( int socket_desc ) {
+	close ( socket_desc );
 }

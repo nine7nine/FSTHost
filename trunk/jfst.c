@@ -53,18 +53,13 @@ extern void gtk_gui_quit();
 extern char* fst_info_default_path(const char* appname);
 extern int fst_info_list(const char* dbpath);
 
+/* jvstproto.c */
+bool jvst_proto_init ( JackVST* jvst );
+bool jvst_proto_close ( JackVST* jvst );
+
 /* lash.c */
 #ifdef HAVE_LASH
 extern void jvst_lash_init(JackVST *jvst, int* argc, char** argv[]);
-#endif
-
-/* serv2.c */
-#ifdef SOCKET_STUFF
-extern int serv_get_sock ( uint16_t );
-extern int serv_get_client ( int );
-bool serv_client_get_data ( int client_sock, char* msg, int msg_max_len );
-/* jvstproto.c */
-extern bool jvst_dispatch ( JackVST* jvst, int client_sock, const char* msg );
 #endif
 
 GMainLoop* glib_main_loop;
@@ -235,7 +230,7 @@ static void jvst_sysex_handler(JackVST* jvst) {
         }
 }
 
-static void jvst_quit(JackVST* jvst) {
+void jvst_quit(JackVST* jvst) {
 	if (jvst->with_editor == WITH_EDITOR_NO) {
 		g_main_loop_quit(glib_main_loop);
 	} else {
@@ -785,9 +780,7 @@ static void usage(char* appname) {
 	fprintf(stderr, format, "-N", "Notify changes by SysEx");
 	fprintf(stderr, format, "-e", "Hide Editor");
 	fprintf(stderr, format, "-s <state_file>", "Load <state_file>");
-#ifdef SOCKET_STUFF
 	fprintf(stderr, format, "-S <port>", "Start CTRL server on port <port>");
-#endif
 	fprintf(stderr, format, "-c <client_name>", "Jack Client name");
 	fprintf(stderr, format, "-k channel", "MIDI Channel (0: all, 17: none)");
 	fprintf(stderr, format, "-i num_in", "Jack number In ports");
@@ -921,39 +914,6 @@ void jvst_cleanup ( JackVST* jvst ) {
 	free ( jvst->inports );
 	free ( jvst->outports );
 }
-
-#ifdef SOCKET_STUFF
-bool handle_client_connection (GIOChannel *source, GIOCondition condition, gpointer data ) {
-	JackVST* jvst = (JackVST*) data;
-
-	int fd = g_io_channel_unix_get_fd ( source ); 
-	char msg[2000];
-	if ( serv_client_get_data ( fd, msg, sizeof msg ) ) {
-		jvst_dispatch ( jvst, fd, msg );
-		return true;
-	}
-	return false;
-}
-
-bool handle_server_connection (GIOChannel *source, GIOCondition condition, gpointer data ) {
-	JackVST* jvst = (JackVST*) data;
-
-	int fd = g_io_channel_unix_get_fd ( source ); 
-	int client_fd = serv_get_client ( fd );
-
-	/* Watch client socket */
-	GIOChannel* channel = g_io_channel_unix_new ( client_fd );
-	g_io_add_watch_full(
-		channel,
-		G_PRIORITY_DEFAULT_IDLE,
-		G_IO_IN,
-		(GIOFunc) handle_client_connection,
-		jvst, NULL
-	);
-
-	return true;
-}
-#endif
 
 #ifdef SEP_THREAD
 const char* kibel;
@@ -1123,30 +1083,13 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 100, (GSourceFunc) fst_event_callback, NULL, NULL);
 #endif
 
-#ifdef SOCKET_STUFF
 	/* Socket stuff */
-	int fd = 0;
 	if ( jvst->ctrl_port_number ) {
-		puts ( "Starting CTRL server ..." );
-		fd = serv_get_sock ( jvst->ctrl_port_number );
-		if ( ! fd ) {
-			fst_error ( "Cannot create CTRL socket :(" );
+		if ( ! jvst_proto_init(jvst) )
 			goto sock_err;
-			
-		}
 		
-		/* Watch server socket */
-		GIOChannel* channel = g_io_channel_unix_new(fd);
-		g_io_add_watch_full (
-			channel,
-			G_PRIORITY_DEFAULT_IDLE,
-			G_IO_IN,
-			(GIOFunc) handle_server_connection,
-			jvst, NULL
-		);
-		g_io_channel_unref(channel);
 	}
-#endif
+
 	// Create GTK or GlibMain thread
 	if (jvst->with_editor != WITH_EDITOR_NO) {
 		puts( "Start GUI" );
@@ -1157,12 +1100,10 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 		g_main_loop_run ( glib_main_loop );
 	}
 
-#ifdef SOCKET_STUFF
 	/* Close CTRL socket */
-	if ( fd ) close ( fd );
+	jvst_proto_close ( jvst );
 
 sock_err:
-#endif
 
 	puts("Jack Deactivate");
 	jack_deactivate(jvst->client);
