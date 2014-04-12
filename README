@@ -20,7 +20,8 @@ Supports:
 - volume control
 - plugins which not handling MIDI Program Change messages
 - easily plugin discovering (-g option)
-- GTK2/GTK3
+- GTK2/GTK3 ( you can compile even without GTK )
+- control using TCP socket ( e.g. via telnet )
 
 There are also:
 - fsthost_menu.sh - zenity script for help to start plugins
@@ -40,7 +41,7 @@ Getting Started
 2) Type 'make'. If everything works correctly this should create an
    executable file called 'fsthost32' and optionaly 'fsthost64'
 
-3) Type 'make GTK2=1' to force GTK+2 GUI
+3) Type 'make GTK=2' to force GTK+2 GUI or 'make GTK=0' for exclude GTK code
 
 4) Type 'make LASH_EXISTS=no' to build without lash.
    This is default if lash libs are not available
