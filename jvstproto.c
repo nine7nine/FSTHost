@@ -58,6 +58,15 @@ static bool jvst_proto_client_dispatch ( JackVST* jvst, int client_sock ) {
 		jvst_bypass ( jvst, false );
 	} else if (  ! strcasecmp ( msg, "kill" ) ) {
 		jvst_quit ( jvst );
+	} else {
+		char* sep = strchr ( msg, ':' );
+		if ( sep != NULL ) {
+			*sep = '\0';
+			int value = strtol ( sep + 1, NULL, 10 );
+			if (  ! strcasecmp ( msg, "program" ) ) {
+				fst_program_change ( jvst->fst, value );
+			}
+		}
 	}
 
 	return true;
