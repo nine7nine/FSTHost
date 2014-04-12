@@ -3,7 +3,6 @@ SRCDIR             := .
 SUBDIRS            :=
 PLAT               := 32
 GTK2               := 0
-SOCK               := 0
 VUMETER            := 0
 LBITS              := $(shell getconf LONG_BIT)
 LASH_EXISTS        := $(shell if pkg-config --exists lash-1.0; then echo yes; else echo no; fi)
@@ -37,10 +36,6 @@ ifeq ($(LASH_EXISTS),yes)
 CEXTRA             += -DHAVE_LASH
 endif
 
-ifeq ($(SOCK),1)
-CEXTRA             += -DSOCKET_STUFF
-endif
-
 ifeq ($(MWW),1)
 CEXTRA             += -DMOVING_WINDOWS_WORKAROUND
 endif
@@ -60,7 +55,8 @@ LIB64_INST_PATH     = $(PREFIX)/lib/x86_64-linux-gnu/wine
 BIN_INST_PATH       = $(PREFIX)/bin
 
 # Platform specific GCC flags
-CEXTRA32           := -m32 $(CEXTRA) -fno-pic -fno-PIC
+#CEXTRA32           := -m32 $(CEXTRA) -fno-pic -fno-PIC
+CEXTRA32           := -m32 $(CEXTRA) -fPIC
 CEXTRA64           := -m64 $(CEXTRA) -fPIC
 
 # Platform specific LDFLAGS
@@ -69,12 +65,13 @@ LDFLAGS64          := -m64 $(LDFLAGS)
 
 ### Global source lists
 C_SRCS              = amc.c jackamc.c fst.c gtk.c jackvst.c jfst.c fxb.c fps.c vstwin.c cpuusage.c info.c midifilter.c list.c
+
+# JVST proto stuff
+C_SRCS             += serv.c jvstproto.c
+
+# Lash
 ifeq ($(LASH_EXISTS),yes)
 C_SRCS             += lash.c
-endif
-
-ifeq ($(SOCK), 1)
-C_SRCS             += serv.c jvstproto.c
 endif
 
 # On 64 bit platform build also fsthost64
