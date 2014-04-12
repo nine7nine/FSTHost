@@ -254,6 +254,10 @@ static void signal_handler (int signum) {
 		puts("Caught signal to save state (SIGUSR1)");
 		jvst_save_state(jvst, jvst->default_state_file);
 		break;
+	case SIGUSR2:
+		puts("Caught signal to open editor (SIGUSR2)");
+		g_idle_add( (GSourceFunc) fst_run_editor, jvst->fst);
+		break;
 	}
 }
 
@@ -1058,6 +1062,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	sa.sa_flags = 0;
 	sa.sa_handler = &signal_handler;
 	sigaction(SIGINT, &sa, NULL);
+	sigaction(SIGUSR2, &sa, NULL);
 
 	// Handling SIGUSR1 for save state - mostly for ladish support
 	if (sigusr1_save_state && jvst->default_state_file)
