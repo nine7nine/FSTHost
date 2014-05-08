@@ -710,6 +710,9 @@ static inline void jvst_connect_to_ctrl_app(JackVST* jvst) {
 			dst = jack_port_name(port);
 		} else continue;
 
+		/* Already connected ? */
+		if ( jack_port_connected_to(port, jports[i]) ) continue;
+
 		if ( jack_connect_wrap (jvst->client, src, dst) )
 			done = true;
 	}
