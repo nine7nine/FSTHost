@@ -52,7 +52,6 @@ typedef struct _JackVST {
     jack_nframes_t  sample_rate;
     jack_port_t*    midi_inport;
     jack_port_t*    midi_outport;
-    jack_port_t*    ctrl_inport;
     jack_port_t*    ctrl_outport;
     jack_port_t**   inports;
     jack_port_t**   outports;
