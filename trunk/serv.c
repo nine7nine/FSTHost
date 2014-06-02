@@ -66,8 +66,9 @@ static void strip_trailing ( char* string, char chr ) {
 bool serv_send_client_data ( int client_sock, char* msg, int msg_len ) {
 	char data[msg_len + 2];
 	snprintf ( data, sizeof data, "%s\n", msg );
-	int write_size = write ( client_sock , data, sizeof data );
-	return ( write_size == msg_len ) ? true : false;
+	int len = sizeof(data) - 1;
+	int write_size = write ( client_sock , data, len);
+	return ( write_size == len ) ? true : false;
 }
 
 bool serv_client_get_data ( int client_sock, char* msg, int msg_max_len ) {
@@ -86,11 +87,6 @@ bool serv_client_get_data ( int client_sock, char* msg, int msg_max_len ) {
 
 	strip_trailing ( msg, '\n' );
 	strip_trailing ( msg, '\r' );
-
-	// send the message back to client
-	char buf[100];
-	snprintf ( buf, sizeof buf, "%s", "OK" );
-	serv_send_client_data ( client_sock, buf, strlen(buf) );
 
 	if ( !strcasecmp ( msg, "quit" ) ) {
 		puts ( "GOT QUIT" );

@@ -4,7 +4,7 @@
 #include <glib.h>
 #include "jackvst.h"
 
-#define PROGRAMS "PROGRAMS"
+#define ACK "<OK>"
 
 /* serv.c */
 int serv_get_sock ( uint16_t port );
@@ -21,7 +21,6 @@ static int serv_fd = 0;
 static void get_programs ( JackVST* jvst, int client_sock ) {
 	FST* fst = jvst->fst;
 	int32_t i;
-	serv_send_client_data ( client_sock, PROGRAMS, strlen(PROGRAMS) );
 	for ( i = 0; i < fst->plugin->numPrograms; i++ ) {
 		/* VST standard says that progName is 24 bytes but some plugs use more characters */
 		char progName[32];
@@ -36,7 +35,6 @@ static void get_programs ( JackVST* jvst, int client_sock ) {
 		}
 		serv_send_client_data ( client_sock, progName, strlen(progName) );
         }
-	serv_send_client_data ( client_sock, PROGRAMS, strlen(PROGRAMS) );
 }
 
 static bool jvst_proto_client_dispatch ( JackVST* jvst, int client_sock ) {
@@ -68,6 +66,9 @@ static bool jvst_proto_client_dispatch ( JackVST* jvst, int client_sock ) {
 			}
 		}
 	}
+
+	// Send ACK
+	serv_send_client_data ( client_sock, ACK, strlen(ACK) );
 
 	return true;
 }
