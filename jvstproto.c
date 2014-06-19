@@ -18,7 +18,7 @@ void jvst_quit(JackVST* jvst);
 
 static int serv_fd = 0;
 
-static void get_programs ( JackVST* jvst, int client_sock ) {
+static void list_programs ( JackVST* jvst, int client_sock ) {
 	FST* fst = jvst->fst;
 	int32_t i;
 	for ( i = 0; i < fst->plugin->numPrograms; i++ ) {
@@ -37,6 +37,12 @@ static void get_programs ( JackVST* jvst, int client_sock ) {
         }
 }
 
+static void get_program ( JackVST* jvst, int client_sock ) {
+	char msg[16];
+	sprintf( msg, "PROGRAM:%d", jvst->fst->current_program );
+	serv_send_client_data ( client_sock, msg, strlen(msg) );
+}
+
 static bool jvst_proto_client_dispatch ( JackVST* jvst, int client_sock ) {
         char msg[64];
         if ( ! serv_client_get_data ( client_sock, msg, sizeof msg ) )
@@ -48,8 +54,10 @@ static bool jvst_proto_client_dispatch ( JackVST* jvst, int client_sock ) {
 		fst_run_editor ( jvst->fst, false );
 	} else if (  ! strcasecmp ( msg, "editor close" ) ) {
 		fst_call ( jvst->fst, EDITOR_CLOSE );
-	} else if (  ! strcasecmp ( msg, "programs" ) ) {
-		get_programs ( jvst, client_sock );
+	} else if (  ! strcasecmp ( msg, "list_programs" ) ) {
+		list_programs ( jvst, client_sock );
+	} else if (  ! strcasecmp ( msg, "get_program" ) ) {
+		get_program ( jvst, client_sock );
 	} else if (  ! strcasecmp ( msg, "suspend" ) ) {
 		jvst_bypass ( jvst, true );
 	} else if (  ! strcasecmp ( msg, "resume" ) ) {
@@ -61,7 +69,7 @@ static bool jvst_proto_client_dispatch ( JackVST* jvst, int client_sock ) {
 		if ( sep != NULL ) {
 			*sep = '\0';
 			int value = strtol ( sep + 1, NULL, 10 );
-			if (  ! strcasecmp ( msg, "program" ) ) {
+			if (  ! strcasecmp ( msg, "set_program" ) ) {
 				fst_program_change ( jvst->fst, value );
 			}
 		}
