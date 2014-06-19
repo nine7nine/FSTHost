@@ -43,6 +43,11 @@ sub editor_button_toggle {
 	$fst->call ( $b->get_active() ? 'editor open' : 'editor close' );
 }
 
+sub presets_combo_change {
+	my ( $p, $fst ) = @_;
+	$fst->set_program ( $p->get_active );
+}
+
 sub show_it {
 	my $fst = shift;
 	our $window;
@@ -86,6 +91,8 @@ sub show_it {
 		my $txt = ++$t . '. ' . $_;
 		$presets_combo->insert_text ( $t, $txt );
 	}
+	$presets_combo->set_active ( $fst->get_program() );
+	$presets_combo->signal_connect ( 'changed' => \&presets_combo_change, $fst );
 	$hbox->pack_start ( $presets_combo, 0, 0, 0 ); # child, expand, fill, padding
 
 	$window->show_all();
@@ -133,8 +140,18 @@ sub call {
 
 sub presets {
 	my $self = shift;
-	my @presets = $self->call ( 'programs' );
+	my @presets = $self->call ( 'list_programs' );
 	return @presets;
+}
+
+sub get_program {
+	my $self = shift;
+	( /PROGRAM:(\d+)/ and return $1 ) for ( $self->call ( 'get_program' ) );
+}
+
+sub set_program {
+	my ( $self, $program ) = @_;
+	$self->call ( 'set_program:' . $program );
 }
 
 sub close {
