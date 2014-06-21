@@ -143,8 +143,16 @@ sub presets_combo_change {
 sub close_button_clicked {
 	my ( $b, $self ) = @_;
 	my $window = $self->{'hbox'}->get_toplevel();
+	Glib::Source->remove( $self->{'idle_id'} );
 	$self->{'hbox'}->destroy();
 	$window->resize(1,1);
+}
+
+sub idle {
+	my $self = shift;
+
+	$self->{'presets_combo'}->set_active ( $self->get_program() );
+	return 1;
 }
 
 sub show {
@@ -194,6 +202,9 @@ sub show {
 
 	$hbox->show_all();
 
+	$self->{'idle_id'} = Glib::Timeout->add ( 1000, \&idle, $self );
+
+	$self->{'presets_combo'} = $presets_combo;
 	$self->{'hbox'} = $hbox;
 
 	return 1;
@@ -229,7 +240,7 @@ sub call {
 	my @ret;
 	while ( my $line = $socket->getline() ) {
 #		$line =~ s/[^[:print:]]//g;
-		print $line;
+#		print $line;
 		last if $line =~ /\<OK\>/;
 		push ( @ret, $line );
 	}
