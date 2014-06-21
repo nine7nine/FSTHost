@@ -6,7 +6,6 @@ use Data::Dumper;
 use IO::Socket;
 
 our $Gtk;
-our $window = undef;
 
 # Load GTK modules
 BEGIN {
@@ -30,12 +29,28 @@ BEGIN {
 	die "Can't find modules Gtk[23]" unless ( $Gtk );
 }
 
-sub add_button_clicked {
-	my ( $b, $href ) = @_;
+
+# Auxiliary methods for GTK2 / GTK3 support
+sub gtk_vbox { return ($Gtk eq 'Gtk3') ? Gtk3::Box->new ('vertical', 0) : Gtk2::VBox->new(); }
+sub gtk_hbox { return ($Gtk eq 'Gtk3') ? Gtk3::Box->new ('horizontal', 0) : Gtk2::HBox->new(); }
+
+package MainForm;
+
+sub new {
+	my $class = shift;
+	my $self = {};
+
+	my $object = bless ( $self, $class );
+	$object->_init();
+	return $object;
+}
+
+sub add_fst {
+	my ( $be, $self ) = @_;
 
 	my $host = 'localhost';
 	my $port;
-	$href->{'entry'}->get_text() =~ /(\w+):(\d+)|(\d+)/;
+	$self->{'entry'}->get_text() =~ /(\w+):(\d+)|(\d+)/;
 	if ( $3 ) {
 		$port = $3;
 	} else {
@@ -44,47 +59,142 @@ sub add_button_clicked {
 	}
 	return unless ( $port );
 
-	my $fst = new FST ( $host, $port );
-	return unless ( $fst );
-
-	$fst->show( $href->{'vbox'} );
+	FST_BOX->new ( $host, $port, $self->{'vbox'} );
 }
 
-sub gtk_vbox { return ($Gtk eq 'Gtk3') ? new Gtk3::Box ('vertical', 0) : new Gtk2::VBox (); }
-sub gtk_hbox { return ($Gtk eq 'Gtk3') ? new Gtk3::Box ('horizontal', 0) : new Gtk2::HBox (); }
-
-sub show_it {
-	my $fst = shift;
-	our $window;
+sub _init {
+	my $self = shift;
 
 	# Main Window
-	$window = ($Gtk.'::Window')->new( 'toplevel' );
+	my $window = ($Gtk.'::Window')->new( 'toplevel' );
 	$window->signal_connect( delete_event => sub { $Gtk->main_quit(); } );
 	$window->set_icon_name ( 'fsthost' );
 	$window->set_title ( 'FSTHost CTRL (' . $Gtk . ')' );
 	$window->set_border_width(5);
 
 	# Vbox
-	my $vbox = gtk_vbox();
+	my $vbox = main::gtk_vbox();
 	$vbox->set_border_width ( 2 );
 	$window->add ( $vbox );
 
-	### FIRST HBOX
-	my $hbox = gtk_hbox();
+	### FIRST HBOX aka toolbar
+	my $hbox = main::gtk_hbox();
 	$hbox->set_border_width ( 2 );
 	$vbox->pack_start ( $hbox, 0, 0, 0 ); # child, expand, fill, padding
 
 	# Entry
 	my $entry = ($Gtk.'::Entry')->new();
+	$entry->signal_connect ( 'activate' => \&add_fst, $self );
 	$hbox->pack_start ( $entry, 0, 0, 0 ); # child, expand, fill, padding
 
 	# Add Button
 	my $add_button = ($Gtk.'::Button')->new_from_stock('gtk-add');
         $add_button->set_tooltip_text ( 'Add new FSTHOST' );
-	$add_button->signal_connect ( clicked => \&add_button_clicked, { entry => $entry, vbox => $vbox } );
+	$add_button->signal_connect ( clicked => \&add_fst, $self );
 	$hbox->pack_start ( $add_button, 0, 0, 0 ); # child, expand, fill, padding
 
 	$window->show_all();
+
+	$self->{'window'} = $window;
+	$self->{'vbox'} = $vbox;
+	$self->{'toolbar'} = $hbox;
+	$self->{'entry'} = $entry;
+	$self->{'add_button'} = $add_button;
+
+	return 1;
+}
+
+package FST_BOX;
+
+use parent -norequire, 'FST';
+
+sub new {
+	my $class = shift;
+
+	my $self = $class->SUPER::new ( shift, shift );
+	return undef unless ( $self );
+	
+	$self->{'vbox'} = shift;
+
+        my $object = bless ( $self, $class );
+	unless ( $object->show() ) {
+		$object->close();
+		return undef;
+	}
+
+	return $object
+}
+
+sub sr_button_toggle {
+	my ( $b, $self ) = @_;
+	$self->call ( $b->get_active() ? 'resume' : 'suspend' );
+}
+
+sub editor_button_clicked {
+	my ( $b, $self ) = @_;
+	$self->call ( 'editor open' );
+}
+
+sub presets_combo_change {
+	my ( $p, $self ) = @_;
+	$self->set_program ( $p->get_active );
+}
+
+sub close_button_clicked {
+	my ( $b, $self ) = @_;
+	my $window = $self->{'hbox'}->get_toplevel();
+	$self->{'hbox'}->destroy();
+	$window->resize(1,1);
+}
+
+sub show {
+	my $self = shift;
+	my $vbox = $self->{'vbox'};
+
+	# Hbox
+	my $hbox = main::gtk_hbox();
+	$hbox->set_border_width ( 2 );
+	$vbox->pack_start ( $hbox, 0, 0, 0 ); # child, expand, fill, padding
+
+	# Label
+	my $label = ($Gtk.'::Label')->new( $self->{'host'} . ':' . $self->{'port'} );
+	$hbox->pack_start ( $label, 0, 0, 0 ); # child, expand, fill, padding
+
+	# Suspend / Resume
+	my $sr_button = ($Gtk.'::ToggleButton')->new_with_label('State');
+	$sr_button->set_active(1);
+	$sr_button->set_tooltip_text ( 'Suspend / Resume' );
+	$sr_button->signal_connect ( 'clicked' => \&sr_button_toggle, $self );
+	$hbox->pack_start ( $sr_button, 0, 0, 0 ); # child, expand, fill, padding
+
+	# Editor Open/Close
+	my $editor_button = ($Gtk.'::Button')->new_with_label('Editor');
+	$editor_button->set_tooltip_text ( 'Editor Open' );
+	$editor_button->signal_connect ( 'clicked' => \&editor_button_clicked, $self );
+	$hbox->pack_start ( $editor_button, 0, 0, 0 ); # child, expand, fill, padding
+
+	# Presets:
+	my $presets_combo = ($Gtk.'::ComboBoxText')->new();
+	$presets_combo->set_tooltip_text ( 'Presets' );
+	my @presets = $self->presets();
+	my $t = 0;
+	foreach ( @presets ) {
+		my $txt = ++$t . '. ' . $_;
+		$presets_combo->insert_text ( $t, $txt );
+	}
+	$presets_combo->set_active ( $self->get_program() );
+	$presets_combo->signal_connect ( 'changed' => \&presets_combo_change, $self );
+	$hbox->pack_start ( $presets_combo, 0, 0, 0 ); # child, expand, fill, padding
+
+	# Close
+	my $close_button = ($Gtk.'::Button')->new_from_stock('gtk-close');
+	$close_button->set_tooltip_text ( 'Close' );
+	$close_button->signal_connect ( 'clicked' => \&close_button_clicked, $self );
+	$hbox->pack_start ( $close_button, 0, 0, 0 ); # child, expand, fill, padding
+
+	$hbox->show_all();
+
+	$self->{'hbox'} = $hbox;
 
 	return 1;
 }
@@ -105,6 +215,7 @@ sub new {
 sub _connect {
 	my $self = shift;
 	$self->{'socket'} = IO::Socket::INET->new ( $self->{'host'} . ':' . $self->{'port'} );
+	# return tru if this assignment is sucessfull
 }
 
 sub call {
@@ -144,77 +255,22 @@ sub set_program {
 
 sub close {
 	my $self = shift;
+	return unless ( $self->{'socket'} );
 	$self->call ('quit');
 	close $self->{'socket'};
 }
 
-##################### GUI ####################################################################
-sub sr_button_toggle {
-	my ( $b, $fst ) = @_;
-	$fst->call ( $b->get_active() ? 'resume' : 'suspend' );
+sub DESTROY {
+	my $self = shift;
+	$self->close();
 }
-
-sub editor_button_clicked {
-	my ( $b, $fst ) = @_;
-	$fst->call ( 'editor open' );
-}
-
-sub presets_combo_change {
-	my ( $p, $fst ) = @_;
-	$fst->set_program ( $p->get_active );
-}
-
-sub show {
-	my ( $self, $vbox ) = @_;
-
-	# Hbox
-	my $hbox = main::gtk_hbox();
-	$hbox->set_border_width ( 2 );
-	$vbox->pack_start ( $hbox, 0, 0, 0 ); # child, expand, fill, padding
-
-	# Label
-	my $label = ($Gtk.'::Label')->new( $self->{'host'} . ':' . $self->{'port'} );
-	$hbox->pack_start ( $label, 0, 0, 0 ); # child, expand, fill, padding
-
-	# Suspend / Resume
-	my $sr_button = ($Gtk.'::ToggleButton')->new_with_label('State');
-	$sr_button->set_active(1);
-	$sr_button->set_tooltip_text ( 'Suspend / Resume' );
-	$sr_button->signal_connect ( 'clicked' => \&sr_button_toggle, $self );
-	$hbox->pack_start ( $sr_button, 0, 0, 0 ); # child, expand, fill, padding
-
-	# Editor Open/Close
-	my $editor_button = ($Gtk.'::Button')->new_with_label('Editor');
-	$editor_button->set_tooltip_text ( 'Editor Open' );
-	$editor_button->signal_connect ( 'clicked' => \&editor_button_clicked, $self );
-	$hbox->pack_start ( $editor_button, 0, 0, 0 ); # child, expand, fill, padding
-
-	# Presets:
-	my $presets_combo = ($Gtk.'::ComboBoxText')->new ();
-	$presets_combo->set_tooltip_text ( 'Presets' );
-	my @presets = $self->presets();
-	my $t = 0;
-	foreach ( @presets ) {
-		my $txt = ++$t . '. ' . $_;
-		$presets_combo->insert_text ( $t, $txt );
-	}
-	$presets_combo->set_active ( $self->get_program() );
-	$presets_combo->signal_connect ( 'changed' => \&presets_combo_change, $self );
-	$hbox->pack_start ( $presets_combo, 0, 0, 0 ); # child, expand, fill, padding
-
-	$hbox->show_all();
-
-	return 1;
-}
-
-package main;
 
 ################### MAIN ######################################################
+package main;
 
 $Gtk->init();
 
-show_it();
-$Gtk->main();
+MainForm->new();
 
-#$fst->close();
+$Gtk->main();
 
