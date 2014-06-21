@@ -33,6 +33,7 @@ BEGIN {
 # Auxiliary methods for GTK2 / GTK3 support
 sub gtk_vbox { return ($Gtk eq 'Gtk3') ? Gtk3::Box->new ('vertical', 0) : Gtk2::VBox->new(); }
 sub gtk_hbox { return ($Gtk eq 'Gtk3') ? Gtk3::Box->new ('horizontal', 0) : Gtk2::HBox->new(); }
+sub gtk_combo { return ($Gtk eq 'Gtk3') ? Gtk3::ComboBoxText->new() : Gtk2::ComboBox->new_text(); }
 
 package MainForm;
 
@@ -182,7 +183,7 @@ sub show {
 	$hbox->pack_start ( $editor_button, 0, 0, 0 ); # child, expand, fill, padding
 
 	# Presets:
-	my $presets_combo = ($Gtk.'::ComboBoxText')->new();
+	my $presets_combo = main::gtk_combo();
 	$presets_combo->set_tooltip_text ( 'Presets' );
 	my @presets = $self->presets();
 	my $t = 0;
