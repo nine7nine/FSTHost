@@ -60,7 +60,9 @@ sub add_fst {
 	}
 	return unless ( $port );
 
-	FST_BOX->new ( $host, $port, $self->{'vbox'} );
+	my $fst = FST_BOX->new ( $host, $port );
+	return unless ( $fst );
+	$self->{'vbox'}->pack_start ( $fst->{'hbox'}, 0, 0, 0 ); # child, expand, fill, padding
 }
 
 sub _init {
@@ -115,8 +117,6 @@ sub new {
 	my $self = $class->SUPER::new ( shift, shift );
 	return undef unless ( $self );
 	
-	$self->{'vbox'} = shift;
-
         my $object = bless ( $self, $class );
 	unless ( $object->show() ) {
 		$object->close();
@@ -158,12 +158,10 @@ sub idle {
 
 sub show {
 	my $self = shift;
-	my $vbox = $self->{'vbox'};
 
 	# Hbox
 	my $hbox = main::gtk_hbox();
 	$hbox->set_border_width ( 2 );
-	$vbox->pack_start ( $hbox, 0, 0, 0 ); # child, expand, fill, padding
 
 	# Label
 	my $label = ($Gtk.'::Label')->new( $self->{'host'} . ':' . $self->{'port'} );
