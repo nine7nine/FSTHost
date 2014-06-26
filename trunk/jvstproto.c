@@ -43,6 +43,27 @@ static void get_program ( JackVST* jvst, int client_sock ) {
 	serv_send_client_data ( client_sock, msg, strlen(msg) );
 }
 
+static struct PROTO_MAP proto_string_map[] = {
+	{ CMD_EDITOR_OPEN, "editor open" },
+	{ CMD_EDITOR_CLOSE, "editor_close" },
+	{ CMD_LIST_PROGRAMS, "list_programs" },
+	{ CMD_GET_PROGRAM, "get_program" },
+	{ CMD_SET_PROGRAM, "set_program" },
+	{ CMD_SUSPEND, "suspend" },
+	{ CMD_RESUME, "resume" },
+	{ CMD_KILL, "kill" },
+	{ CMD_UNKNOWN, NULL }
+};
+
+static enum PROTO_CMD proto_lookup ( const char* name ) {
+	short i;
+	for ( i = 0; proto_string_map[i].key != CMD_UNKNOWN; i++ ) {
+		if ( ! strcasecmp( proto_string_map[i].name, name ) )
+			return proto_string_map[i].key;
+	}
+	return CMD_UNKNOWN;
+}
+
 static bool jvst_proto_client_dispatch ( JackVST* jvst, int client_sock ) {
         char msg[64];
         if ( ! serv_client_get_data ( client_sock, msg, sizeof msg ) )
@@ -50,29 +71,41 @@ static bool jvst_proto_client_dispatch ( JackVST* jvst, int client_sock ) {
 
 	printf ( "GOT MSG: %s\n", msg );
 
-	if ( ! strcasecmp ( msg, "editor open" ) ) {
+	int value = 0;
+	char* sep = strchr ( msg, ':' );
+	if ( sep != NULL ) {
+		*sep = '\0';
+		value = strtol ( sep + 1, NULL, 10 );
+	}
+
+	switch ( proto_lookup ( msg ) ) {
+	case CMD_EDITOR_OPEN:
 		fst_run_editor ( jvst->fst, false );
-	} else if (  ! strcasecmp ( msg, "editor close" ) ) {
+		break;
+	case CMD_EDITOR_CLOSE:
 		fst_call ( jvst->fst, EDITOR_CLOSE );
-	} else if (  ! strcasecmp ( msg, "list_programs" ) ) {
+		break;
+	case CMD_LIST_PROGRAMS:
 		list_programs ( jvst, client_sock );
-	} else if (  ! strcasecmp ( msg, "get_program" ) ) {
+		break;
+	case CMD_GET_PROGRAM:
 		get_program ( jvst, client_sock );
-	} else if (  ! strcasecmp ( msg, "suspend" ) ) {
+		break;
+	case CMD_SET_PROGRAM:
+		fst_program_change ( jvst->fst, value );
+		break;
+	case CMD_SUSPEND:
 		jvst_bypass ( jvst, true );
-	} else if (  ! strcasecmp ( msg, "resume" ) ) {
+		break;
+	case CMD_RESUME:
 		jvst_bypass ( jvst, false );
-	} else if (  ! strcasecmp ( msg, "kill" ) ) {
+		break;
+	case CMD_KILL:
 		jvst_quit ( jvst );
-	} else {
-		char* sep = strchr ( msg, ':' );
-		if ( sep != NULL ) {
-			*sep = '\0';
-			int value = strtol ( sep + 1, NULL, 10 );
-			if (  ! strcasecmp ( msg, "set_program" ) ) {
-				fst_program_change ( jvst->fst, value );
-			}
-		}
+		break;
+	case CMD_UNKNOWN:
+	default:
+		printf ( "Unknown command: %s\n", msg );
 	}
 
 	// Send ACK
