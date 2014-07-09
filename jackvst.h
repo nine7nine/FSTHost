@@ -115,7 +115,7 @@ typedef struct _JackVST {
 } JackVST;
 
 JackVST* jvst_new();
-bool jvst_load(JackVST* jvst, const char* plug_spec);
+bool jvst_load(JackVST* jvst, const char* plug_spec, bool want_state_and_amc);
 void jvst_log(const char *msg);
 void jvst_destroy(JackVST* jvst);
 void jvst_send_sysex(JackVST* jvst, enum SysExWant);

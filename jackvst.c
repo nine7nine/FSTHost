@@ -43,21 +43,33 @@ JackVST* jvst_new() {
 }
 
 /* plug_spec could be path, dll name or eff/plug name */
-bool jvst_load (JackVST* jvst, const char* plug_spec) {
-	/* Try load directly */
-	printf( "yo... lets see... ( try load directly)\n" );
+static bool jvst_load_directly (JackVST* jvst, const char* plug_spec ) {
+	printf( "yo... lets see... ( try load directly )\n" );
 	jvst->fst = fst_load_open ( plug_spec );
-	if ( ! jvst->fst ) {
-		printf ( "... and now for something completely different ... try load using XML DB\n" );
-		if ( ! jvst->dbinfo_file ) return false;
-		jvst->fst = fst_info_load_open ( jvst->dbinfo_file, plug_spec );
-		if ( ! jvst->fst ) return false;
-	}
+	if ( jvst->fst ) return true;
 
-	/* Plugin loaded - bind Jack to Audio Master Callback */
-	jvstamc_init ( jvst, &( jvst->fst->amc ) );
+	if ( ! jvst->dbinfo_file ) return false;
+	printf ( "... and now for something completely different ... try load using XML DB\n" );
+	jvst->fst = fst_info_load_open ( jvst->dbinfo_file, plug_spec );
+	return ( jvst->fst ) ? true : false;
+}
 
-	return true;
+bool jvst_load (JackVST* jvst, const char* plug_spec, bool want_state_and_amc) {
+	/* Try load directly */
+	bool loaded = false;
+	if ( plug_spec )
+		loaded = jvst_load_directly ( jvst, plug_spec );
+
+	/* load state if requested - state file may contain plugin path
+	   NOTE: it can call jvst_load */
+	if ( want_state_and_amc && jvst->default_state_file )
+		loaded = jvst_load_state (jvst, jvst->default_state_file);
+
+	/* bind Jack to Audio Master Callback */
+	if ( loaded && want_state_and_amc )
+		jvstamc_init ( jvst, &( jvst->fst->amc ) );
+
+	return loaded;
 }
 
 void jvst_destroy (JackVST* jvst) {
