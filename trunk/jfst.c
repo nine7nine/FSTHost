@@ -964,6 +964,10 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	char* menv = getenv("FSTHOST_GUI");
 	if ( menv ) jvst->with_editor = strtol(menv, NULL, 10);
 
+	// Handle FSTHOST_THREADS environment
+	menv = getenv("FSTHOST_THREADS");
+	if ( menv ) separate_threads = true;
+
         // Parse command line options
 	cmdline2arg(&argc, &argv, cmdline);
 	while ( (i = getopt (argc, argv, "bBd:egs:S:c:k:i:j:LnNm:pPo:t:Tu:U:V")) != -1) {

@@ -794,7 +794,7 @@ make_img_button(const gchar *stock_id, const gchar *tooltip, bool toggle,
 
 bool
 gtk_gui_start (JackVST* jvst) {
-	printf("GTK Thread WineID: %d | LWP: %d\n", GetCurrentThreadId (), (int) syscall (SYS_gettid));
+//	printf("GTK Thread WineID: %d | LWP: %d\n", GetCurrentThreadId (), (int) syscall (SYS_gettid));
 
 	// create a GtkWindow containing a GtkSocket...
 	//

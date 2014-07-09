@@ -117,15 +117,13 @@ my_window_proc (HWND w, UINT msg, WPARAM wp, LPARAM lp) {
 
 static bool
 register_window_class() {
-	WNDCLASSEX wclass;
 	HMODULE hInst;
-
 	if ((hInst = GetModuleHandleA (NULL)) == NULL) {
 		fst_error ("can't get module handle");
 		return FALSE;
 	}
 
-
+	WNDCLASSEX wclass;
 	wclass.cbSize = sizeof(WNDCLASSEX);
 	wclass.style = 0;
 //	wclass.style = (CS_HREDRAW | CS_VREDRAW);
@@ -445,9 +443,6 @@ void fst_close (FST* fst) {
 
 /*************************** Event handler routines *****************************************/
 static bool fst_create_editor (FST* fst) {
-	HMODULE hInst;
-	HWND window;
-	struct ERect* er;
 	AEffect* plugin = fst->plugin;
 
 	/* "guard point" to trap errors that occur during plugin loading */
@@ -456,6 +451,7 @@ static bool fst_create_editor (FST* fst) {
 		return FALSE;
 	}
 
+	HMODULE hInst;
 	if ((hInst = GetModuleHandleA (NULL)) == NULL) {
 		fst_error ("can't get module handle");
 		return FALSE;
@@ -463,7 +459,8 @@ static bool fst_create_editor (FST* fst) {
 
 	if ( ! WindowClassRegistered && ! register_window_class() )
 		return FALSE;
-	
+
+	HWND window;
 	if ((window = CreateWindowA ("FST", fst->handle->name, (fst->editor_popup) ? 
 		(WS_POPUP & ~WS_TABSTOP) :
 //		(WS_OVERLAPPEDWINDOW & ~WS_THICKFRAME & ~WS_MAXIMIZEBOX & ~WS_CAPTION) :
@@ -476,9 +473,12 @@ static bool fst_create_editor (FST* fst) {
 	}
 	fst->window = window;
 
+	/* Request plugin to open editor */
 	plugin->dispatcher (plugin, effEditOpen, 0, 0, window, 0);
-	plugin->dispatcher (plugin, effEditGetRect, 0, 0, &er, 0 );
 
+	/* Get editor window size */
+	struct ERect* er;
+	plugin->dispatcher (plugin, effEditGetRect, 0, 0, &er, 0 );
 	fst->width  = er->right - er->left;
 	fst->height = er->bottom - er->top;
 
@@ -519,7 +519,6 @@ static inline void fst_suspend ( FST* fst ) {
 static inline void fst_event_handler (FST* fst) {
 	FSTEventCall* ec = &( fst->event_call );
 	if ( ec->type == RESET ) return;
-
 
 	AEffect* plugin = fst->plugin;
 	FSTDispatcher* dp = ec->dispatcher;
@@ -616,12 +615,11 @@ bool fst_event_callback() {
 	return TRUE;
 }
 
-// ----------- NOT USED ----------------
-void fst_event_loop (HMODULE hInst) {
+void fst_event_loop () {
 	//DWORD gui_thread_id;
 	HANDLE* h_thread = GetCurrentThread ();
 
-	register_window_class(hInst);
+	register_window_class();
 	//gui_thread_id = GetCurrentThreadId ();
 
 	//SetPriorityClass ( h_thread, REALTIME_PRIORITY_CLASS);
