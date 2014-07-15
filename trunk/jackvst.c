@@ -117,17 +117,40 @@ void jvst_bypass(JackVST* jvst, bool bypass) {
 	}
 }
 
+typedef enum {
+	JVST_FILE_TYPE_FXP,
+	JVST_FILE_TYPE_FXB,
+	JVST_FILE_TYPE_FPS,
+	JVST_FILE_TYPE_UNKNOWN
+} JVST_FileType;
+
+static JVST_FileType get_file_type ( const char * filename ) {
+	char* file_ext = strrchr(filename, '.');
+	if (! file_ext) return JVST_FILE_TYPE_UNKNOWN;
+
+	if ( !strcasecmp(file_ext, ".fps") ) return JVST_FILE_TYPE_FPS;
+	if ( !strcasecmp(file_ext, ".fxp") ) return JVST_FILE_TYPE_FXP;
+	if ( !strcasecmp(file_ext, ".fxb") ) return JVST_FILE_TYPE_FXB;
+
+	printf("Unkown file type\n");
+	return JVST_FILE_TYPE_UNKNOWN;
+}
+
 bool jvst_load_state (JackVST* jvst, const char * filename) {
 	bool success = false;
-	char* file_ext = strrchr(filename, '.');
-	if (! file_ext) return false;
 
-	if ( !strcasecmp(file_ext, ".fps") ) {
-		success = fps_load(jvst, filename);
-	} else if ( !strcasecmp(file_ext, ".fxp") || !strcasecmp(file_ext, ".fxb") ) {
-		if (jvst->fst) success = fst_load_fxfile(jvst->fst, filename);
-	} else {
-		printf("Unkown file type\n");
+	switch ( get_file_type ( filename ) ) {
+	case JVST_FILE_TYPE_FPS:
+		success = fps_load (jvst, filename);
+		break;
+
+	case JVST_FILE_TYPE_FXP:
+	case JVST_FILE_TYPE_FXB:
+		if (! jvst->fst) break;
+		success = fst_load_fxfile (jvst->fst, filename);
+		break;
+
+	case JVST_FILE_TYPE_UNKNOWN:;
 	}
 
 	if (success) {
@@ -140,18 +163,17 @@ bool jvst_load_state (JackVST* jvst, const char * filename) {
 }
 
 bool jvst_save_state (JackVST* jvst, const char * filename) {
-	bool ret = FALSE;
-	char* file_ext = strrchr(filename, '.');
+	switch ( get_file_type ( filename ) ) {
+	case JVST_FILE_TYPE_FPS:
+		return fps_save(jvst, filename);
 
-	if (strcasecmp(file_ext, ".fxp") == 0) {
-		ret = fst_save_fxfile(jvst->fst, filename, FXPROGRAM);
-	} else if (strcasecmp(file_ext, ".fxb") == 0) {
-		ret = fst_save_fxfile(jvst->fst, filename, FXBANK);
-	} else if (strcasecmp(file_ext, ".fps") == 0) {
-		ret = fps_save(jvst, filename);
-	} else {
-		printf("Unkown file type\n");
+	case JVST_FILE_TYPE_FXB:
+		return fst_save_fxfile(jvst->fst, filename, FXBANK);
+
+	case JVST_FILE_TYPE_FXP:
+		return fst_save_fxfile (jvst->fst, filename, FXPROGRAM);
+
+	case JVST_FILE_TYPE_UNKNOWN:;
 	}
-
-	return ret;
+	return false;
 }
