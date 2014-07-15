@@ -8,6 +8,7 @@
 
 int serv_get_sock ( uint16_t port ) {
 	struct sockaddr_in server;
+	socklen_t addrlen = sizeof(server);
 
 	//Create socket
 	int socket_desc = socket(AF_INET , SOCK_STREAM , 0);
@@ -27,13 +28,13 @@ int serv_get_sock ( uint16_t port ) {
 	setsockopt(socket_desc, SOL_SOCKET, SO_REUSEADDR, &ofc, sizeof ofc);
 
 	//Bind
-	int ret = bind (socket_desc,(struct sockaddr *) &server , sizeof(server));
+	int ret = bind (socket_desc,(struct sockaddr *) &server , addrlen);
 	if ( ret < 0 ) {
-		//print the error message
 		perror("bind failed. Error");
 		return 0;
 	}
-	puts("bind done");
+	getsockname ( socket_desc, (struct sockaddr *) &server , &addrlen );
+	printf ("bind done, port: %d\n", ntohs( server.sin_port ) );
 
 	//Listen
 	listen(socket_desc , 3);

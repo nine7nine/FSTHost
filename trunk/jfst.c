@@ -771,7 +771,7 @@ static void usage(char* appname) {
 	fprintf(stderr, format, "-e", "Hide Editor");
 #endif
 	fprintf(stderr, format, "-s <state_file>", "Load <state_file>");
-	fprintf(stderr, format, "-S <port>", "Start CTRL server on port <port>");
+	fprintf(stderr, format, "-S <port>", "Start CTRL server on port <port>. Use 0 for random.");
 	fprintf(stderr, format, "-c <client_name>", "Jack Client name");
 	fprintf(stderr, format, "-k channel", "MIDI Channel (0: all, 17: none)");
 	fprintf(stderr, format, "-i num_in", "Jack number In ports");
@@ -950,6 +950,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	bool		opt_list_plugins = false;
 	bool		want_midi_physical = false;
 	bool		separate_threads = false;
+	bool		serv = false;
 	const char*	connect_to = NULL;
 	const char*	custom_path = NULL;
 
@@ -979,7 +980,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 			case 'L': opt_list_plugins = true; break;
 			case 'B': jvst->bbt_sync = true; break;
 			case 's': jvst->default_state_file = optarg; break;
-			case 'S': jvst->ctrl_port_number = strtol(optarg,NULL,10); break;
+			case 'S': serv=true; jvst->ctrl_port_number = strtol(optarg,NULL,10); break;
 			case 'c': jvst->client_name = optarg; break;
 			case 'k': midi_filter_one_channel_set(&jvst->channel, strtol(optarg, NULL, 10)); break;
 			case 'i': opt_numIns = strtol(optarg, NULL, 10); break;
@@ -1086,9 +1087,8 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 		g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 100, (GSourceFunc) fst_event_callback, NULL, NULL);
 
 	/* Socket stuff */
-	if ( jvst->ctrl_port_number )
-		if ( ! jvst_proto_init(jvst) )
-			goto sock_err;
+	if ( serv && ! jvst_proto_init(jvst) )
+		goto sock_err;
 
 #ifdef NO_GTK
 	// Create GTK or GlibMain thread
