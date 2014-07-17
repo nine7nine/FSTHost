@@ -29,13 +29,6 @@ JackVST* jvst_new() {
 	for(i=0; i<128;++i) jvst->midi_map[i] = -1;
 	jvst->midi_pc = MIDI_PC_PLUG; // mean that plugin take care of Program Change
 
-	// Little trick (const entries)
-	SysExIdentReply sxir = SYSEX_IDENT_REPLY;
-	memcpy(&jvst->sysex_ident_reply, &sxir, sizeof(SysExIdentReply));
-
-	SysExDumpV1 sxd = SYSEX_DUMP;
-	memcpy(&jvst->sysex_dump, &sxd, sizeof(SysExDumpV1));
-
 	jvst->transposition = midi_filter_transposition_init ( &jvst->filters );
 	midi_filter_one_channel_init( &jvst->filters, &jvst->channel );
 
