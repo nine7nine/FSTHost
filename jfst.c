@@ -24,7 +24,6 @@
 #include <semaphore.h>
 #include <signal.h>
 #include <errno.h>
-#include <sys/syscall.h>
 #include <sys/mman.h>
 
 #include "jackvst.h"
@@ -271,7 +270,7 @@ static DWORD WINAPI
 wine_thread_aux( LPVOID arg ) {
 	struct JackWineThread* jwt = (struct JackWineThread*) arg;
 
-        printf("Audio Thread W32ID: %d | LWP: %d\n", GetCurrentThreadId (), (int) syscall (SYS_gettid));
+	fst_show_thread_info ( "Audio" );
 
 	void* func_arg = jwt->arg;
 	void* (*func)(void*) = jwt->func;
@@ -623,10 +622,9 @@ static void jvst_connect_audio(JackVST *jvst, const char *audio_to) {
 		return;
 	}
 
-	const char *pname;
 	unsigned short i;
 	for (i=0; jports[i] && i < jvst->numOuts; i++) {
-		pname = jack_port_name(jvst->outports[i]);
+		const char *pname = jack_port_name(jvst->outports[i]);
 		jack_connect_wrap ( jvst->client, pname, jports[i] );
 	}
 	jack_free(jports);
@@ -867,8 +865,12 @@ static bool jvst_jack_init( JackVST* jvst ) {
 	return true;
 }
 
-static bool jvst_fst_init( JackVST* jvst ) {
+static bool jvst_fst_init( JackVST* jvst, int32_t max_in, int32_t max_out ) {
 	FST* fst = jvst->fst;
+	AEffect* plugin = fst->plugin;
+
+	// Set client name (if user did not provide own)
+	if (!jvst->client_name) jvst->client_name = fst->handle->name;
 
 	// MIDI	
 	/* No MIDI at all - very old/rare v1 plugins */
@@ -882,14 +884,18 @@ static bool jvst_fst_init( JackVST* jvst ) {
 	if (fst->canSendVstEvents || fst->canSendVstMidiEvent)
 		jvst->want_midi_out = true;
 
-audio:
-	// Jack Audio
+audio:	// Jack Audio
+	jvst->numIns = (max_in >= 0 && max_in < plugin->numInputs) ? max_in : plugin->numInputs;
+	jvst->numOuts = (max_out >= 0 && max_out < plugin->numOutputs) ? max_out : plugin->numOutputs;
+	printf("Port Layout (FSTHost/plugin) IN: %d/%d OUT: %d/%d\n", 
+		jvst->numIns, plugin->numInputs, jvst->numOuts, plugin->numOutputs);
+
 	if ( ! jvst_jack_init ( jvst ) ) return false;
 
 	// Lock our crucial memory ( which is used in process callback )
 	// TODO: this is not all
 	mlock ( jvst, sizeof(JackVST) );
-	mlock ( jvst->fst, sizeof(FST) );
+	mlock ( fst, sizeof(FST) );
 
 	// Set block size / sample rate
 	fst_call_dispatcher (fst, effSetSampleRate, 0, 0, NULL, (float) jvst->sample_rate);
@@ -898,9 +904,17 @@ audio:
 	return true;
 }
 
-void jvst_cleanup ( JackVST* jvst ) {
+void jvst_close ( JackVST* jvst ) {
+	puts("Jack Deactivate");
+	jack_deactivate ( jvst->client );
+	jack_client_close ( jvst->client );
+
+	fst_close(jvst->fst);
+
 	free ( jvst->inports );
 	free ( jvst->outports );
+
+	jvst_destroy( jvst );
 }
 
 struct SepThread {
@@ -913,6 +927,8 @@ struct SepThread {
 static DWORD WINAPI
 sep_thread ( LPVOID arg ) {
 	struct SepThread* st = (struct SepThread*) arg;
+
+	fst_set_thread_priority ( "SepThread", ABOVE_NORMAL_PRIORITY_CLASS, THREAD_PRIORITY_ABOVE_NORMAL );
 
 	bool loaded = st->loaded = jvst_load ( st->jvst, st->plug_spec, true );
 
@@ -943,9 +959,8 @@ int WINAPI
 WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	int		argc = -1;
 	char**		argv = NULL;
-	short		i;
-	int32_t		opt_numIns = -1;
-	int32_t		opt_numOuts = -1;
+	int32_t		opt_maxIns = -1;
+	int32_t		opt_maxOuts = -1;
 	bool		opt_generate_dbinfo = false;
 	bool		opt_list_plugins = false;
 	bool		want_midi_physical = false;
@@ -971,8 +986,9 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 
         // Parse command line options
 	cmdline2arg(&argc, &argv, cmdline);
-	while ( (i = getopt (argc, argv, "bBd:egs:S:c:k:i:j:LnNm:pPo:t:Tu:U:V")) != -1) {
-		switch (i) {
+	short c;
+	while ( (c = getopt (argc, argv, "bBd:egs:S:c:k:i:j:LnNm:pPo:t:Tu:U:V")) != -1) {
+		switch (c) {
 			case 'b': jvst->bypassed = TRUE; break;
 			case 'd': free(jvst->dbinfo_file); jvst->dbinfo_file = optarg; break;
 			case 'e': jvst->with_editor = WITH_EDITOR_HIDE; break;
@@ -983,11 +999,11 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 			case 'S': serv=true; jvst->ctrl_port_number = strtol(optarg,NULL,10); break;
 			case 'c': jvst->client_name = optarg; break;
 			case 'k': midi_filter_one_channel_set(&jvst->channel, strtol(optarg, NULL, 10)); break;
-			case 'i': opt_numIns = strtol(optarg, NULL, 10); break;
+			case 'i': opt_maxIns = strtol(optarg, NULL, 10); break;
 			case 'j': connect_to = optarg; break;
 			case 'p': want_midi_physical = TRUE; break;
 			case 'P': jvst->midi_pc = MIDI_PC_SELF; break; /* used but not enabled */
-			case 'o': opt_numOuts = strtol(optarg, NULL, 10); break;
+			case 'o': opt_maxOuts = strtol(optarg, NULL, 10); break;
 			case 'n': jvst->with_editor = WITH_EDITOR_NO; break;
 			case 'N': jvst->sysex_want_notify = true; break;
 			case 'm': jvst->want_state_cc = strtol(optarg, NULL, 10); break;
@@ -1027,30 +1043,13 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 		return 1;
 	}
 
-	// Our shourcuts
-	FST* fst = jvst->fst;
-	AEffect* plugin = fst->plugin;
-
-	// Set client name (if user did not provide own)
-	if (!jvst->client_name) jvst->client_name = jvst->fst->handle->name;
-
 	// Set Thread policy - usefull only with WineRT/LPA patch
-	HANDLE* h_thread = GetCurrentThread();
-	//SetPriorityClass ( h_thread, REALTIME_PRIORITY_CLASS);
-	SetPriorityClass ( h_thread, ABOVE_NORMAL_PRIORITY_CLASS);
-	//SetThreadPriority ( h_thread, THREAD_PRIORITY_TIME_CRITICAL);
-	SetThreadPriority ( h_thread, THREAD_PRIORITY_ABOVE_NORMAL);
-        printf("Main Thread W32ID: %d | LWP: %d | W32 Class: %d | W32 Priority: %d\n",
-		GetCurrentThreadId (), (int) syscall (SYS_gettid), GetPriorityClass (h_thread), GetThreadPriority(h_thread));
-
-	// Count audio ports
-	jvst->numIns = (opt_numIns >= 0 && opt_numIns < plugin->numInputs) ? opt_numIns : plugin->numInputs;
-	jvst->numOuts = (opt_numOuts >= 0 && opt_numOuts < plugin->numOutputs) ? opt_numOuts : plugin->numOutputs;
-	printf("Port Layout (FSTHost/plugin) IN: %d/%d OUT: %d/%d\n", 
-		jvst->numIns, plugin->numInputs, jvst->numOuts, plugin->numOutputs);
+	//fst_set_thread_priority ( "Main", REALTIME_PRIORITY_CLASS, THREAD_PRIORITY_TIME_CRITICAL );
+	fst_set_thread_priority ( "Main", ABOVE_NORMAL_PRIORITY_CLASS, THREAD_PRIORITY_ABOVE_NORMAL );
 
 	// Init Jack
-	if ( ! jvst_fst_init ( jvst ) ) return 1;
+	if ( ! jvst_fst_init ( jvst, opt_maxIns, opt_maxOuts ) )
+		return 1;
 
 	// Handling signals
 	struct sigaction sa;
@@ -1110,21 +1109,11 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 		g_main_loop_run ( glib_main_loop );
 	}
 #endif
-
 	/* Close CTRL socket */
 	jvst_proto_close ( jvst );
 
 sock_err:
-
-	puts("Jack Deactivate");
-	jack_deactivate(jvst->client);
-	jack_client_close ( jvst->client );
-
-	jvst_cleanup(jvst);
-
-	fst_close(jvst->fst);
-
-	jvst_destroy(jvst);
+	jvst_close(jvst);
 
 	puts("Game Over");
 

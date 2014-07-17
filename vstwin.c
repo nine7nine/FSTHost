@@ -3,6 +3,8 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <limits.h>
+#include <unistd.h>
+#include <sys/syscall.h>
 
 #include "fst.h"
 
@@ -615,19 +617,27 @@ bool fst_event_callback() {
 	return TRUE;
 }
 
-void fst_event_loop () {
-	//DWORD gui_thread_id;
+void fst_show_thread_info ( const char* th_name ) {
+	HANDLE* h_thread = GetCurrentThread();
+        printf("%s Thread W32ID: %d | LWP: %d | W32 Class: %d | W32 Priority: %d\n",
+		th_name,
+		GetCurrentThreadId(),
+		(int) syscall (SYS_gettid),
+		GetPriorityClass(h_thread),
+		GetThreadPriority(h_thread)
+	);
+}
+
+void fst_set_thread_priority ( const char* th_name, int class, int priority ) {
 	HANDLE* h_thread = GetCurrentThread ();
+	SetPriorityClass ( h_thread, class );
+	SetThreadPriority ( h_thread, priority );
+	fst_show_thread_info ( th_name );
+}
+
+void fst_event_loop () {
 
 	register_window_class();
-	//gui_thread_id = GetCurrentThreadId ();
-
-	//SetPriorityClass ( h_thread, REALTIME_PRIORITY_CLASS);
-	SetPriorityClass ( h_thread, ABOVE_NORMAL_PRIORITY_CLASS);
-	//SetThreadPriority ( h_thread, THREAD_PRIORITY_TIME_CRITICAL);
-	SetThreadPriority ( h_thread, THREAD_PRIORITY_ABOVE_NORMAL);
-	fst_error ("W32 GUI EVENT Thread Class: %d", GetPriorityClass (h_thread));
-	fst_error ("W32 GUI EVENT Thread Priority: %d", GetThreadPriority(h_thread));
 
 	if (!SetTimer (NULL, 1000, 100, NULL)) {
 		fst_error ("cannot set timer on dummy window");
