@@ -712,7 +712,7 @@ void jvst_close ( JackVST* jvst ) {
 struct SepThread {
 	JackVST* jvst;
 	const char* plug_spec;
-	sem_t* sem;
+	sem_t sem;
 	bool loaded;
 };
 
@@ -724,7 +724,7 @@ sep_thread ( LPVOID arg ) {
 
 	bool loaded = st->loaded = jvst_load ( st->jvst, st->plug_spec, true );
 
-	sem_post( st->sem );
+	sem_post( &st->sem );
 
 	if ( loaded ) fst_event_loop();
 
@@ -732,17 +732,15 @@ sep_thread ( LPVOID arg ) {
 }
 
 bool jvst_load_sep_th (JackVST* jvst, const char* plug_spec, bool want_state_and_amc) {
-	sem_t sem;
-	sem_init( &sem, 0, 0 );
 
 	struct SepThread st;
 	st.jvst = jvst;
 	st.plug_spec = plug_spec;
-	st.sem = &sem;
+	sem_init( &st.sem, 0, 0 );
 	CreateThread( NULL, 0, sep_thread, &st, 0, 0 );
 
-	sem_wait ( &sem );
-	sem_destroy ( &sem );
+	sem_wait ( &st.sem );
+	sem_destroy ( &st.sem );
 
 	return st.loaded;
 }
