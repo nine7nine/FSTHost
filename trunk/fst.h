@@ -138,6 +138,9 @@ typedef struct {
 
 void fst_error (const char *fmt, ...);
 
+void fst_set_thread_priority ( const char* th_name, int class, int priority );
+void fst_show_thread_info ( const char* th_name );
+
 FSTHandle* fst_load (const char * path );
 bool fst_unload (FSTHandle*);
 FST* fst_open (FSTHandle*);
