@@ -9,8 +9,8 @@
 #include <math.h>
 
 #include "sysex.h"
-#include "fst.h"
-#include "midifilter.h"
+#include "fst/fst.h"
+#include "midifilter/midifilter.h"
 
 #define MIDI_PC_SELF -1
 #define MIDI_PC_PLUG -2
