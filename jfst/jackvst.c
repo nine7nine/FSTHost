@@ -1,5 +1,5 @@
-#include <jackvst.h>
-#include <amc.h>
+#include "jackvst.h"
+#include "../fst/amc.h"
 
 /* fps.c */
 bool fps_save(JackVST* jvst, const char* filename);

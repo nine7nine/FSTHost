@@ -26,7 +26,7 @@
 #include <errno.h>
 #include <sys/mman.h>
 
-#include "jackvst.h"
+#include "jfst/jackvst.h"
 #include <jack/thread.h>
 
 #define CTRLAPP "FHControl"
@@ -46,7 +46,7 @@ extern void gtk_gui_init (int* argc, char** argv[]);
 extern int gtk_gui_start (JackVST * jvst);
 extern void gtk_gui_quit();
 
-/* list.c */
+/* xmldb.c */
 extern char* fst_info_default_path(const char* appname);
 extern int fst_info_list(const char* dbpath);
 

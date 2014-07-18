@@ -4,7 +4,7 @@
 #include <libxml/parser.h>
 #include <libxml/tree.h>
 
-#include "fst.h"
+#include "../fst/fst.h"
 
 #ifdef __x86_64__
 #define ARCH "64"

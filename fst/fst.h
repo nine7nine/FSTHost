@@ -1,5 +1,5 @@
-#ifndef __fst_fst_h__
-#define __fst_fst_h__
+#ifndef __fst_h__
+#define __fst_h__
 
 #include <stdio.h>
 #include <setjmp.h>
@@ -166,4 +166,4 @@ int fst_save_fxfile (FST * fst, const char * filename, enum FxFileType fileType)
 /* Support for XML Database (info.c) */
 int fst_info_update(const char *dbpath, const char *fst_path);
 
-#endif /* __fst_fst_h__ */
+#endif /* __fst_h__ */

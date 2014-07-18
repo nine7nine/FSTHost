@@ -1,5 +1,5 @@
-#include <jackvst.h>
-#include <amc.h>
+#include "jackvst.h"
+#include "../fst/amc.h"
 
 static void jvstamc_automate ( AMC* amc, int32_t param ) {
 	JackVST* jvst = (JackVST*) amc->user_ptr;

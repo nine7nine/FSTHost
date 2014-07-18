@@ -68,19 +68,31 @@ LDFLAGS32          := -m32 $(LDFLAGS) -L/usr/lib/i386-linux-gnu/wine
 LDFLAGS64          := -m64 $(LDFLAGS)
 
 ### Global source lists
-C_SRCS              = amc.c jackamc.c fst.c jackvst.c jfst.c sysex.c fxb.c fps.c vstwin.c cpuusage.c info.c midifilter.c list.c
+C_SRCS             := fsthost.c
+
+# JFST
+C_SRCS             += $(wildcard jfst/*.c)
+
+# MIDIFILTER
+C_SRCS             += $(wildcard midifilter/*.c)
+
+# FST
+C_SRCS             += $(wildcard fst/*.c)
 
 # JVST proto stuff
-C_SRCS             += serv.c jvstproto.c
+C_SRCS             += $(wildcard serv/*.c)
 
-# Lash
+# XML DB
+C_SRCS             += $(wildcard xmldb/*.c)
+
+# LASH
 ifeq ($(LASH_EXISTS),yes)
-C_SRCS             += lash.c
+C_SRCS             += $(wildcard lash/*.c)
 endif
 
 # GTK
 ifneq ($(GTK),0)
-C_SRCS             += gtk.c
+C_SRCS             += $(wildcard gtk/*.c)
 endif
 
 # On 64 bit platform build also fsthost64
@@ -123,7 +135,7 @@ clean:: $(SUBDIRS:%=%/__clean__) $(EXTRASUBDIRS:%=%/__clean__)
 
 # Prepare manual
 man:
-	pod2man fsthost_menu.pl fsthost_menu.1
+	pod2man perl/fsthost_menu.pl fsthost_menu.1
 
 install-man: man
 	install -Dm 0644 fsthost.1 $(DESTDIR)$(MANDIR)/fsthost.1
@@ -141,7 +153,7 @@ ifeq ($(LBITS), 64)
 	install -Dm 0755 fsthost64 $(DESTDIR)$(BIN_INST_PATH)/fsthost64
 endif
 	install -Dm 0755 fsthost_list $(DESTDIR)$(BIN_INST_PATH)/fsthost_list
-	install -Dm 0755 fsthost_menu.pl $(DESTDIR)$(BIN_INST_PATH)/fsthost_menu
+	install -Dm 0755 perl/fsthost_menu.pl $(DESTDIR)$(BIN_INST_PATH)/fsthost_menu
 	ln -fs fsthost32 $(DESTDIR)$(BIN_INST_PATH)/fsthost
 
 $(SUBDIRS:%=%/__clean__): dummy
@@ -150,7 +162,7 @@ $(SUBDIRS:%=%/__clean__): dummy
 $(EXTRASUBDIRS:%=%/__clean__): dummy
 	cd `dirname $@` && $(RM) $(CLEAN_FILES)
 
-fsthost_list: list_$(LBITS).o
+fsthost_list: xmldb/list_$(LBITS).o
 	gcc flist.c $< $(shell pkg-config --cflags --libs libxml-2.0) -O2 -g -o $@
 
 ### Target specific build rules
