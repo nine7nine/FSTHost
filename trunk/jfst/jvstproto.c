@@ -2,16 +2,11 @@
 #include <string.h>
 #include <stdio.h>
 #include <glib.h>
-#include "jackvst.h"
+
+#include "../serv/serv.h"
+#include "jfst.h"
 
 #define ACK "<OK>"
-
-/* serv.c */
-int serv_get_sock ( uint16_t port );
-int serv_get_client ( int socket_desc );
-bool serv_send_client_data ( int client_sock, char* msg, int msg_len );
-bool serv_client_get_data ( int client_sock, char* msg, int msg_max_len );
-void serv_close_socket ( int socket_desc );
 
 /* jfst.c */
 void jvst_quit(JackVST* jvst);

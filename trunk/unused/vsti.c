@@ -29,7 +29,7 @@
 #include <memory.h>
 #include <fcntl.h>
 #include <stdbool.h>
-#include <jackvst.h>
+#include <jfst.h>
 #include <vestige/aeffectx.h>
 #include <pthread.h>
 #include <sched.h>

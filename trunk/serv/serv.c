@@ -1,10 +1,11 @@
-#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdio.h>
 #include <unistd.h>    //write
 #include <sys/socket.h>
 #include <arpa/inet.h> //inet_addr
+
+#include "serv.h"
 
 int serv_get_sock ( uint16_t port ) {
 	struct sockaddr_in server;
