@@ -1,4 +1,4 @@
-#include "jackvst.h"
+#include "jfst.h"
 #include "../fst/amc.h"
 
 /* fps.c */
@@ -11,9 +11,16 @@ extern void jvstamc_init ( JackVST* jvst, AMC* amc );
 /* info.c */
 FST* fst_info_load_open ( const char* dbpath, const char* plug_spec );
 
+static void jvst_midi_learn_init ( JackVST* jvst ) {
+	short i;
+	jvst->midi_learn = FALSE;
+	jvst->midi_learn_CC = -1;
+	jvst->midi_learn_PARAM = -1;
+	for(i=0; i<128;++i) jvst->midi_map[i] = -1;
+}
+
 JackVST* jvst_new() {
 	JackVST* jvst = calloc (1, sizeof (JackVST));
-	short i;
 
 	pthread_mutex_init (&jvst->sysex_lock, NULL);
 	pthread_cond_init (&jvst->sysex_sent, NULL);
@@ -23,11 +30,9 @@ JackVST* jvst_new() {
 	jvst->tempo = -1; // -1 here mean get it from Jack
 	/* Local Keyboard MIDI CC message (122) is probably not used by any VST */
 	jvst->want_state_cc = 122;
-	jvst->midi_learn = FALSE;
-	jvst->midi_learn_CC = -1;
-	jvst->midi_learn_PARAM = -1;
-	for(i=0; i<128;++i) jvst->midi_map[i] = -1;
 	jvst->midi_pc = MIDI_PC_PLUG; // mean that plugin take care of Program Change
+
+	jvst_midi_learn_init ( jvst );
 
 	jvst->transposition = midi_filter_transposition_init ( &jvst->filters );
 	midi_filter_one_channel_init( &jvst->filters, &jvst->channel );

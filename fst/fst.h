@@ -136,6 +136,18 @@ typedef struct {
 	int32_t numPrograms;
 } FXHeader;
 
+static inline bool fst_want_midi_in ( FST* fst ) {
+	/* No MIDI at all - very old/rare v1 plugins */
+	if (fst->vst_version < 2) return false;
+	return (fst->isSynth || fst->canReceiveVstEvents || fst->canReceiveVstMidiEvent);
+}
+
+static inline bool fst_want_midi_out ( FST* fst ) {
+	/* No MIDI at all - very old/rare v1 plugins */
+	if (fst->vst_version < 2) return false;
+	return (fst->canSendVstEvents || fst->canSendVstMidiEvent);
+}
+
 void fst_error (const char *fmt, ...);
 
 void fst_set_thread_priority ( const char* th_name, int class, int priority );

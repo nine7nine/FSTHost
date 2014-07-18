@@ -1,5 +1,5 @@
 #include <lash/lash.h>
-#include "jackvst.h"
+#include "jfst.h"
 
 static lash_client_t *lash_client = NULL;
 

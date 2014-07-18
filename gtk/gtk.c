@@ -1,4 +1,4 @@
-#include "../jfst/jackvst.h"
+#include "../jfst/jfst.h"
 #include <gtk/gtk.h>
 #include <strings.h>
 

@@ -26,7 +26,8 @@
 #include <errno.h>
 #include <sys/mman.h>
 
-#include "jfst/jackvst.h"
+#include "jfst/jfst.h"
+
 #include <jack/thread.h>
 
 #define CTRLAPP "FHControl"
@@ -46,7 +47,7 @@ extern void gtk_gui_init (int* argc, char** argv[]);
 extern int gtk_gui_start (JackVST * jvst);
 extern void gtk_gui_quit();
 
-/* xmldb.c */
+/* list.c */
 extern char* fst_info_default_path(const char* appname);
 extern int fst_info_list(const char* dbpath);
 
@@ -141,7 +142,8 @@ wine_thread_create (pthread_t* thread_id, const pthread_attr_t* attr, void *(*fu
 }
 
 static inline void process_midi_output(JackVST* jvst, jack_nframes_t nframes) {
-	if (! jvst->want_midi_out) return;
+	if (! fst_want_midi_out(jvst->fst) ) return;
+
 	// Do not process anything if MIDI OUT port is not connected
 	if (! jack_port_connected ( jvst->midi_outport ) ) return;
 
@@ -256,7 +258,7 @@ static inline void process_midi_in_msg ( JackVST* jvst, jack_midi_event_t* jacke
 	}
 
 	// ... wanna play at all ?
-	if ( jvst->bypassed || ! jvst->want_midi_in ) return;
+	if ( jvst->bypassed || ! fst_want_midi_in(jvst->fst) ) return;
 	
 	/* Prepare MIDI events */
 	VstMidiEvent* midi_event = (VstMidiEvent*) events->events[events->numEvents];
@@ -442,7 +444,7 @@ static void jvst_connect_audio(JackVST *jvst, const char *audio_to) {
 }
 
 static void jvst_connect_midi_to_physical(JackVST* jvst) {
-	if ( ! jvst->want_midi_in ) return;
+	if ( ! fst_want_midi_in(jvst->fst) ) return;
 
 	const char **jports = jack_get_ports(jvst->client, NULL, JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput|JackPortIsPhysical);
         if (!jports) return;
@@ -583,8 +585,20 @@ static void usage(char* appname) {
 	fprintf(stderr, format, "-V", "Disable Volume control / filtering CC7 messages");
 }
 
-static bool jvst_jack_init( JackVST* jvst ) {
+static jack_port_t** jack_audio_port_init ( jack_client_t* client, unsigned long flags, int32_t num ) {
+	jack_port_t** ports = malloc( sizeof(jack_port_t*) * num );
+	mlock ( ports, sizeof(jack_port_t*) * num );
+
 	int32_t i;
+	for (i = 0; i < num; ++i) {
+		char buf[16];
+		snprintf (buf, sizeof(buf), "in%d", i+1);
+		ports[i] = jack_port_register ( client, buf, JACK_DEFAULT_AUDIO_TYPE, flags, 0 );
+	}
+	return ports;
+}
+
+static bool jvst_jack_init( JackVST* jvst ) {
 
 	jack_set_info_function(jvst_log);
 	jack_set_error_function(jvst_log);
@@ -614,30 +628,16 @@ static bool jvst_jack_init( JackVST* jvst ) {
 	jvst->sample_rate = jack_get_sample_rate(jvst->client);
 	jvst->buffer_size = jack_get_buffer_size(jvst->client);
 
-	// Register input ports
-	jvst->inports = malloc(sizeof(jack_port_t*) * jvst->numIns); // jack_port_t**
-	mlock ( jvst->inports, sizeof(jack_port_t*) * jvst->numIns );
-	for (i = 0; i < jvst->numIns; ++i) {
-		char buf[6];
-		snprintf (buf, sizeof(buf), "in%d", i+1);
-		jvst->inports[i] = jack_port_register (jvst->client, buf, JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
-	}
-
-	// Register output ports
-	jvst->outports = malloc (sizeof(jack_port_t*) * jvst->numOuts); //jack_port_t**
-	mlock ( jvst->outports, sizeof(jack_port_t*) * jvst->numOuts );
-	for (i = 0; i < jvst->numOuts; ++i) {
-		char buf[7];
-		snprintf (buf, sizeof(buf), "out%d", i+1);
-		jvst->outports[i] = jack_port_register (jvst->client, buf, JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
-	}
+	// Register/allocate audio ports
+	jvst->inports  = jack_audio_port_init ( jvst->client, JackPortIsInput,  jvst->numIns );
+	jvst->outports = jack_audio_port_init ( jvst->client, JackPortIsOutput, jvst->numOuts );
 
 	// Register MIDI input port (if needed)
 	// NOTE: we always create midi_in port cause it works also as ctrl_in
 	jvst->midi_inport = jack_port_register(jvst->client, "midi-in", JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
 
 	// Register MIDI output port (if needed)
-	if ( jvst->want_midi_out ) {
+	if ( fst_want_midi_out(jvst->fst) ) {
 		jvst->midi_outport = jack_port_register(jvst->client, "midi-out", JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
 		jvst->ringbuffer = jack_ringbuffer_create(RINGBUFFER_SIZE);
 		if (! jvst->ringbuffer) {
@@ -651,9 +651,6 @@ static bool jvst_jack_init( JackVST* jvst ) {
 	jvst->ctrl_outport = jack_port_register(jvst->client, "ctrl-out",
 		JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
 
-	/* Sysex init */
-	jvst_sysex_init ( jvst );
-
 	return true;
 }
 
@@ -664,25 +661,16 @@ static bool jvst_fst_init( JackVST* jvst, int32_t max_in, int32_t max_out ) {
 	// Set client name (if user did not provide own)
 	if (!jvst->client_name) jvst->client_name = fst->handle->name;
 
-	// MIDI	
-	/* No MIDI at all - very old/rare v1 plugins */
-	if (fst->vst_version < 2) goto audio; 
-
-	/**************** MIDI IN ***********************/
-	if (fst->isSynth || fst->canReceiveVstEvents || fst->canReceiveVstMidiEvent)
-		jvst->want_midi_in = true;
-
-	/**************** MIDI OUT **********************/
-	if (fst->canSendVstEvents || fst->canSendVstMidiEvent)
-		jvst->want_midi_out = true;
-
-audio:	// Jack Audio
+	// Jack Audio
 	jvst->numIns = (max_in >= 0 && max_in < plugin->numInputs) ? max_in : plugin->numInputs;
 	jvst->numOuts = (max_out >= 0 && max_out < plugin->numOutputs) ? max_out : plugin->numOutputs;
 	printf("Port Layout (FSTHost/plugin) IN: %d/%d OUT: %d/%d\n", 
 		jvst->numIns, plugin->numInputs, jvst->numOuts, plugin->numOutputs);
 
 	if ( ! jvst_jack_init ( jvst ) ) return false;
+
+	/* Sysex init */
+	jvst_sysex_init ( jvst );
 
 	// Lock our crucial memory ( which is used in process callback )
 	// TODO: this is not all
@@ -693,6 +681,7 @@ audio:	// Jack Audio
 	fst_call_dispatcher (fst, effSetSampleRate, 0, 0, NULL, (float) jvst->sample_rate);
 	fst_call_dispatcher (fst, effSetBlockSize, 0, (intptr_t) jvst->buffer_size, NULL, 0.0f);
 	printf("Sample Rate: %d | Block Size: %d\n", jvst->sample_rate, jvst->buffer_size);
+
 	return true;
 }
 

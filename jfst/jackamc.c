@@ -1,4 +1,4 @@
-#include "jackvst.h"
+#include "jfst.h"
 #include "../fst/amc.h"
 
 static void jvstamc_automate ( AMC* amc, int32_t param ) {
