@@ -1,3 +1,5 @@
+#include <sys/mman.h>
+
 #include "jfst.h"
 #include "../fst/amc.h"
 
@@ -11,15 +13,6 @@ extern void jvstamc_init ( JackVST* jvst, AMC* amc );
 /* info.c */
 FST* fst_info_load_open ( const char* dbpath, const char* plug_spec );
 
-static inline void jvst_midi_learn_init ( JackVST* jvst ) {
-	short i;
-	MidiLearn* ml = &jvst->midi_learn;
-	ml->wait = FALSE;
-	ml->cc = -1;
-	ml->param = -1;
-	for(i=0; i<128;++i) ml->map[i] = -1;
-}
-
 JackVST* jvst_new() {
 	JackVST* jvst = calloc (1, sizeof (JackVST));
 
@@ -27,18 +20,106 @@ JackVST* jvst_new() {
 	pthread_cond_init (&jvst->sysex_sent, NULL);
 
 	jvst->with_editor = WITH_EDITOR_SHOW;
-	jvst->volume = 1;
+	jvst->volume = -1;
 	jvst->tempo = -1; // -1 here mean get it from Jack
 	/* Local Keyboard MIDI CC message (122) is probably not used by any VST */
 	jvst->want_state_cc = 122;
 	jvst->midi_pc = MIDI_PC_PLUG; // mean that plugin take care of Program Change
 
-	jvst_midi_learn_init ( jvst );
+	/* MidiLearn */
+	short i;
+	MidiLearn* ml = &jvst->midi_learn;
+	ml->wait = FALSE;
+	ml->cc = -1;
+	ml->param = -1;
+	for(i=0; i<128;++i) ml->map[i] = -1;
 
 	jvst->transposition = midi_filter_transposition_init ( &jvst->filters );
 	midi_filter_one_channel_init( &jvst->filters, &jvst->channel );
 
 	return jvst;
+}
+
+void jvst_destroy (JackVST* jvst) {
+	midi_filter_cleanup( &jvst->filters, true );
+	free(jvst);
+}
+
+bool jvst_init( JackVST* jvst, int32_t max_in, int32_t max_out ) {
+	FST* fst = jvst->fst;
+	AEffect* plugin = fst->plugin;
+
+	// Set client name (if user did not provide own)
+	if (!jvst->client_name) jvst->client_name = fst->handle->name;
+
+	// Jack Audio
+	jvst->numIns = (max_in >= 0 && max_in < plugin->numInputs) ? max_in : plugin->numInputs;
+	jvst->numOuts = (max_out >= 0 && max_out < plugin->numOutputs) ? max_out : plugin->numOutputs;
+	printf("Port Layout (FSTHost/plugin) IN: %d/%d OUT: %d/%d\n", 
+		jvst->numIns, plugin->numInputs, jvst->numOuts, plugin->numOutputs);
+
+	bool want_midi_out = fst_want_midi_out ( jvst->fst );
+	if ( ! jvst_jack_init ( jvst, want_midi_out ) ) return false;
+
+	/* Sysex init */
+	jvst_sysex_init ( jvst );
+
+	// Lock our crucial memory ( which is used in process callback )
+	// TODO: this is not all
+	mlock ( jvst, sizeof(JackVST) );
+	mlock ( fst, sizeof(FST) );
+
+	// Set block size / sample rate
+	fst_call_dispatcher (fst, effSetSampleRate, 0, 0, NULL, (float) jvst->sample_rate);
+	fst_call_dispatcher (fst, effSetBlockSize, 0, (intptr_t) jvst->buffer_size, NULL, 0.0f);
+	printf("Sample Rate: %d | Block Size: %d\n", jvst->sample_rate, jvst->buffer_size);
+
+	return true;
+}
+
+void jvst_close ( JackVST* jvst ) {
+	puts("Jack Deactivate");
+	jack_deactivate ( jvst->client );
+	jack_client_close ( jvst->client );
+
+	fst_close(jvst->fst);
+
+	free ( jvst->inports );
+	free ( jvst->outports );
+
+	jvst_destroy( jvst );
+}
+
+/* return true if want quit */
+bool jvst_session_callback( JackVST* jvst, const char* appname ) {
+	puts("session callback");
+
+	jack_session_event_t *event = jvst->session_event;
+
+	// Save state
+	char filename[MAX_PATH];
+	snprintf( filename, sizeof(filename), "%sstate.fps", event->session_dir );
+	if ( ! jvst_save_state( jvst, filename ) ) {
+		puts("SAVE ERROR");
+		event->flags |= JackSessionSaveError;
+	}
+
+	// Reply to session manager
+	char retval[256];
+	snprintf( retval, sizeof(retval), "%s -u %s -s \"${SESSION_DIR}state.fps\"", appname, event->client_uuid);
+	event->command_line = strndup( retval, strlen(retval) + 1  );
+
+	jack_session_reply(jvst->client, event);
+
+	bool quit = false;
+	if (event->type == JackSessionSaveAndQuit) {
+		puts("JackSession manager ask for quit");
+		quit = true;
+	}
+
+	jack_session_event_free(event);
+
+	return quit;
 }
 
 /* plug_spec could be path, dll name or eff/plug name */
@@ -69,40 +150,6 @@ bool jvst_load (JackVST* jvst, const char* plug_spec, bool want_state_and_amc) {
 		jvstamc_init ( jvst, &( jvst->fst->amc ) );
 
 	return loaded;
-}
-
-void jvst_destroy (JackVST* jvst) {
-	midi_filter_cleanup( &jvst->filters, true );
-	free(jvst);
-}
-
-void jvst_sysex_set_uuid (JackVST* jvst, uint8_t uuid) {
-	jvst->sysex_ident_reply.model[0] = jvst->sysex_dump.uuid = uuid;
-}
-
-void jvst_log(const char *msg) { fprintf(stderr, "JACK: %s\n", msg); }
-
-void jvst_set_volume(JackVST* jvst, short volume) {
-	if (jvst->volume != -1) jvst->volume = powf(volume / 63.0f, 2);
-}
-
-unsigned short jvst_get_volume(JackVST* jvst) {
-	if (jvst->volume == -1) return 0;
-
-	short ret = roundf(sqrtf(jvst->volume) * 63.0f);
-
-	return (ret < 0) ? 0 : (ret > 127) ? 127 : ret;
-}
-
-void jvst_apply_volume ( JackVST* jvst, jack_nframes_t nframes, float** outs ) {
-	if (jvst->volume == -1) return;
-
-	int32_t i;
-	for ( i = 0; i < jvst->numOuts; i++ ) {
-		jack_nframes_t n;
-		for ( n = 0; n < nframes; n++ )
-			outs[i][n] *= jvst->volume;
-	}
 }
 
 void jvst_bypass(JackVST* jvst, bool bypass) {
