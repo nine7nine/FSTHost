@@ -91,14 +91,14 @@ vumeter_draw_handler (GtkWidget *widget, cairo_t *cr, gpointer user_data) {
 static void
 learn_handler (GtkToggleButton *but, gpointer ptr) {
 	JackVST* jvst = (JackVST*) ptr;
+	MidiLearn* ml = &jvst->midi_learn;
 	
-	if ( ! gtk_toggle_button_get_active (but) ) {
-		jvst->midi_learn = FALSE;
-		return;
+	if ( gtk_toggle_button_get_active (but) ) {
+		ml->cc = ml->param = -1;
+		ml->wait = true;
+	} else {
+		ml->wait = false;
 	}
-
-	jvst->midi_learn_CC = jvst->midi_learn_PARAM = -1;
-	jvst->midi_learn = TRUE;
 }
 
 static void
@@ -678,19 +678,17 @@ idle_cb(JackVST *jvst) {
 	}
 
 	// MIDI learn support
-	if ( jvst->midi_learn &&
-	     jvst->midi_learn_CC >= 0 &&
-	     jvst->midi_learn_PARAM >= 0
-	) {
-		jvst->midi_learn = FALSE;
-		jvst->midi_map[jvst->midi_learn_CC] = jvst->midi_learn_PARAM;
+	MidiLearn* ml = &jvst->midi_learn;
+	if ( ml->wait && ml->cc >= 0 && ml->param >= 0 ) {
+		ml->wait = false;
+		ml->map[ml->cc] = ml->param;
 
 		char name[32];
-		bool success = plugin->dispatcher( plugin, effGetParamName, jvst->midi_learn_PARAM, 0, name, 0 );
+		bool success = plugin->dispatcher( plugin, effGetParamName, ml->param, 0, name, 0 );
 		if (success) {
-			printf("MIDIMAP CC: %d => %s\n", jvst->midi_learn_CC, name);
+			printf("MIDIMAP CC: %d => %s\n", ml->cc, name);
 		} else {
-			printf("MIDIMAP CC: %d => %d\n", jvst->midi_learn_CC, jvst->midi_learn_PARAM);
+			printf("MIDIMAP CC: %d => %d\n", ml->cc, ml->param);
 		}
 
 		bool show_tooltip = FALSE;
@@ -698,7 +696,7 @@ idle_cb(JackVST *jvst) {
 		tooltip[0] = '\0';
 		uint8_t cc;
 	   	for (cc = 0; cc < 128; cc++) {
-			int32_t paramIndex = jvst->midi_map[cc];
+			int32_t paramIndex = ml->map[cc];
 			if ( paramIndex < 0 || paramIndex >= plugin->numParams )
 				continue;
 
