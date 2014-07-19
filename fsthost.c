@@ -340,8 +340,8 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 		fst_run_editor (jvst->fst, false);
 	} else {
 		puts("GUI Disabled - start GlibMainLoop");
-		g_main_loop_run ( glib_main_loop );
 	}
+	g_main_loop_run ( glib_main_loop );
 #else
 	// Create GTK or GlibMain thread
 	if (jvst->with_editor != WITH_EDITOR_NO) {
