@@ -3,8 +3,10 @@
 
 static void jvstamc_automate ( AMC* amc, int32_t param ) {
 	JackVST* jvst = (JackVST*) amc->user_ptr;
-	if ( jvst && jvst->midi_learn )
-		jvst->midi_learn_PARAM = param;
+	if ( ! jvst ) return;
+
+	MidiLearn* ml = &(jvst->midi_learn);
+	if ( ml->wait ) ml->param = param;
 }
 
 static VstTimeInfo* jvstamc_get_time ( AMC* amc, int32_t mask ) {

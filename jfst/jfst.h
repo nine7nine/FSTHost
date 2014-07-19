@@ -57,6 +57,13 @@ struct MidiMessage {
    jack_midi_data_t data[3];
 };
 
+typedef struct {
+    int32_t         map[128];
+    bool            wait;
+    int8_t          cc;
+    int32_t         param;
+} MidiLearn;
+
 typedef struct _JackVST {
     jack_client_t*  client;
     FST*            fst;
@@ -84,10 +91,8 @@ typedef struct _JackVST {
     bool            bbt_sync;
     uint16_t        ctrl_port_number;
 
-    int32_t         midi_map[128];
-    bool            midi_learn;
-    int8_t          midi_learn_CC;
-    int32_t         midi_learn_PARAM;
+    MidiLearn       midi_learn;
+
     int8_t          midi_pc;
     MIDIFILTER*     filters;
     MIDIFILTER*     transposition;

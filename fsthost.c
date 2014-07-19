@@ -239,11 +239,12 @@ static inline void process_midi_in_msg ( JackVST* jvst, jack_midi_event_t* jacke
 		if (jvst->bypassed) return;
 
 		// Mapping MIDI CC
-		if ( jvst->midi_learn ) {
-			jvst->midi_learn_CC = CC;
+		MidiLearn* ml = &jvst->midi_learn;
+		if ( ml->wait ) {
+			ml->cc = CC;
 		// handle mapped MIDI CC
-		} else if ( jvst->midi_map[CC] != -1 ) {
-			int32_t parameter = jvst->midi_map[CC];
+		} else if ( ml->map[CC] != -1 ) {
+			int32_t parameter = ml->map[CC];
 			float value = 1.0/127.0 * (float) VALUE;
 			AEffect* plugin = jvst->fst->plugin;
 			plugin->setParameter( plugin, parameter, value );

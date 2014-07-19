@@ -11,12 +11,13 @@ extern void jvstamc_init ( JackVST* jvst, AMC* amc );
 /* info.c */
 FST* fst_info_load_open ( const char* dbpath, const char* plug_spec );
 
-static void jvst_midi_learn_init ( JackVST* jvst ) {
+static inline void jvst_midi_learn_init ( JackVST* jvst ) {
 	short i;
-	jvst->midi_learn = FALSE;
-	jvst->midi_learn_CC = -1;
-	jvst->midi_learn_PARAM = -1;
-	for(i=0; i<128;++i) jvst->midi_map[i] = -1;
+	MidiLearn* ml = &jvst->midi_learn;
+	ml->wait = FALSE;
+	ml->cc = -1;
+	ml->param = -1;
+	for(i=0; i<128;++i) ml->map[i] = -1;
 }
 
 JackVST* jvst_new() {

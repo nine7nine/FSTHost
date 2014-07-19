@@ -108,7 +108,7 @@ fps_process_node(JackVST* jvst, xmlNode *a_node) {
           if ( cc < 0 || cc >= 128 || index < 0 || index >= fst->plugin->numParams )
              continue;
 
-          jvst->midi_map[cc] = index;
+          jvst->midi_learn.map[cc] = index;
        // Param
        } else if (xmlStrcmp(cur_node->name, BAD_CAST "param") == 0) {
           if (fst->plugin->flags & effFlagsProgramChunks) {
@@ -273,7 +273,7 @@ bool fps_save (JackVST* jvst, const char* filename) {
 
    // MIDI Map
    for (cc = 0; cc < 128; cc++ ) {
-      int32_t paramIndex = jvst->midi_map[cc];
+      int32_t paramIndex = jvst->midi_learn.map[cc];
       if ( paramIndex < 0 || paramIndex >= fst->plugin->numParams ) continue;
 
       fst_call_dispatcher( fst, effGetParamName, paramIndex, 0, tString, 0 );
