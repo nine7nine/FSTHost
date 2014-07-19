@@ -67,7 +67,7 @@ bool jvst_init( JackVST* jvst, int32_t max_in, int32_t max_out ) {
 	if ( ! jvst_jack_init ( jvst, want_midi_out ) ) return false;
 
 	/* Sysex init */
-	jvst_sysex_init ( jvst );
+	if ( ! jvst_sysex_init ( jvst ) ) return false;
 
 	// Lock our crucial memory ( which is used in process callback )
 	// TODO: this is not all
