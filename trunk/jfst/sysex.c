@@ -39,6 +39,10 @@ bool jvst_sysex_init ( JackVST* jvst ) {
 	return true;
 }
 
+void jvst_sysex_set_uuid (JackVST* jvst, uint8_t uuid) {
+	jvst->sysex_ident_reply.model[0] = jvst->sysex_dump.uuid = uuid;
+}
+
 void jvst_sysex_rt_send ( JackVST* jvst, void *port_buffer ) {
 	if (jvst->sysex_want == SYSEX_WANT_NO) return;
 

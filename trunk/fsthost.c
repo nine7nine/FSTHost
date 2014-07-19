@@ -23,12 +23,8 @@
 #include <glib.h>
 #include <semaphore.h>
 #include <signal.h>
-#include <errno.h>
-#include <sys/mman.h>
 
 #include "jfst/jfst.h"
-
-#include <jack/thread.h>
 
 #define CTRLAPP "FHControl"
 #define VERSION "1.5.5"
@@ -40,13 +36,6 @@
 #define APPNAME "fsthost"
 #define APPNAME_ARCH APPNAME ARCH
 
-#define RINGBUFFER_SIZE 16 * sizeof(struct MidiMessage)
-
-/* gtk.c */
-extern void gtk_gui_init (int* argc, char** argv[]);
-extern int gtk_gui_start (JackVST * jvst);
-extern void gtk_gui_quit();
-
 /* list.c */
 extern char* fst_info_default_path(const char* appname);
 extern int fst_info_list(const char* dbpath);
@@ -55,13 +44,12 @@ extern int fst_info_list(const char* dbpath);
 bool jvst_proto_init ( JackVST* jvst );
 bool jvst_proto_close ( JackVST* jvst );
 
-/* sysex.c */
-extern void jvst_send_sysex ( JackVST* jvst, enum SysExWant sysex_want );
-extern void jvst_queue_sysex ( JackVST* jvst, jack_midi_data_t* data, size_t size );
-extern void jvst_sysex_handler ( JackVST* jvst );
-extern void jvst_sysex_notify ( JackVST* jvst );
-extern bool jvst_sysex_init ( JackVST* jvst );
-extern void jvst_sysex_rt_send ( JackVST* jvst, void *port_buffer );
+/* gtk.c */
+#ifndef NO_GTK
+extern void gtk_gui_init (int* argc, char** argv[]);
+extern int gtk_gui_start (JackVST * jvst);
+extern void gtk_gui_quit();
+#endif
 
 /* lash.c */
 #ifdef HAVE_LASH
@@ -102,366 +90,16 @@ static void signal_handler (int signum) {
 	}
 }
 
-struct JackWineThread {
-	void* (*func)(void*);
-	void* arg;
-	pthread_t pthid;
-	sem_t sema;
-};
-
-static DWORD WINAPI
-wine_thread_aux( LPVOID arg ) {
-	struct JackWineThread* jwt = (struct JackWineThread*) arg;
-
-	fst_show_thread_info ( "Audio" );
-
-	void* func_arg = jwt->arg;
-	void* (*func)(void*) = jwt->func;
-
-	jwt->pthid = pthread_self();
-	sem_post( &jwt->sema );
-
-	func ( func_arg );
-
-	return 0;
-}
-
-static int
-wine_thread_create (pthread_t* thread_id, const pthread_attr_t* attr, void *(*function)(void*), void* arg) {
-	struct JackWineThread jwt;
-
-	sem_init( &jwt.sema, 0, 0 );
-	jwt.func = function;
-	jwt.arg = arg;
-
-	CreateThread( NULL, 0, wine_thread_aux, &jwt, 0, 0 );
-	sem_wait( &jwt.sema );
-
-	*thread_id = jwt.pthid;
-	return 0;
-}
-
-static inline void process_midi_output(JackVST* jvst, jack_nframes_t nframes) {
-	if (! fst_want_midi_out(jvst->fst) ) return;
-
-	// Do not process anything if MIDI OUT port is not connected
-	if (! jack_port_connected ( jvst->midi_outport ) ) return;
-
-	/* This jack ringbuffer consume code was largely taken from jack-keyboard */
-	/* written by Edward Tomasz Napierala <trasz@FreeBSD.org>                 */
-	void *port_buffer = jack_port_get_buffer(jvst->midi_outport, nframes);
-	/* We need always clear buffer if port is connected someware */
-	jack_midi_clear_buffer(port_buffer);
-
-	jack_nframes_t last_frame_time = jack_last_frame_time(jvst->client);
-	jack_ringbuffer_t* ringbuffer = jvst->ringbuffer;
-	while (jack_ringbuffer_read_space(ringbuffer)) {
-		struct MidiMessage ev;
-		int read = jack_ringbuffer_peek(ringbuffer, (char*)&ev, sizeof(ev));
-		if (read != sizeof(ev)) {
-			fst_error("Short read from the ringbuffer, possible note loss.");
-			jack_ringbuffer_read_advance(ringbuffer, read);
-			continue;
-		}
-
-		int t = ev.time + nframes - last_frame_time;
-
-		/* If computed time is too much into the future, we'll send it later. */
-		if (t >= nframes) return;
-
-		/* If computed time is < 0, we missed a cycle because of xrun. */
-		if (t < 0) t = 0;
-
-		jack_ringbuffer_read_advance(ringbuffer, sizeof(ev));
-
-		if ( jack_midi_event_write(port_buffer, t, ev.data, ev.len) )
-			fst_error("queue: jack_midi_event_write failed, NOTE LOST.");
-	}
-}
-
-static inline void process_ctrl_output(JackVST* jvst, jack_nframes_t nframes) {
-	if ( ! jack_port_connected ( jvst->ctrl_outport ) ) return;
-
-	void *port_buffer = jack_port_get_buffer(jvst->ctrl_outport, nframes);
-	/* We need always clear buffer if port is connected someware */
-	jack_midi_clear_buffer(port_buffer);
-
-	jvst_sysex_rt_send ( jvst, port_buffer );
-}
-
-/* True if this message should be passed to plugin */
-static inline void process_midi_in_msg ( JackVST* jvst, jack_midi_event_t* jackevent, VstEvents* events )
-{
-	/* TODO: SysEx
-	For now we simply drop all SysEx messages because VST standard
-	require special Event type for this (kVstSysExType)
-	and this type is not supported (yet ;-)
-	... but we take over our messages
-	*/
-	if ( jackevent->buffer[0] == SYSEX_BEGIN) {
-		jvst_queue_sysex(jvst, jackevent->buffer, jackevent->size);
-		return;
-	}
-
-	/* Copy this MIDI event beacuse Jack gives same buffer to all clients and we cannot work on this data */
-	jack_midi_data_t buf[jackevent->size];
-	memcpy(&buf, jackevent->buffer, jackevent->size);
-
-	/* MIDI FILTERS */
-	if ( ! midi_filter_check( &jvst->filters, (uint8_t*) &buf, jackevent->size ) ) return;
-
-	switch ( (buf[0] >> 4) & 0xF ) {
-	case MM_CONTROL_CHANGE: ;
-		// CC assigments
-		uint8_t CC = buf[1];
-		uint8_t VALUE = buf[2];
-
-		// Want Mode
-		if (CC == jvst->want_state_cc) {
-			// 0-63 mean want bypass
-			if (VALUE >= 0 && VALUE <= 63) {
-				jvst->want_state = WANT_STATE_BYPASS;
-			// 64-127 mean want resume
-			} else if (VALUE > 63 && VALUE <= 127) {
-				jvst->want_state = WANT_STATE_RESUME;
-			// other values are wrong
-			} else {
-				jvst->want_state = WANT_STATE_NO;
-			}
-			return;
-		// If Volume control is enabled then grab CC7 messages
-		} else if (CC == 7 && jvst->volume != -1) {
-			jvst_set_volume(jvst, VALUE);
-			return;
-		}
-
-		// In bypass mode do not touch plugin
-		if (jvst->bypassed) return;
-
-		// Mapping MIDI CC
-		MidiLearn* ml = &jvst->midi_learn;
-		if ( ml->wait ) {
-			ml->cc = CC;
-		// handle mapped MIDI CC
-		} else if ( ml->map[CC] != -1 ) {
-			int32_t parameter = ml->map[CC];
-			float value = 1.0/127.0 * (float) VALUE;
-			AEffect* plugin = jvst->fst->plugin;
-			plugin->setParameter( plugin, parameter, value );
-		}
-		break;
-	case MM_PROGRAM_CHANGE:
-		// Self Program Change
-		if (jvst->midi_pc != MIDI_PC_SELF) break;
-		jvst->midi_pc = buf[1];
-		// OFC don't forward this message to plugin
-		return;
-	}
-
-	// ... wanna play at all ?
-	if ( jvst->bypassed || ! fst_want_midi_in(jvst->fst) ) return;
-	
-	/* Prepare MIDI events */
-	VstMidiEvent* midi_event = (VstMidiEvent*) events->events[events->numEvents];
-	midi_event->type = kVstMidiType;
-	midi_event->byteSize = sizeof (VstMidiEvent);
-	midi_event->deltaFrames = jackevent->time;
-	midi_event->flags = kVstMidiEventIsRealtime; // All our MIDI data are realtime, it's clear ?
-
-	uint8_t j;
-	for (j=0; j < 3; j++) midi_event->midiData[j] = ( j < jackevent->size ) ? buf[j] : 0;
-	/* event_array[3] remain 0 (according to VST Spec) */
-	midi_event->midiData[3] = 0;
-
-	events->numEvents++;
-}
-
-static int process_callback( jack_nframes_t nframes, void* data) {
-	int32_t i;
-	JackVST* jvst = (JackVST*) data;
-	AEffect* plugin = jvst->fst->plugin;
-
-	// ******************* Process MIDI Input ************************************
-
-	// Do not process anything if MIDI IN port is not connected
-	if ( ! jack_port_connected ( jvst->midi_inport ) ) goto no_midi_in;
-
-	// NOTE: we process MIDI even in bypass mode for want_state handling and our SysEx
-	void *port_buffer = jack_port_get_buffer( jvst->midi_inport, nframes );
-	jack_nframes_t num_jackevents = jack_midi_get_event_count( port_buffer );
-
-	/* Allocate space for VST MIDI - preallocate space for all messages even
-	   if we use only few - cause of alloca scope. Can't move this to separate
-	   function because VST plug need this space during process call
-	   NOTE: can't use VLA here because of goto above
-	*/
-	size_t size = sizeof(VstEvents) + ((num_jackevents - 2) * sizeof(VstEvent*));
-	VstEvents* events = alloca ( size );
-	VstMidiEvent* event_array = alloca ( num_jackevents * sizeof(VstMidiEvent) );
-	memset ( event_array, 0, num_jackevents * sizeof(VstMidiEvent) );
-
-	events->numEvents = 0;
-	for (i = 0; i < num_jackevents; i++) {
-		jack_midi_event_t jackevent;
-		if ( jack_midi_event_get( &jackevent, port_buffer, i ) != 0 ) break;
-
-		/* Bind MIDI event to collection */
-		events->events[i] = (VstEvent*) &( event_array[i] );
-
-		process_midi_in_msg ( jvst, &jackevent, events );
-	}
-
-	// ... let's the music play
-	if ( events->numEvents > 0 )
-		plugin->dispatcher (plugin, effProcessEvents, 0, 0, events, 0.0f);
-
-no_midi_in: ;
-	/* Process AUDIO */
-	float* ins[plugin->numInputs];
-	float* outs[plugin->numOutputs];
-
-	// swap area ( nonused ports )
-	float swap[jvst->buffer_size];
-	memset ( swap, 0, jvst->buffer_size * sizeof(float) );
-
-	// Get addresses of input buffers
-	for (i = 0; i < plugin->numInputs; ++i) {
-		if ( i < jvst->numIns ) { 
-			ins[i] = (float*) jack_port_get_buffer (jvst->inports[i], nframes);
-		} else {
-			ins[i] = swap;
-		}
-	}
-
-	// Initialize output buffers
-	for (i = 0; i < plugin->numOutputs; ++i) {
-		if ( i < jvst->numOuts ) {
-			// Get address
-			outs[i]  = (float*) jack_port_get_buffer (jvst->outports[i], nframes);
-	
-			// If bypassed then copy In's to Out's
-			if ( jvst->bypassed && i < jvst->numIns ) {
-				memcpy ( outs[i], ins[i], sizeof (float) * nframes );
-			// Zeroing output buffers
-			} else {
-				memset ( outs[i], 0, sizeof (float) * nframes );
-			}
-		} else {
-			outs[i] = swap;
-		}
-	}
-
-	// Bypass - because all audio jobs are done  - simply return
-	if (jvst->bypassed) goto midi_out;
-
-	// Deal with plugin
-	if (plugin->flags & effFlagsCanReplacing) {
-		plugin->processReplacing (plugin, ins, outs, nframes);
-	} else {
-		plugin->process (plugin, ins, outs, nframes);
-	}
-
-#ifndef NO_VUMETER
-	/* Compute output level for VU Meter */
-	float avg_level = 0;
-	jack_nframes_t n;
-	for (n=0; n < nframes; n++) avg_level += fabs( outs[0][n] );
-	avg_level /= nframes;
-
-	jvst->out_level = avg_level * 100;
-	if (jvst->out_level > 100) jvst->out_level = 100;
-#endif
-
-	jvst_apply_volume ( jvst, nframes, outs );
-
-midi_out:
-	// Process MIDI Output
-	process_midi_output(jvst, nframes);
-	process_ctrl_output(jvst, nframes);
-
-	return 0;
-}
-
-static bool session_callback( JackVST* jvst ) {
-	puts("session callback");
-
-	jack_session_event_t *event = jvst->session_event;
-
-	// Save state
-	char filename[MAX_PATH];
-	snprintf( filename, sizeof(filename), "%sstate.fps", event->session_dir );
-	if ( ! jvst_save_state( jvst, filename ) ) {
-		puts("SAVE ERROR");
-		event->flags |= JackSessionSaveError;
-	}
-
-	// Reply to session manager
-	char retval[256];
-	snprintf( retval, sizeof(retval), "%s -u %s -s \"${SESSION_DIR}state.fps\"", APPNAME_ARCH, event->client_uuid);
-	event->command_line = strndup( retval, strlen(retval) + 1  );
-
-	jack_session_reply(jvst->client, event);
-
-	if (event->type == JackSessionSaveAndQuit) {
-		puts("JackSession manager ask for quit");
-		jack_session_event_free(event);
-		jvst_quit(jvst);
-	}
-
-	jack_session_event_free(event);
-
+static bool sescall ( JackVST* jvst ) {
+	bool quit = jvst_session_callback ( jvst, APPNAME_ARCH );
+	if ( quit ) jvst_quit ( jvst );
 	return FALSE;
 }
 
-static void session_callback_aux( jack_session_event_t *event, void* arg ) {
+void session_callback_aux( jack_session_event_t *event, void* arg ) {
 	JackVST* jvst = (JackVST*) arg;
-
         jvst->session_event = event;
-
-        g_idle_add( (GSourceFunc) session_callback, jvst );
-}
-
-static inline bool jack_connect_wrap ( jack_client_t* client , const char* source_port, const char* destination_port ) {
-	int ret = jack_connect( client, source_port, destination_port );
-	if ( ret == EEXIST ) return FALSE;
-	printf( "Connect: %s -> %s [ %s ]\n", source_port, destination_port, (ret==0)?"DONE":"FAIL" );
-	return (ret==0) ? TRUE : FALSE;
-}
-
-static void jvst_connect_audio(JackVST *jvst, const char *audio_to) {
-	// Connect audio port
-	const char **jports = jack_get_ports(jvst->client, audio_to, JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput);
-	if (!jports) {
-		printf("Can't find any ports for %s\n", audio_to);
-		return;
-	}
-
-	unsigned short i;
-	for (i=0; jports[i] && i < jvst->numOuts; i++) {
-		const char *pname = jack_port_name(jvst->outports[i]);
-		jack_connect_wrap ( jvst->client, pname, jports[i] );
-	}
-	jack_free(jports);
-}
-
-static void jvst_connect_midi_to_physical(JackVST* jvst) {
-	if ( ! fst_want_midi_in(jvst->fst) ) return;
-
-	const char **jports = jack_get_ports(jvst->client, NULL, JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput|JackPortIsPhysical);
-        if (!jports) return;
-
-	const char *pname = jack_port_name(jvst->midi_inport);
-	unsigned short i;
-        for (i=0; jports[i]; i++)
-		jack_connect_wrap (jvst->client, jports[i], pname);
-
-        jack_free(jports);
-}
-
-static int graph_order_callback( void *arg ) {
-	JackVST* jvst = arg;
-	jvst->graph_order_change = TRUE;
-	return 0;
+        g_idle_add( (GSourceFunc) sescall, jvst );
 }
 
 static inline void jvst_connect_to_ctrl_app(JackVST* jvst) {
@@ -584,119 +222,6 @@ static void usage(char* appname) {
 	fprintf(stderr, format, "-u uuid", "JackSession UUID");
 	fprintf(stderr, format, "-U SysExID", "SysEx ID (1-127). 0 is default (do not use it)");
 	fprintf(stderr, format, "-V", "Disable Volume control / filtering CC7 messages");
-}
-
-static jack_port_t** jack_audio_port_init ( jack_client_t* client, unsigned long flags, int32_t num ) {
-	jack_port_t** ports = malloc( sizeof(jack_port_t*) * num );
-	mlock ( ports, sizeof(jack_port_t*) * num );
-
-	int32_t i;
-	for (i = 0; i < num; ++i) {
-		char buf[16];
-		snprintf (buf, sizeof(buf), "in%d", i+1);
-		ports[i] = jack_port_register ( client, buf, JACK_DEFAULT_AUDIO_TYPE, flags, 0 );
-	}
-	return ports;
-}
-
-static bool jvst_jack_init( JackVST* jvst ) {
-
-	jack_set_info_function(jvst_log);
-	jack_set_error_function(jvst_log);
-
-	printf("Starting Jack thread ... ");
-	jack_status_t status;
-	jvst->client = jack_client_open(jvst->client_name,JackSessionID,&status,jvst->uuid);
-	if (! jvst->client) {
-		fst_error ("can't connect to JACK");
-		return false;
-	}
-	puts("Done");
-
-	/* Change client name if jack assign new */
-	if (status & JackNameNotUnique) {
-		jvst->client_name = jack_get_client_name(jvst->client);
-		printf("Jack change our name to %s\n", jvst->client_name);
-	}
-
-	// Set client callbacks
-	jack_set_thread_creator (wine_thread_create);
-	jack_set_process_callback (jvst->client, (JackProcessCallback) process_callback, jvst);
-	jack_set_session_callback( jvst->client, session_callback_aux, jvst );
-	jack_set_graph_order_callback(jvst->client, graph_order_callback, jvst);
-
-	/* set rate and blocksize */
-	jvst->sample_rate = jack_get_sample_rate(jvst->client);
-	jvst->buffer_size = jack_get_buffer_size(jvst->client);
-
-	// Register/allocate audio ports
-	jvst->inports  = jack_audio_port_init ( jvst->client, JackPortIsInput,  jvst->numIns );
-	jvst->outports = jack_audio_port_init ( jvst->client, JackPortIsOutput, jvst->numOuts );
-
-	// Register MIDI input port (if needed)
-	// NOTE: we always create midi_in port cause it works also as ctrl_in
-	jvst->midi_inport = jack_port_register(jvst->client, "midi-in", JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
-
-	// Register MIDI output port (if needed)
-	if ( fst_want_midi_out(jvst->fst) ) {
-		jvst->midi_outport = jack_port_register(jvst->client, "midi-out", JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
-		jvst->ringbuffer = jack_ringbuffer_create(RINGBUFFER_SIZE);
-		if (! jvst->ringbuffer) {
-			fst_error("Cannot create JACK ringbuffer.");
-			return false;
-		}
-		jack_ringbuffer_mlock(jvst->ringbuffer);
-	}
-
-	// Register Control MIDI Output port
-	jvst->ctrl_outport = jack_port_register(jvst->client, "ctrl-out",
-		JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
-
-	return true;
-}
-
-static bool jvst_fst_init( JackVST* jvst, int32_t max_in, int32_t max_out ) {
-	FST* fst = jvst->fst;
-	AEffect* plugin = fst->plugin;
-
-	// Set client name (if user did not provide own)
-	if (!jvst->client_name) jvst->client_name = fst->handle->name;
-
-	// Jack Audio
-	jvst->numIns = (max_in >= 0 && max_in < plugin->numInputs) ? max_in : plugin->numInputs;
-	jvst->numOuts = (max_out >= 0 && max_out < plugin->numOutputs) ? max_out : plugin->numOutputs;
-	printf("Port Layout (FSTHost/plugin) IN: %d/%d OUT: %d/%d\n", 
-		jvst->numIns, plugin->numInputs, jvst->numOuts, plugin->numOutputs);
-
-	if ( ! jvst_jack_init ( jvst ) ) return false;
-
-	/* Sysex init */
-	jvst_sysex_init ( jvst );
-
-	// Lock our crucial memory ( which is used in process callback )
-	// TODO: this is not all
-	mlock ( jvst, sizeof(JackVST) );
-	mlock ( fst, sizeof(FST) );
-
-	// Set block size / sample rate
-	fst_call_dispatcher (fst, effSetSampleRate, 0, 0, NULL, (float) jvst->sample_rate);
-	fst_call_dispatcher (fst, effSetBlockSize, 0, (intptr_t) jvst->buffer_size, NULL, 0.0f);
-	printf("Sample Rate: %d | Block Size: %d\n", jvst->sample_rate, jvst->buffer_size);
-
-	return true;
-}
-
-void jvst_close ( JackVST* jvst ) {
-	puts("Jack Deactivate");
-	jack_deactivate ( jvst->client );
-	jack_client_close ( jvst->client );
-
-	fst_close(jvst->fst);
-
-	free ( jvst->inports );
-	free ( jvst->outports );
-
-	jvst_destroy( jvst );
 }
 
 struct SepThread {
@@ -828,7 +353,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	fst_set_thread_priority ( "Main", ABOVE_NORMAL_PRIORITY_CLASS, THREAD_PRIORITY_ABOVE_NORMAL );
 
 	// Init Jack
-	if ( ! jvst_fst_init ( jvst, opt_maxIns, opt_maxOuts ) )
+	if ( ! jvst_init ( jvst, opt_maxIns, opt_maxOuts ) )
 		return 1;
 
 	// Handling signals
@@ -856,7 +381,8 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 
 	// Auto connect on start
 	if (connect_to) jvst_connect_audio(jvst, connect_to);
-	if (want_midi_physical) jvst_connect_midi_to_physical(jvst);
+	if (want_midi_physical && fst_want_midi_in(jvst->fst))
+		jvst_connect_midi_to_physical(jvst);
 
 	// Add FST event callback to Gblib main loop
 	if ( ! separate_threads )
