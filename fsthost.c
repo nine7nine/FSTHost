@@ -26,7 +26,6 @@
 
 #include "jfst/jfst.h"
 
-#define CTRLAPP "FHControl"
 #define VERSION "1.5.5"
 #ifdef __x86_64__
 #define ARCH "64"
@@ -102,66 +101,8 @@ void session_callback_aux( jack_session_event_t *event, void* arg ) {
         g_idle_add( (GSourceFunc) sescall, jvst );
 }
 
-static inline void jvst_connect_to_ctrl_app(JackVST* jvst) {
-	const char **jports = jack_get_ports(jvst->client, CTRLAPP, JACK_DEFAULT_MIDI_TYPE, 0);
-	if (!jports) return;
-
-	bool done = false;
-	unsigned short i;
-	for (i=0; jports[i]; i++) {
-		const char *src, *dst;
-		jack_port_t* port = jack_port_by_name(jvst->client, jports[i]);
-		jack_port_t* my_port;
-		if (jack_port_flags(port) & JackPortIsInput) {
-			/* ctrl_out -> input */
-			my_port = jvst->ctrl_outport;
-			src = jack_port_name( my_port );
-			dst = jports[i];
-		} else if (jack_port_flags(port) & JackPortIsOutput) {
-			/* output -> midi_in */
-			my_port = jvst->midi_inport;
-			src = jports[i];
-			dst = jack_port_name( my_port );
-		} else continue;
-
-		/* Already connected ? */
-		if ( jack_port_connected_to(my_port, jports[i]) ) continue;
-
-		if ( jack_connect_wrap (jvst->client, src, dst) )
-			done = true;
-	}
-        jack_free(jports);
-
-	/* Now we are connected to CTRL APP - send announce */
-	if (done) jvst_send_sysex(jvst, SYSEX_WANT_IDENT_REPLY);
-}
-
-static bool jvst_idle(JackVST* jvst) {
-	// Handle SysEx Input
-	jvst_sysex_handler(jvst);
-
-	// Check state
-	switch(jvst->want_state) {
-	case WANT_STATE_BYPASS: jvst_bypass(jvst,TRUE); break;
-	case WANT_STATE_RESUME: jvst_bypass(jvst,FALSE); break;
-	case WANT_STATE_NO:; /* because of GCC warning */
-	}
-
-	// Self Program change support
-	if (jvst->midi_pc > MIDI_PC_SELF) {
-		fst_program_change(jvst->fst, jvst->midi_pc);
-		jvst->midi_pc = MIDI_PC_SELF;
-	}
-
-	// Attempt to connect MIDI ports to control app if Graph order change
-	if (jvst->graph_order_change) {
-		jvst->graph_order_change = FALSE;
-		jvst_connect_to_ctrl_app(jvst);
-	}
-
-	// Send notify if we want notify and something change
-	if (jvst->sysex_want_notify) jvst_sysex_notify(jvst);
-
+static bool idle ( JackVST* jvst ) {
+	jvst_idle ( jvst );
 	return TRUE;
 }
 
@@ -377,7 +318,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 
 	// Init Glib main event loop
 	glib_main_loop = g_main_loop_new(NULL, FALSE);
-	g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 750, (GSourceFunc) jvst_idle, jvst, NULL);
+	g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 750, (GSourceFunc) idle, jvst, NULL);
 
 	// Auto connect on start
 	if (connect_to) jvst_connect_audio(jvst, connect_to);

@@ -15,6 +15,8 @@
 #define MIDI_PC_SELF -1
 #define MIDI_PC_PLUG -2
 
+#define CTRLAPP "FHControl"
+
 enum WantState {
    WANT_STATE_NO     = 0,
    WANT_STATE_RESUME = 1,
@@ -117,36 +119,31 @@ typedef struct _JackVST {
     jack_ringbuffer_t* ringbuffer;
 } JackVST;
 
+/* jfst.c */
 JackVST* jvst_new();
 bool jvst_init( JackVST* jvst, int32_t max_in, int32_t max_out );
-bool jvst_jack_init( JackVST* jvst, bool want_midi_out );
 bool jvst_load(JackVST* jvst, const char* plug_spec, bool want_state_and_amc);
-void jvst_log(const char *msg);
-void jvst_destroy(JackVST* jvst);
-void jvst_close ( JackVST* jvst );
-void jvst_send_sysex(JackVST* jvst, enum SysExWant);
-void jvst_bypass(JackVST* jvst, bool bypass);
 bool jvst_load_state(JackVST* jvst, const char * filename);
 bool jvst_save_state(JackVST* jvst, const char * filename);
-void jvst_set_volume(JackVST* jvst, short volume);
-void jvst_apply_volume ( JackVST* jvst, jack_nframes_t nframes, float** outs );
-void jvst_sysex_set_uuid(JackVST* jvst, uint8_t uuid);
-unsigned short jvst_get_volume(JackVST* jvst);
 bool jvst_session_callback( JackVST* jvst, const char* appname );
-void jvst_connect_audio(JackVST *jvst, const char *audio_to);
-void jvst_connect_midi_to_physical(JackVST* jvst);
-void jvst_process( JackVST* jvst, jack_nframes_t nframes );
-
-/* sysex.c */
-void jvst_send_sysex ( JackVST* jvst, enum SysExWant sysex_want );
-void jvst_queue_sysex ( JackVST* jvst, jack_midi_data_t* data, size_t size );
-void jvst_sysex_handler ( JackVST* jvst );
-void jvst_sysex_notify ( JackVST* jvst );
-bool jvst_sysex_init ( JackVST* jvst );
-void jvst_sysex_rt_send ( JackVST* jvst, void *port_buffer );
+void jvst_idle(JackVST* jvst);
+void jvst_close ( JackVST* jvst );
+void jvst_bypass(JackVST* jvst, bool bypass);
 
 /* jack.c */
-bool jack_connect_wrap ( jack_client_t* client , const char* source_port, const char* destination_port );
+bool jvst_jack_init( JackVST* jvst, bool want_midi_out );
+void jvst_connect_audio(JackVST *jvst, const char *audio_to);
+void jvst_connect_midi_to_physical(JackVST* jvst);
+void jvst_connect_to_ctrl_app(JackVST* jvst);
 
+void jvst_set_volume(JackVST* jvst, short volume);
+unsigned short jvst_get_volume(JackVST* jvst);
+
+/* sysex.c */
+void jvst_sysex_set_uuid(JackVST* jvst, uint8_t uuid);
+void jvst_send_sysex(JackVST* jvst, enum SysExWant);
+
+/* process.c */
+void jvst_process( JackVST* jvst, jack_nframes_t nframes );
 
 #endif /* __jack_vst_h__ */

@@ -1,5 +1,13 @@
 #include "jfst.h"
 
+/* sysex.c */
+extern void jvst_sysex_handler ( JackVST* jvst );
+extern void jvst_sysex_rt_send ( JackVST* jvst, void *port_buffer );
+extern void jvst_queue_sysex ( JackVST* jvst, jack_midi_data_t* data, size_t size );
+
+/* jack.c */
+extern void jvst_apply_volume ( JackVST* jvst, jack_nframes_t nframes, float** outs );
+
 static inline void process_midi_output(JackVST* jvst, jack_nframes_t nframes) {
 	if (! fst_want_midi_out(jvst->fst) ) return;
 

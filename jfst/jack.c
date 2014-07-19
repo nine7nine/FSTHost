@@ -73,7 +73,7 @@ wine_thread_create (pthread_t* thread_id, const pthread_attr_t* attr, void *(*fu
 	return 0;
 }
 
-bool jack_connect_wrap ( jack_client_t* client , const char* source_port, const char* destination_port ) {
+static bool jack_connect_wrap ( jack_client_t* client , const char* source_port, const char* destination_port ) {
 	int ret = jack_connect( client, source_port, destination_port );
 	if ( ret == EEXIST ) return FALSE;
 	printf( "Connect: %s -> %s [ %s ]\n", source_port, destination_port, (ret==0)?"DONE":"FAIL" );
@@ -105,7 +105,41 @@ void jvst_connect_midi_to_physical(JackVST* jvst) {
         for (i=0; jports[i]; i++)
 		jack_connect_wrap (jvst->client, jports[i], pname);
 
+	jack_free(jports);
+}
+
+void jvst_connect_to_ctrl_app(JackVST* jvst) {
+	const char **jports = jack_get_ports(jvst->client, CTRLAPP, JACK_DEFAULT_MIDI_TYPE, 0);
+	if (!jports) return;
+
+	bool done = false;
+	unsigned short i;
+	for (i=0; jports[i]; i++) {
+		const char *src, *dst;
+		jack_port_t* port = jack_port_by_name(jvst->client, jports[i]);
+		jack_port_t* my_port;
+		if (jack_port_flags(port) & JackPortIsInput) {
+			/* ctrl_out -> input */
+			my_port = jvst->ctrl_outport;
+			src = jack_port_name( my_port );
+			dst = jports[i];
+		} else if (jack_port_flags(port) & JackPortIsOutput) {
+			/* output -> midi_in */
+			my_port = jvst->midi_inport;
+			src = jports[i];
+			dst = jack_port_name( my_port );
+		} else continue;
+
+		/* Already connected ? */
+		if ( jack_port_connected_to(my_port, jports[i]) ) continue;
+
+		if ( jack_connect_wrap (jvst->client, src, dst) )
+			done = true;
+	}
         jack_free(jports);
+
+	/* Now we are connected to CTRL APP - send announce */
+	if (done) jvst_send_sysex(jvst, SYSEX_WANT_IDENT_REPLY);
 }
 
 static jack_port_t** jack_audio_port_init ( jack_client_t* client, unsigned long flags, int32_t num ) {
@@ -127,13 +161,13 @@ static int jvst_graph_order_callback( void *arg ) {
 	return 0;
 }
 
-void jvst_log(const char *msg) { fprintf(stderr, "JACK: %s\n", msg); }
-
 static int process_callback ( jack_nframes_t nframes, void* data) {
 	JackVST* jvst = (JackVST*) data;
 	jvst_process( jvst, nframes );
 	return 0;
 }
+
+static void jvst_log(const char *msg) { fprintf(stderr, "JACK: %s\n", msg); }
 
 bool jvst_jack_init( JackVST* jvst, bool want_midi_out ) {
 
