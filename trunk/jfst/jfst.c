@@ -4,14 +4,19 @@
 #include "../fst/amc.h"
 
 /* fps.c */
-bool fps_save(JackVST* jvst, const char* filename);
-bool fps_load(JackVST* jvst, const char* filename);
+extern bool fps_save(JackVST* jvst, const char* filename);
+extern bool fps_load(JackVST* jvst, const char* filename);
 
 /* jackamc.c */
 extern void jvstamc_init ( JackVST* jvst, AMC* amc );
 
+/* sysex.c */
+extern bool jvst_sysex_init ( JackVST* jvst );
+extern void jvst_sysex_handler ( JackVST* jvst );
+extern void jvst_sysex_notify ( JackVST* jvst );
+
 /* info.c */
-FST* fst_info_load_open ( const char* dbpath, const char* plug_spec );
+extern FST* fst_info_load_open ( const char* dbpath, const char* plug_spec );
 
 JackVST* jvst_new() {
 	JackVST* jvst = calloc (1, sizeof (JackVST));
@@ -40,7 +45,7 @@ JackVST* jvst_new() {
 	return jvst;
 }
 
-void jvst_destroy (JackVST* jvst) {
+static void jvst_destroy (JackVST* jvst) {
 	midi_filter_cleanup( &jvst->filters, true );
 	free(jvst);
 }
@@ -161,6 +166,33 @@ void jvst_bypass(JackVST* jvst, bool bypass) {
 		fst_call ( jvst->fst, RESUME );
 		jvst->bypassed = FALSE;
 	}
+}
+
+void jvst_idle(JackVST* jvst) {
+	// Handle SysEx Input
+	jvst_sysex_handler(jvst);
+
+	// Check state
+	switch(jvst->want_state) {
+	case WANT_STATE_BYPASS: jvst_bypass(jvst,TRUE); break;
+	case WANT_STATE_RESUME: jvst_bypass(jvst,FALSE); break;
+	case WANT_STATE_NO:; /* because of GCC warning */
+	}
+
+	// Self Program change support
+	if (jvst->midi_pc > MIDI_PC_SELF) {
+		fst_program_change(jvst->fst, jvst->midi_pc);
+		jvst->midi_pc = MIDI_PC_SELF;
+	}
+
+	// Attempt to connect MIDI ports to control app if Graph order change
+	if (jvst->graph_order_change) {
+		jvst->graph_order_change = FALSE;
+		jvst_connect_to_ctrl_app(jvst);
+	}
+
+	// Send notify if we want notify and something change
+	if (jvst->sysex_want_notify) jvst_sysex_notify(jvst);
 }
 
 typedef enum {
