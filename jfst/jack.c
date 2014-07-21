@@ -1,6 +1,7 @@
 #include <semaphore.h>
 #include <errno.h>
 #include <sys/mman.h>
+#include <math.h>
 
 #include "jfst.h"
 

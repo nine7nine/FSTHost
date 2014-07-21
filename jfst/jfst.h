@@ -6,8 +6,8 @@
 #include <jack/ringbuffer.h>
 #include <jack/session.h>
 #include <jack/midiport.h>
-#include <math.h>
 
+#include "eventqueue.h"
 #include "sysex.h"
 #include "fst/fst.h"
 #include "midifilter/midifilter.h"
@@ -69,6 +69,7 @@ typedef struct {
 typedef struct _JackVST {
     jack_client_t*  client;
     FST*            fst;
+    EventQueue      event_queue;
     char*           client_name;
     char*           default_state_file;
     char*           dbinfo_file;

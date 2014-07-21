@@ -31,6 +31,8 @@ JackVST* jvst_new() {
 	jvst->want_state_cc = 122;
 	jvst->midi_pc = MIDI_PC_PLUG; // mean that plugin take care of Program Change
 
+	event_queue_init ( &jvst->event_queue );
+
 	/* MidiLearn */
 	short i;
 	MidiLearn* ml = &jvst->midi_learn;
