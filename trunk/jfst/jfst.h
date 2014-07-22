@@ -12,15 +12,16 @@
 #include "fst/fst.h"
 #include "midifilter/midifilter.h"
 
-#define MIDI_PC_SELF -1
-#define MIDI_PC_PLUG -2
-
 #define CTRLAPP "FHControl"
 
+enum MidiPC {
+   MIDI_PC_SELF,
+   MIDI_PC_PLUG
+};
+
 enum WantState {
-   WANT_STATE_NO     = 0,
-   WANT_STATE_RESUME = 1,
-   WANT_STATE_BYPASS = 2
+   WANT_STATE_RESUME,
+   WANT_STATE_BYPASS
 };
 
 enum WithEditor {
@@ -83,20 +84,18 @@ typedef struct _JackVST {
     jack_port_t**   inports;
     jack_port_t**   outports;
     bool            bypassed;
-    enum WantState  want_state;
     short           want_state_cc;
     enum WithEditor with_editor;
     bool            want_resize;
     double          tempo;
     float           volume; /* where 0.0 mean silence */
     uint8_t         out_level; /* for VU-meter */
-    bool            graph_order_change;
     bool            bbt_sync;
     uint16_t        ctrl_port_number;
 
     MidiLearn       midi_learn;
 
-    int8_t          midi_pc;
+    enum MidiPC     midi_pc;
     MIDIFILTER*     filters;
     MIDIFILTER*     transposition;
     OCH_FILTERS     channel;
@@ -114,7 +113,6 @@ typedef struct _JackVST {
 
     /* Jack Session support */
     char* uuid;
-    jack_session_event_t* session_event;
 
     /* For VSTi support - midi effects & synth source (like audio to midi VSTs) support */
     jack_ringbuffer_t* ringbuffer;
@@ -127,7 +125,7 @@ bool jvst_load(JackVST* jvst, const char* plug_spec, bool want_state_and_amc);
 bool jvst_load_state(JackVST* jvst, const char * filename);
 bool jvst_save_state(JackVST* jvst, const char * filename);
 bool jvst_session_callback( JackVST* jvst, const char* appname );
-void jvst_idle(JackVST* jvst);
+void jvst_idle(JackVST* jvst, const char* appname);
 void jvst_close ( JackVST* jvst );
 void jvst_bypass(JackVST* jvst, bool bypass);
 

@@ -9,9 +9,6 @@
 
 #define RINGBUFFER_SIZE 16 * sizeof(struct MidiMessage)
 
-/* fsthost.c */
-extern void session_callback_aux( jack_session_event_t *event, void* arg );
-
 void jvst_set_volume(JackVST* jvst, short volume) {
 	if (jvst->volume != -1) jvst->volume = powf(volume / 63.0f, 2);
 }
@@ -156,10 +153,15 @@ static jack_port_t** jack_audio_port_init ( jack_client_t* client, unsigned long
 	return ports;
 }
 
-static int jvst_graph_order_callback( void *arg ) {
+static int graph_order_callback( void *arg ) {
 	JackVST* jvst = (JackVST*) arg;
-	jvst->graph_order_change = TRUE;
+	event_queue_send_val ( &jvst->event_queue, EVENT_GRAPH, 0 );
 	return 0;
+}
+
+static void session_callback( jack_session_event_t *event, void* arg ) {
+        JackVST* jvst = (JackVST*) arg;
+	event_queue_send_ptr ( &jvst->event_queue, EVENT_SESSION, event );
 }
 
 static int process_callback ( jack_nframes_t nframes, void* data) {
@@ -193,8 +195,8 @@ bool jvst_jack_init( JackVST* jvst, bool want_midi_out ) {
 	// Set client callbacks
 	jack_set_thread_creator (wine_thread_create);
 	jack_set_process_callback ( jvst->client, (JackProcessCallback) process_callback, jvst );
-	jack_set_session_callback ( jvst->client, session_callback_aux, jvst );
-	jack_set_graph_order_callback ( jvst->client, jvst_graph_order_callback, jvst );
+	jack_set_session_callback ( jvst->client, session_callback, jvst );
+	jack_set_graph_order_callback ( jvst->client, graph_order_callback, jvst );
 
 	/* set rate and blocksize */
 	jvst->sample_rate = jack_get_sample_rate ( jvst->client );
