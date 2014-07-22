@@ -47,6 +47,7 @@ bool jvst_proto_close ( JackVST* jvst );
 #ifndef NO_GTK
 extern void gtk_gui_init (int* argc, char** argv[]);
 extern int gtk_gui_start (JackVST * jvst);
+extern void gtk_gui_resize ( JackVST* jvst );
 extern void gtk_gui_quit();
 #endif
 
@@ -92,6 +93,19 @@ static void signal_handler (int signum) {
 static bool idle ( JackVST* jvst ) {
 	jvst_idle ( jvst, APPNAME_ARCH );
 	return TRUE;
+}
+
+#ifndef NO_GTK
+static bool gui_resize_aux ( JackVST* jvst ) {
+	gtk_gui_resize( jvst );
+	return FALSE;
+}
+#endif
+
+void gui_resize ( JackVST* jvst ) {
+#ifndef NO_GTK
+	g_idle_add( (GSourceFunc) gui_resize_aux, jvst );
+#endif
 }
 
 static void cmdline2arg(int *argc, char ***pargv, LPSTR cmdline) {
@@ -175,6 +189,11 @@ sep_thread ( LPVOID arg ) {
 	return 0;
 }
 
+static void edit_close_handler ( void* arg ) {
+	JackVST* jvst = (JackVST*) arg;
+	g_idle_add( (GSourceFunc) jvst_quit, jvst);
+}
+
 bool jvst_load_sep_th (JackVST* jvst, const char* plug_spec, bool want_state_and_amc) {
 
 	struct SepThread st;
@@ -208,8 +227,6 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	JackVST*	jvst = jvst_new();
 	jvst_first = jvst;
 
-	jvst->dbinfo_file = fst_info_default_path(APPNAME);
-
 	// Handle FSTHOST_GUI environment
 	char* menv = getenv("FSTHOST_GUI");
 	if ( menv ) jvst->with_editor = strtol(menv, NULL, 10);
@@ -224,7 +241,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	while ( (c = getopt (argc, argv, "bBd:egs:S:c:k:i:j:LnNm:pPo:t:Tu:U:V")) != -1) {
 		switch (c) {
 			case 'b': jvst->bypassed = TRUE; break;
-			case 'd': free(jvst->dbinfo_file); jvst->dbinfo_file = optarg; break;
+			case 'd': jvst->dbinfo_file = optarg; break;
 			case 'e': jvst->with_editor = WITH_EDITOR_HIDE; break;
 			case 'g': opt_generate_dbinfo = true; break;
 			case 'L': opt_list_plugins = true; break;
@@ -249,6 +266,9 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 			default: usage (argv[0]); return 1;
 		}
 	}
+
+	/* If usere didn't provide dbinfo path use default */
+	if (! jvst->dbinfo_file ) jvst->dbinfo_file = fst_info_default_path(APPNAME);
 
 	/* If use want to list plugins then abandon other tasks */
 	if (opt_list_plugins) return fst_info_list ( jvst->dbinfo_file );
@@ -329,6 +349,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	} else {
 		puts("GUI Disabled - start GlibMainLoop");
 	}
+	fst_set_window_close_callback( jvst->fst, edit_close_handler, jvst );
 	g_main_loop_run ( glib_main_loop );
 #else
 	// Create GTK or GlibMain thread
@@ -338,6 +359,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 		gtk_gui_start(jvst);
 	} else {
 		puts("GUI Disabled - start GlibMainLoop");
+		fst_set_window_close_callback( jvst->fst, edit_close_handler, jvst );
 		g_main_loop_run ( glib_main_loop );
 	}
 #endif

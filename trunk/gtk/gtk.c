@@ -89,6 +89,12 @@ vumeter_draw_handler (GtkWidget *widget, cairo_t *cr, gpointer user_data) {
 #endif
 
 static void
+gtk_edit_close_handler ( void* arg ) {
+//	JackVST* jvst = (JackVST*) arg;
+	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(editor_button), FALSE );
+}
+
+static void
 learn_handler (GtkToggleButton *but, gpointer ptr) {
 	JackVST* jvst = (JackVST*) ptr;
 	MidiLearn* ml = &jvst->midi_learn;
@@ -741,15 +747,6 @@ idle_cb(JackVST *jvst) {
 		gtk_widget_set_tooltip_text(bypass_button, tmpstr);
 	}
 
-	// Adapt button state to Wine window
-	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(editor_button), jvst->fst->window ? TRUE : FALSE);
-
-	// Editor Window is embedded and want resize window
-	if ( jvst->fst->editor_popup && jvst->fst->window && jvst->want_resize) {
-		jvst->want_resize = FALSE;
-		gtk_widget_set_size_request(gtk_socket, jvst->fst->width, jvst->fst->height);
-	}
-
 #ifdef HAVE_LASH
 	if ( ! jvst_lash_idle(jvst) ) {
 		gtk_main_quit();
@@ -810,6 +807,7 @@ gtk_gui_start (JackVST* jvst) {
 	gtk_widget_set_tooltip_text(editor_checkbox, "Embedded Editor");
 	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(editor_checkbox), TRUE);
 	gtk_box_pack_start(GTK_BOX(hpacker), editor_checkbox, FALSE, FALSE, 0);
+	fst_set_window_close_callback( jvst->fst, gtk_edit_close_handler, jvst );
 	//----------------------------------------------------------------------------------
 	midi_learn_toggle = make_img_button(GTK_STOCK_DND, "MIDI Learn", TRUE, &learn_handler,
 		jvst, FALSE, hpacker);
@@ -895,6 +893,13 @@ int fst_xerror_handler( Display *disp, XErrorEvent *ev ) {
 		printf( "Xerror:  Wine : %s\n", error_text );
 		return wine_error_handler( disp, ev );
 	}
+}
+
+// Editor Window is embedded and want resize window
+void gtk_gui_resize ( JackVST* jvst ) {
+	FST* fst = jvst->fst;
+	if ( fst->editor_popup && fst->window )
+		gtk_widget_set_size_request(gtk_socket, fst->width, fst->height);
 }
 
 void gtk_gui_init(int *argc, char **argv[]) {

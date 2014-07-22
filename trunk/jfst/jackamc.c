@@ -3,6 +3,9 @@
 #include "jfst.h"
 #include "../fst/amc.h"
 
+/* fsthost.c - FIXME */
+extern void gui_resize(JackVST* jvst);
+
 static void jvstamc_automate ( AMC* amc, int32_t param ) {
 	JackVST* jvst = (JackVST*) amc->user_ptr;
 	if ( ! jvst ) return;
@@ -182,19 +185,20 @@ static intptr_t jvstamc_tempo ( struct _AMC* amc, int32_t location ) {
 
 static void jvstamc_need_idle ( struct _AMC* amc ) {
 	JackVST* jvst = (JackVST*) amc->user_ptr;
-	if ( jvst && jvst->fst )
-		jvst->fst->wantIdle = TRUE;
+	if ( ! jvst ) return;
+	FST* fst = jvst->fst;
+	if ( fst ) fst->wantIdle = TRUE;
 }
 
 static void jvstamc_window_resize ( struct _AMC* amc, int32_t width, int32_t height ) {
 	JackVST* jvst = (JackVST*) amc->user_ptr;
-	if ( ! ( jvst && jvst->fst ) ) return;
-
-	jvst->fst->width = width;
-	jvst->fst->height = height;
-	jvst->fst->wantResize = TRUE;
+	FST* fst = jvst->fst;
+	if ( ! jvst || ! fst ) return;
+	fst->width = width;
+	fst->height = height;
+	fst_call ( jvst->fst, EDITOR_RESIZE );
 	/* Resize also GTK window in popup (embedded) mode */
-	if (jvst->fst->editor_popup) jvst->want_resize = TRUE;
+	gui_resize( jvst );
 }
 
 static intptr_t jvstamc_get_sample_rate ( struct _AMC* amc ) {
@@ -210,7 +214,8 @@ static intptr_t jvstamc_get_buffer_size ( struct _AMC* amc ) {
 /* return true if editor is opened */
 static bool jvstamc_update_display ( struct _AMC* amc ) {
 	JackVST* jvst = (JackVST*) amc->user_ptr;
-	return ( jvst && jvst->fst && jvst->fst->window ) ? true : false;
+	FST* fst = jvst->fst;
+	return ( jvst && fst && fst->window ) ? true : false;
 }
 
 void jvstamc_init ( JackVST* jvst, AMC* amc ) {

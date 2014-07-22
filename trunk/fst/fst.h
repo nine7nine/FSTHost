@@ -76,6 +76,7 @@ typedef enum {
 	DISPATCHER,
 	EDITOR_OPEN,
 	EDITOR_CLOSE,
+	EDITOR_RESIZE,
 	PROGRAM_CHANGE
 } FSTEventTypes;
 
@@ -88,6 +89,8 @@ typedef struct {
 		int32_t program;		/* PROGRAM_CHANGE */
 	};
 } FSTEventCall;
+
+typedef void (*FSTWindowCloseCallback)(void* arg);
 
 typedef struct _FST {
 	AEffect*		plugin;
@@ -107,7 +110,10 @@ typedef struct _FST {
 	void*			xid;    /* X11 XWindow */
 	int			width;
 	int			height;
-	bool			wantResize;
+
+	/* Window Close Callback */
+	void			(*window_close)(void* arg);
+	void*			window_close_user_ptr;
 
 	int32_t			current_program;
 	bool			program_changed;
@@ -147,6 +153,11 @@ static inline bool fst_want_midi_out ( FST* fst ) {
 	if (fst->vst_version < 2) return false;
 	return (fst->canSendVstEvents || fst->canSendVstMidiEvent);
 }
+
+static inline void fst_set_window_close_callback ( FST* fst, void(*f), void* ptr ) {
+	fst->window_close = f;
+	fst->window_close_user_ptr = ptr;
+} 
 
 void fst_error (const char *fmt, ...);
 

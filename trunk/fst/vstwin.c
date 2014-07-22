@@ -101,9 +101,12 @@ my_window_proc (HWND w, UINT msg, WPARAM wp, LPARAM lp) {
 	case WM_CLOSE:
 		if (fst) {
 			fst->window = NULL;
-			fst->plugin->dispatcher(fst->plugin, effEditClose, 0, 0, NULL, 0.0f);
+			AEffect* plugin = fst->plugin;
+			plugin->dispatcher(plugin, effEditClose, 0, 0, NULL, 0.0f);
 
 			if (fst->editor_popup) fst_error("Receive WM_CLOSE - WTF ?");
+
+			if ( fst->window_close ) fst->window_close ( fst->window_close_user_ptr );
 		}
 		break;
 	case WM_NCDESTROY:
@@ -549,6 +552,9 @@ static inline void fst_event_handler (FST* fst) {
 	case EDITOR_CLOSE:
 		fst_destroy_editor (fst);
 		break;
+	case EDITOR_RESIZE:
+		fst_resize_editor(fst);
+		break;
 	case PROGRAM_CHANGE:
 		plugin->dispatcher (plugin, effBeginSetProgram, 0, 0, NULL, 0);
 		plugin->dispatcher (plugin, effSetProgram, 0, ec->program, NULL, 0);
@@ -589,13 +595,8 @@ static void fst_event_dispatcher() {
 		if (fst->wantIdle)
 			fst->plugin->dispatcher (fst->plugin, effIdle, 0, 0, NULL, 0);  
 
-		if (fst->window) {
+		if (fst->window)
 			fst->plugin->dispatcher (fst->plugin, effEditIdle, 0, 0, NULL, 0);
-			if (fst->wantResize) {
-				fst->wantResize = FALSE;
-				fst_resize_editor(fst);
-			}
-		}
 
 		fst_update_current_program(fst);
 

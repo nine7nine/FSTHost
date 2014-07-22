@@ -44,8 +44,8 @@ BEGIN {
 	if ( exists $ENV{'FSTMENU_GTK'} ) {
 		push ( @GTK, 'Gtk'.$ENV{'FSTMENU_GTK'} );
 	} else {
-		push ( @GTK, qw/Gtk2 Gtk3/ );
-#		push ( @GTK, qw/Gtk3 Gtk2/ );
+#		push ( @GTK, qw/Gtk2 Gtk3/ );
+		push ( @GTK, qw/Gtk3 Gtk2/ );
 	}
 
 	for my $pkg ( @GTK ) {
