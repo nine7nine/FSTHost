@@ -199,6 +199,21 @@ void jvst_idle(JackVST* jvst, const char* appname) {
 		}
 	}
 
+	// MIDI learn support
+	MidiLearn* ml = &jvst->midi_learn;
+	if ( ml->wait && ml->cc >= 0 && ml->param >= 0 ) {
+		ml->map[ml->cc] = ml->param;
+		ml->wait = false;
+
+		char name[32];
+		bool success = fst_call_dispatcher( jvst->fst, effGetParamName, ml->param, 0, name, 0 );
+		if (success) {
+			printf("MIDIMAP CC: %d => %s\n", ml->cc, name);
+		} else {
+			printf("MIDIMAP CC: %d => %d\n", ml->cc, ml->param);
+		}
+	}
+
 	// Send notify if we want notify and something change
 	if (jvst->sysex_want_notify) jvst_sysex_notify(jvst);
 }

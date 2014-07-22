@@ -679,18 +679,9 @@ idle_cb(JackVST *jvst) {
 
 	// MIDI learn support
 	MidiLearn* ml = &jvst->midi_learn;
-	if ( ml->wait && ml->cc >= 0 && ml->param >= 0 ) {
-		ml->wait = false;
-		ml->map[ml->cc] = ml->param;
-
-		char name[32];
-		bool success = plugin->dispatcher( plugin, effGetParamName, ml->param, 0, name, 0 );
-		if (success) {
-			printf("MIDIMAP CC: %d => %s\n", ml->cc, name);
-		} else {
-			printf("MIDIMAP CC: %d => %d\n", ml->cc, ml->param);
-		}
-
+	if ( gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(midi_learn_toggle) )
+		&& ! ml->wait
+	) {
 		bool show_tooltip = FALSE;
 		char tooltip[96 * 128];
 		tooltip[0] = '\0';
@@ -700,9 +691,9 @@ idle_cb(JackVST *jvst) {
 			if ( paramIndex < 0 || paramIndex >= plugin->numParams )
 				continue;
 
-			success = plugin->dispatcher ( plugin, effGetParamName, paramIndex, 0, name, 0 );
-			if ( ! success )
-				snprintf ( name, sizeof name, "Param%d", paramIndex );
+			char name[32];
+			bool success = fst_call_dispatcher ( fst, effGetParamName, paramIndex, 0, name, 0 );
+			if ( ! success ) snprintf ( name, sizeof name, "Param%d", paramIndex );
 
 			char tString[96];
 			if (show_tooltip) {
