@@ -313,7 +313,7 @@ bool fps_save (JackVST* jvst, const char* filename) {
 
    // MIDI Program Change handling type
    cur_node = xmlNewChild(plugin_state_node, NULL, BAD_CAST "midi_pc", NULL);
-   xmlStrPrintf(tString, sizeof tString, BAD_CAST ((jvst->midi_pc > MIDI_PC_PLUG) ? "self" : "plugin"));
+   xmlStrPrintf(tString, sizeof tString, BAD_CAST ((jvst->midi_pc == MIDI_PC_SELF) ? "self" : "plugin"));
    xmlNewProp(cur_node, BAD_CAST "type", tString);
 
    // Volume

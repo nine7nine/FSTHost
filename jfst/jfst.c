@@ -18,6 +18,9 @@ extern void jvst_sysex_notify ( JackVST* jvst );
 /* info.c */
 extern FST* fst_info_load_open ( const char* dbpath, const char* plug_spec );
 
+/* fsthost.c - FIXME */
+extern void jvst_quit(JackVST* jvst);
+
 JackVST* jvst_new() {
 	JackVST* jvst = calloc (1, sizeof (JackVST));
 
@@ -98,10 +101,8 @@ void jvst_close ( JackVST* jvst ) {
 }
 
 /* return true if want quit */
-bool jvst_session_callback( JackVST* jvst, const char* appname ) {
+void jvst_session_handler( JackVST* jvst, jack_session_event_t* event, const char* appname ) {
 	puts("session callback");
-
-	jack_session_event_t *event = jvst->session_event;
 
 	// Save state
 	char filename[MAX_PATH];
@@ -126,7 +127,7 @@ bool jvst_session_callback( JackVST* jvst, const char* appname ) {
 
 	jack_session_event_free(event);
 
-	return quit;
+        if ( quit ) jvst_quit ( jvst );
 }
 
 /* plug_spec could be path, dll name or eff/plug name */
@@ -160,7 +161,6 @@ bool jvst_load (JackVST* jvst, const char* plug_spec, bool want_state_and_amc) {
 }
 
 void jvst_bypass(JackVST* jvst, bool bypass) {
-	jvst->want_state = WANT_STATE_NO;
 	if (bypass & !jvst->bypassed) {
 		jvst->bypassed = TRUE;
 		fst_call ( jvst->fst, SUSPEND );
@@ -170,27 +170,33 @@ void jvst_bypass(JackVST* jvst, bool bypass) {
 	}
 }
 
-void jvst_idle(JackVST* jvst) {
+void jvst_idle(JackVST* jvst, const char* appname) {
 	// Handle SysEx Input
 	jvst_sysex_handler(jvst);
 
-	// Check state
-	switch(jvst->want_state) {
-	case WANT_STATE_BYPASS: jvst_bypass(jvst,TRUE); break;
-	case WANT_STATE_RESUME: jvst_bypass(jvst,FALSE); break;
-	case WANT_STATE_NO:; /* because of GCC warning */
-	}
-
-	// Self Program change support
-	if (jvst->midi_pc > MIDI_PC_SELF) {
-		fst_program_change(jvst->fst, jvst->midi_pc);
-		jvst->midi_pc = MIDI_PC_SELF;
-	}
-
-	// Attempt to connect MIDI ports to control app if Graph order change
-	if (jvst->graph_order_change) {
-		jvst->graph_order_change = FALSE;
-		jvst_connect_to_ctrl_app(jvst);
+	Event* ev;
+	while ( (ev = event_queue_get ( &jvst->event_queue )) ) {
+		switch ( ev->type ) {
+		case EVENT_STATE:
+			switch ( ev->value ) {
+			case WANT_STATE_BYPASS: jvst_bypass(jvst,TRUE); break;
+			case WANT_STATE_RESUME: jvst_bypass(jvst,FALSE); break;
+			}
+			break;
+		case EVENT_PC:
+			// Self Program change support
+			if (jvst->midi_pc != MIDI_PC_SELF) break;
+			
+			fst_program_change(jvst->fst, ev->value);
+			break;
+		case EVENT_GRAPH:
+			// Attempt to connect MIDI ports to control app if Graph order change
+			jvst_connect_to_ctrl_app(jvst);
+			break;
+		case EVENT_SESSION:
+			jvst_session_handler(jvst, ev->ptr, appname);
+			break;
+		}
 	}
 
 	// Send notify if we want notify and something change

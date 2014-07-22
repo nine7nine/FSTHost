@@ -327,7 +327,7 @@ load_handler (GtkToggleButton *but, gpointer ptr) {
         g_signal_handler_unblock (preset_listbox, preset_listbox_signal);
 
 	// Update MIDI PC button
-	gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON( midi_pc ), (jvst->midi_pc > MIDI_PC_PLUG) );
+	gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON( midi_pc ), (jvst->midi_pc == MIDI_PC_SELF) );
 
 	// Update transposition spin button
 	gtk_spin_button_set_value(GTK_SPIN_BUTTON(transposition_spin), midi_filter_transposition_get(jvst->transposition));
@@ -741,9 +741,7 @@ idle_cb(JackVST *jvst) {
 	gtk_label_set_text(GTK_LABEL(cpu_usage), tmpstr);
 
 	// All about Bypass/Resume
-	if (jvst->bypassed != gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(bypass_button)) &&
-		jvst->want_state == WANT_STATE_NO
-	) {
+	if (jvst->bypassed != gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(bypass_button))) {
 		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(bypass_button), jvst->bypassed);
 	}
 	if (jvst->want_state_cc != mode_cc) {

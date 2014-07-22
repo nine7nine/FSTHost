@@ -89,20 +89,8 @@ static void signal_handler (int signum) {
 	}
 }
 
-static bool sescall ( JackVST* jvst ) {
-	bool quit = jvst_session_callback ( jvst, APPNAME_ARCH );
-	if ( quit ) jvst_quit ( jvst );
-	return FALSE;
-}
-
-void session_callback_aux( jack_session_event_t *event, void* arg ) {
-	JackVST* jvst = (JackVST*) arg;
-        jvst->session_event = event;
-        g_idle_add( (GSourceFunc) sescall, jvst );
-}
-
 static bool idle ( JackVST* jvst ) {
-	jvst_idle ( jvst );
+	jvst_idle ( jvst, APPNAME_ARCH );
 	return TRUE;
 }
 

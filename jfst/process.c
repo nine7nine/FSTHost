@@ -87,13 +87,10 @@ static inline void process_midi_in_msg ( JackVST* jvst, jack_midi_event_t* jacke
 		if (CC == jvst->want_state_cc) {
 			// 0-63 mean want bypass
 			if (VALUE >= 0 && VALUE <= 63) {
-				jvst->want_state = WANT_STATE_BYPASS;
+				event_queue_send_val ( &jvst->event_queue, EVENT_STATE, WANT_STATE_BYPASS );
 			// 64-127 mean want resume
 			} else if (VALUE > 63 && VALUE <= 127) {
-				jvst->want_state = WANT_STATE_RESUME;
-			// other values are wrong
-			} else {
-				jvst->want_state = WANT_STATE_NO;
+				event_queue_send_val ( &jvst->event_queue, EVENT_STATE, WANT_STATE_RESUME );
 			}
 			return;
 		// If Volume control is enabled then grab CC7 messages
@@ -120,7 +117,7 @@ static inline void process_midi_in_msg ( JackVST* jvst, jack_midi_event_t* jacke
 	case MM_PROGRAM_CHANGE:
 		// Self Program Change
 		if (jvst->midi_pc != MIDI_PC_SELF) break;
-		jvst->midi_pc = buf[1];
+		event_queue_send_val ( &jvst->event_queue, EVENT_PC, buf[1] );
 		// OFC don't forward this message to plugin
 		return;
 	}

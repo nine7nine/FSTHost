@@ -10,16 +10,30 @@ static inline void eq_index_next ( uint8_t* index ) {
 		*index = 0;
 }
 
-void event_queue_send ( EventQueue* eq, EventType type, uint32_t value ) {
+static inline void event_queue_send ( EventQueue* eq, Event* ev ) {
 	eq_index_next( &eq->front );
 
 	if ( eq->front == eq->rear ) {
 		printf ( "Event Queue overflow !\n" );
 		eq_index_next( &eq->rear );
 	}
-	Event* ev = &( eq->events[eq->front] );
-	ev->type = type;
-	ev->value = value;
+
+	eq->events[eq->front] = *ev;
+//	printf( "Send Event: %d Value: %d\n", type, value );
+}
+
+void event_queue_send_val ( EventQueue* eq, EventType type, uint32_t value ) {
+	Event ev;
+	ev.type = type;
+	ev.value = value;
+	event_queue_send ( eq, &ev );
+}
+
+void event_queue_send_ptr ( EventQueue* eq, EventType type, void* ptr ) {
+	Event ev;
+	ev.type = type;
+	ev.ptr = ptr;
+	event_queue_send ( eq, &ev );
 }
 
 Event* event_queue_get ( EventQueue* eq ) {

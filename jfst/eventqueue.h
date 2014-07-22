@@ -1,16 +1,21 @@
 #ifndef __eventqueue_h__
 #define __eventqueue_h__
 
-#define MAX_EVENTS 5
+#define MAX_EVENTS 16
 
 typedef enum {
-	JFST_EVENT_PC,
-	JFST_EVENT_STATE
+	EVENT_PC,
+	EVENT_STATE,
+	EVENT_GRAPH,
+	EVENT_SESSION
 } EventType;
 
 typedef struct {
 	EventType	type;
-	uint32_t	value;
+	union {
+		uint32_t	value;
+		void*		ptr;
+	};
 } Event;
 
 typedef struct {
@@ -20,7 +25,8 @@ typedef struct {
 } EventQueue;
 
 void event_queue_init ( EventQueue* eq );
-void event_queue_send ( EventQueue* eq, EventType type, uint32_t value );
+void event_queue_send_val ( EventQueue* eq, EventType type, uint32_t value );
+void event_queue_send_ptr ( EventQueue* eq, EventType type, void* ptr );
 Event* event_queue_get ( EventQueue* eq );
 
 #endif /* __eventqueue_h__ */
