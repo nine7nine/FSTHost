@@ -86,7 +86,6 @@ typedef struct _JackVST {
     bool            bypassed;
     short           want_state_cc;
     enum WithEditor with_editor;
-    bool            want_resize;
     double          tempo;
     float           volume; /* where 0.0 mean silence */
     uint8_t         out_level; /* for VU-meter */

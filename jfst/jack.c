@@ -140,14 +140,14 @@ void jvst_connect_to_ctrl_app(JackVST* jvst) {
 	if (done) jvst_send_sysex(jvst, SYSEX_WANT_IDENT_REPLY);
 }
 
-static jack_port_t** jack_audio_port_init ( jack_client_t* client, unsigned long flags, int32_t num ) {
+static jack_port_t** jack_audio_port_init ( jack_client_t* client, const char* prefix, unsigned long flags, int32_t num ) {
 	jack_port_t** ports = malloc( sizeof(jack_port_t*) * num );
 	mlock ( ports, sizeof(jack_port_t*) * num );
 
 	int32_t i;
-	for (i = 0; i < num; ++i) {
+	for (i = 0; i < num; i++) {
 		char buf[16];
-		snprintf (buf, sizeof(buf), "in%d", i+1);
+		snprintf (buf, sizeof(buf), "%s%d", prefix, i+1);
 		ports[i] = jack_port_register ( client, buf, JACK_DEFAULT_AUDIO_TYPE, flags, 0 );
 	}
 	return ports;
@@ -203,8 +203,8 @@ bool jvst_jack_init( JackVST* jvst, bool want_midi_out ) {
 	jvst->buffer_size = jack_get_buffer_size ( jvst->client );
 
 	// Register/allocate audio ports
-	jvst->inports  = jack_audio_port_init ( jvst->client, JackPortIsInput,  jvst->numIns );
-	jvst->outports = jack_audio_port_init ( jvst->client, JackPortIsOutput, jvst->numOuts );
+	jvst->inports  = jack_audio_port_init ( jvst->client, "in",  JackPortIsInput,  jvst->numIns );
+	jvst->outports = jack_audio_port_init ( jvst->client, "out", JackPortIsOutput, jvst->numOuts );
 
 	// Register MIDI input port (if needed)
 	// NOTE: we always create midi_in port cause it works also as ctrl_in
