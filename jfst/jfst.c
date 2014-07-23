@@ -57,16 +57,15 @@ static void jvst_destroy (JackVST* jvst) {
 
 bool jvst_init( JackVST* jvst, int32_t max_in, int32_t max_out ) {
 	FST* fst = jvst->fst;
-	AEffect* plugin = fst->plugin;
 
 	// Set client name (if user did not provide own)
 	if (!jvst->client_name) jvst->client_name = fst->handle->name;
 
 	// Jack Audio
-	jvst->numIns = (max_in >= 0 && max_in < plugin->numInputs) ? max_in : plugin->numInputs;
-	jvst->numOuts = (max_out >= 0 && max_out < plugin->numOutputs) ? max_out : plugin->numOutputs;
+	jvst->numIns = (max_in >= 0 && max_in < fst_num_ins(fst)) ? max_in : fst_num_ins(fst);
+	jvst->numOuts = (max_out >= 0 && max_out < fst_num_outs(fst)) ? max_out : fst_num_outs(fst);
 	printf("Port Layout (FSTHost/plugin) IN: %d/%d OUT: %d/%d\n", 
-		jvst->numIns, plugin->numInputs, jvst->numOuts, plugin->numOutputs);
+		jvst->numIns, fst_num_ins(fst), jvst->numOuts, fst_num_outs(fst));
 
 	bool want_midi_out = fst_want_midi_out ( jvst->fst );
 	if ( ! jvst_jack_init ( jvst, want_midi_out ) ) return false;

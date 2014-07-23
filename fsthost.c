@@ -164,7 +164,7 @@ static void usage(char* appname) {
 	fprintf(stderr, format, "-T", "Separate threads");
 	fprintf(stderr, format, "-u uuid", "JackSession UUID");
 	fprintf(stderr, format, "-U SysExID", "SysEx ID (1-127). 0 is default (do not use it)");
-	fprintf(stderr, format, "-V", "Disable Volume control / filtering CC7 messages");
+	fprintf(tderr, format, "-V", "Disable Volume control / filtering CC7 messages");
 }
 
 struct SepThread {

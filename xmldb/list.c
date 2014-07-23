@@ -30,8 +30,7 @@ int fst_info_list(const char* dbpath) {
 				break;
 			}
 		}
-		if (!f) continue;
-		printf("%s|%s|%s\n", f, a, p);
+		if (f) printf("%s|%s|%s\n", f, a, p);
 	}
 
 	xmlFreeDoc(xml_db);

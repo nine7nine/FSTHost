@@ -15,10 +15,15 @@
 /** Bank (fxb) identifier for opaque chunk data. */
 #define chunkBankMagic		'FBCh'
 
-static uint32_t endian_swap(uint32_t x)
+static inline uint32_t endian_swap(uint32_t x)
 {
 //	return (x>>24) | ((x<<8) & 0x00FF0000) | ((x>>8) & 0x0000FF00) | (x<<24);
 	return __builtin_bswap32 (x);
+}
+
+static inline float endian_swap_float ( float x )
+{
+	return (float) endian_swap ( (uint32_t) x );
 }
 
 static void fx_load_chunk ( FST *fst, FILE *fxfile, enum FxFileType chunkType )
@@ -34,8 +39,8 @@ static void fx_load_chunk ( FST *fst, FILE *fxfile, enum FxFileType chunkType )
 	// FIXME: are we should call this also for regular bank ? if not then why there is numElements ?
 	VstPatchChunkInfo chunkInfo;
 	chunkInfo.version = 1;
-	chunkInfo.pluginUniqueID = fst->plugin->uniqueID;
-	chunkInfo.pluginVersion = fst->plugin->version;
+	chunkInfo.pluginUniqueID = fst_uid(fst);
+	chunkInfo.pluginVersion = fst_version(fst);
 	chunkInfo.numElements = 1;
 	if ( chunkType == FXBANK) {
 		fst_call_dispatcher(fst, effBeginLoadBank, 0, 0, &chunkInfo, 0);
@@ -113,8 +118,8 @@ static void fx_load_program ( FST *fst, FILE *fxfile, short programNumber )
 		pthread_mutex_lock (&fst->lock);
 		int32_t i;
 		for (i = 0; i < fxHeader.numPrograms; i++ ) {
-			float v = (float) endian_swap( (uint32_t) Params[i] );
-			fst->plugin->setParameter( fst->plugin, i, v );
+			float v = endian_swap_float ( Params[i] );
+			fst_set_param( fst, i, v );
 		}
 		pthread_mutex_unlock (&fst->lock);
 	}
@@ -152,8 +157,8 @@ int fst_load_fxfile ( FST *fst, const char *filename )
 		return 0;
 	}
 
-	printf("Compare: Plugin UniqueID (%d) to Bank fxID (%d)\n", fst->plugin->uniqueID, fxHeader.fxID);
-	if (fst->plugin->uniqueID != fxHeader.fxID) {
+	printf("Compare: Plugin UniqueID (%d) to Bank fxID (%d)\n", fst_uid(fst), fxHeader.fxID);
+	if (fst_uid(fst) != fxHeader.fxID) {
 		printf( "Error: Plugin UniqID not match\n");
 		fclose( fxfile );
 		return 0;
@@ -205,17 +210,16 @@ int fst_load_fxfile ( FST *fst, const char *filename )
 
 static void fx_save_params ( FST *fst, FILE *fxfile )
 {
-	float Params[fst->plugin->numParams];
+	float Params[ fst_num_params(fst) ];
 
 	pthread_mutex_lock (&fst->lock);
 	int32_t i;
-	for (i = 0; i < fst->plugin->numParams; i++ ) {
-		float v = endian_swap( fst->plugin->getParameter( fst->plugin, i ) );
-		Params[i] = (float) endian_swap( (unsigned int) v );
-	}
+	for (i = 0; i < fst_num_params(fst); i++ )
+		Params[i] = endian_swap_float ( fst_get_param(fst, i) );
+
 	pthread_mutex_unlock (&fst->lock);
 
-	fwrite(&Params, sizeof(float), fst->plugin->numParams, fxfile);
+	fwrite(&Params, sizeof(float), fst_num_params(fst), fxfile);
 }
 
 int fst_save_fxfile ( FST *fst, const char *filename, enum FxFileType fileType )
@@ -223,7 +227,7 @@ int fst_save_fxfile ( FST *fst, const char *filename, enum FxFileType fileType )
 	char prgName[28];
 
 	bool isBank = (fileType == FXBANK) ? TRUE : FALSE;
-	bool isChunk = (fst->plugin->flags & effFlagsProgramChunks);
+	bool isChunk = fst_has_chunks(fst);
 	enum FxFileType chunkType = fileType;
 
 	FXHeader fxHeader;
@@ -251,12 +255,12 @@ int fst_save_fxfile ( FST *fst, const char *filename, enum FxFileType fileType )
 
 	fxHeader.fxMagic = endian_swap ( fxHeader.fxMagic );
         fxHeader.version = endian_swap( (isBank) ? 2 : 1 );
-        fxHeader.fxID = endian_swap( fst->plugin->uniqueID );
-        fxHeader.fxVersion = endian_swap( fst->plugin->version );
-        fxHeader.numPrograms = endian_swap( (isBank) ? fst->plugin->numPrograms : fst->plugin->numParams );
+        fxHeader.fxID = endian_swap( fst_uid(fst) );
+        fxHeader.fxVersion = endian_swap( fst_version(fst) );
+        fxHeader.numPrograms = endian_swap( (isBank) ? fst_num_presets(fst) : fst_num_params(fst) );
 
 	size_t headerSize = ( sizeof(FXHeader) - sizeof(fxHeader.chunkMagic) - sizeof(fxHeader.byteSize) );
-	size_t paramSize = fst->plugin->numParams * sizeof(float);
+	size_t paramSize = fst_num_params(fst) * sizeof(float);
 	size_t programSize = headerSize + sizeof(prgName) + paramSize;
 	int32_t currentProgram = fst->current_program; // used by Banks
 
@@ -270,7 +274,7 @@ int fst_save_fxfile ( FST *fst, const char *filename, enum FxFileType fileType )
 		printf("%zu B -  DONE\n", (size_t) chunkSize);
 		fxHeader.byteSize += chunkSize + sizeof(chunkSize);
 	} else {
-		fxHeader.byteSize += (isBank) ? fst->plugin->numPrograms * programSize : paramSize;
+		fxHeader.byteSize += (isBank) ? fst_num_presets(fst) * programSize : paramSize;
 	}
 
 	// Add current program and blank hole for bank or program name for program
@@ -286,7 +290,7 @@ int fst_save_fxfile ( FST *fst, const char *filename, enum FxFileType fileType )
 		char blank[124];
 		memset(blank, 0, sizeof blank);
 		fwrite(&blank, sizeof blank, 1, fxfile);
-	} else {
+	} else { /* isProgram */
 //		prgName = endian_swap(prgName);
 		fst_get_program_name ( fst, fst->current_program, prgName, sizeof prgName );
 		fwrite(&prgName, sizeof prgName, 1, fxfile);
@@ -300,11 +304,11 @@ int fst_save_fxfile ( FST *fst, const char *filename, enum FxFileType fileType )
 	} else if (isBank) {
 		// Bank with multiple regular programs
 		fxHeader.fxMagic = endian_swap( fMagic );
-		fxHeader.numPrograms = endian_swap( fst->plugin->numParams );
+		fxHeader.numPrograms = endian_swap( fst_num_presets(fst) );
 		fxHeader.byteSize = endian_swap( programSize );
 
 		int32_t p;
-		for (p = 0; p < fst->plugin->numPrograms; p++) {
+		for (p = 0; p < fst_num_presets(fst); p++) {
 			fst_program_change (fst, p);
 			fst_get_program_name(fst, fst->current_program, prgName, sizeof prgName);
 

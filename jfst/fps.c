@@ -53,7 +53,7 @@ fps_check_this(FST *fst, char *field, char *value) {
    printf("Check %s : %s == ", field, value);
    if ( strcmp( field, "uniqueID" ) == 0 ) {
       int32_t ival = strtol( value, NULL, 10 );
-      if ( ival == fst->plugin->uniqueID ) {
+      if ( ival == fst_uid(fst) ) {
          printf("%d [PASS]\n", ival);
          return TRUE;
       } else {
@@ -105,13 +105,13 @@ fps_process_node(JackVST* jvst, xmlNode *a_node) {
           char *name = (char *) xmlGetProp(cur_node, BAD_CAST "name");
 
           printf( "Got map %d = %d (%s)\n", cc, index, name );
-          if ( cc < 0 || cc >= 128 || index < 0 || index >= fst->plugin->numParams )
+          if ( cc < 0 || cc >= 128 || index < 0 || index >= fst_num_params(fst) )
              continue;
 
           jvst->midi_learn.map[cc] = index;
        // Param
        } else if (xmlStrcmp(cur_node->name, BAD_CAST "param") == 0) {
-          if (fst->plugin->flags & effFlagsProgramChunks) {
+          if ( fst_has_chunks(fst) ) {
              printf("FPS: skip param - plugin do expect chunk\n");
              continue;
           }
@@ -120,7 +120,7 @@ fps_process_node(JackVST* jvst, xmlNode *a_node) {
 	  float val = strtof((const char*) xmlGetProp(cur_node, BAD_CAST "value"), NULL);
 
 	  pthread_mutex_lock( &fst->lock );
-	  fst->plugin->setParameter( fst->plugin, index, val );
+	  fst_set_param ( fst, index, val );
 	  pthread_mutex_unlock( &fst->lock );
        // MIDI Channel
        } else if (xmlStrcmp(cur_node->name, BAD_CAST "channel") == 0) {
@@ -184,7 +184,7 @@ fps_process_node(JackVST* jvst, xmlNode *a_node) {
           fst_program_change(fst, currentProgram);
        // Chunk
        } else if (xmlStrcmp(cur_node->name, BAD_CAST "chunk") == 0) {
-          if ( ! (fst->plugin->flags & effFlagsProgramChunks) ) {
+          if ( ! fst_has_chunks(fst) ) {
              printf("FPS: skip chunk - plugin expect params\n");
              continue;
           }
@@ -269,12 +269,12 @@ bool fps_save (JackVST* jvst, const char* filename) {
    // Check - UniqueID
    cur_node = xmlNewChild(plugin_state_node, NULL, BAD_CAST "check", NULL);
    xmlNewProp(cur_node, BAD_CAST "field", BAD_CAST "uniqueID");
-   xmlNewProp(cur_node, BAD_CAST "value", int2str(tString, sizeof tString, fst->plugin->uniqueID));
+   xmlNewProp(cur_node, BAD_CAST "value", int2str(tString, sizeof tString, fst_uid(fst)));
 
    // MIDI Map
    for (cc = 0; cc < 128; cc++ ) {
       int32_t paramIndex = jvst->midi_learn.map[cc];
-      if ( paramIndex < 0 || paramIndex >= fst->plugin->numParams ) continue;
+      if ( paramIndex < 0 || paramIndex >= fst_num_params(fst) ) continue;
 
       fst_call_dispatcher( fst, effGetParamName, paramIndex, 0, tString, 0 );
 
@@ -339,7 +339,7 @@ bool fps_save (JackVST* jvst, const char* filename) {
    xmlNewProp(cur_node, BAD_CAST "number", int2str(tString, sizeof tString, (int) jvst->fst->current_program));
 
    // Chunk
-   if ( fst->plugin->flags & effFlagsProgramChunks ) {
+   if ( fst_has_chunks(fst) ) {
       printf( "getting chunk ... " );
       void * chunk_data;
       intptr_t chunk_size = fst_call_dispatcher( fst, effGetChunk, 0, 0, &chunk_data, 0 );
@@ -357,8 +357,8 @@ bool fps_save (JackVST* jvst, const char* filename) {
    // Params
    } else {
       int32_t paramIndex;
-      for ( paramIndex=0; paramIndex < fst->plugin->numParams; paramIndex++ ) {
-         float val = fst->plugin->getParameter( fst->plugin, paramIndex );
+      for ( paramIndex=0; paramIndex < fst_num_params(fst); paramIndex++ ) {
+         float val = fst_get_param( fst, paramIndex );
          cur_node = xmlNewChild(plugin_state_node, NULL, BAD_CAST "param", NULL);
          xmlNewProp(cur_node, BAD_CAST "index", int2str(tString, sizeof tString, paramIndex));
          xmlNewProp(cur_node, BAD_CAST "value", float2str(tString, sizeof tString, val));

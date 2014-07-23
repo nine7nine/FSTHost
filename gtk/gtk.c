@@ -214,7 +214,7 @@ save_handler (GtkToggleButton *but, gpointer ptr) {
 static int
 create_preset_store( GtkListStore* store, FST *fst ) {
 	short i;
-	for( i = 0; i < fst->plugin->numPrograms; i++ ) {
+	for( i = 0; i < fst_num_presets(fst); i++ ) {
 		GtkTreeIter new_row_iter;
 
 		/* VST standard says that progName is 24 bytes but some plugs use more characters */
@@ -672,7 +672,6 @@ channel_change (GtkComboBox *combo, JackVST *jvst) {
 static gboolean
 idle_cb(JackVST *jvst) {
 	FST* fst = (FST*) jvst->fst;
-	AEffect* plugin = fst->plugin;
 
 	// If program was changed via plugin or MIDI
 	if ( fst->event_call.type != PROGRAM_CHANGE &&
@@ -694,7 +693,7 @@ idle_cb(JackVST *jvst) {
 		uint8_t cc;
 	   	for (cc = 0; cc < 128; cc++) {
 			int32_t paramIndex = ml->map[cc];
-			if ( paramIndex < 0 || paramIndex >= plugin->numParams )
+			if ( paramIndex < 0 || paramIndex >= fst_num_params(fst) )
 				continue;
 
 			char name[32];

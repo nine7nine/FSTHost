@@ -16,7 +16,7 @@ static int serv_fd = 0;
 static void list_programs ( JackVST* jvst, int client_sock ) {
 	FST* fst = jvst->fst;
 	int32_t i;
-	for ( i = 0; i < fst->plugin->numPrograms; i++ ) {
+	for ( i = 0; i < fst_num_presets(fst); i++ ) {
 		/* VST standard says that progName is 24 bytes but some plugs use more characters */
 		char progName[32];
 		if ( fst->vst_version >= 2 ) {

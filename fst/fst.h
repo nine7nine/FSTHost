@@ -157,7 +157,35 @@ static inline bool fst_want_midi_out ( FST* fst ) {
 static inline void fst_set_window_close_callback ( FST* fst, void(*f), void* ptr ) {
 	fst->window_close = f;
 	fst->window_close_user_ptr = ptr;
-} 
+}
+
+static inline void fst_process ( FST* fst, float** ins, float** outs, int32_t frames ) {
+	if ( fst->plugin->flags & effFlagsCanReplacing ) {
+		fst->plugin->processReplacing (fst->plugin, ins, outs, frames);
+	} else {
+		fst->plugin->process (fst->plugin, ins, outs, frames);
+	}
+}
+
+static inline void fst_process_events ( FST* fst, VstEvents* events ) {
+	fst->plugin->dispatcher (fst->plugin, effProcessEvents, 0, 0, events, 0.0f);
+}
+
+static inline float fst_get_param ( FST* fst, int32_t param ) {
+	return fst->plugin->getParameter(fst->plugin,param);
+}
+
+static inline void fst_set_param ( FST* fst, int32_t param, float value ) {
+	fst->plugin->setParameter( fst->plugin, param, value );
+}
+
+static inline int32_t	fst_num_params	( FST* fst ) { return fst->plugin->numParams; }
+static inline int32_t	fst_num_presets	( FST* fst ) { return fst->plugin->numPrograms; }
+static inline int32_t	fst_num_ins	( FST* fst ) { return fst->plugin->numInputs; }
+static inline int32_t	fst_num_outs	( FST* fst ) { return fst->plugin->numOutputs; }
+static inline int32_t	fst_uid 	( FST* fst ) { return fst->plugin->uniqueID; }
+static inline int32_t	fst_version 	( FST* fst ) { return fst->plugin->version; }
+static inline bool	fst_has_chunks	( FST* fst ) { return fst->plugin->flags & effFlagsProgramChunks; }
 
 void fst_error (const char *fmt, ...);
 
