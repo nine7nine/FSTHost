@@ -110,8 +110,7 @@ static inline void process_midi_in_msg ( JackVST* jvst, jack_midi_event_t* jacke
 		} else if ( ml->map[CC] != -1 ) {
 			int32_t parameter = ml->map[CC];
 			float value = 1.0/127.0 * (float) VALUE;
-			AEffect* plugin = jvst->fst->plugin;
-			plugin->setParameter( plugin, parameter, value );
+			fst_set_param( jvst->fst, parameter, value );
 		}
 		break;
 	case MM_PROGRAM_CHANGE:
@@ -142,7 +141,7 @@ static inline void process_midi_in_msg ( JackVST* jvst, jack_midi_event_t* jacke
 
 void jvst_process( JackVST* jvst, jack_nframes_t nframes ) {
 	int32_t i;
-	AEffect* plugin = jvst->fst->plugin;
+	FST* fst = jvst->fst;
 
 	// ******************* Process MIDI Input ************************************
 
@@ -176,19 +175,19 @@ void jvst_process( JackVST* jvst, jack_nframes_t nframes ) {
 
 	// ... let's the music play
 	if ( events->numEvents > 0 )
-		plugin->dispatcher (plugin, effProcessEvents, 0, 0, events, 0.0f);
+		fst_process_events ( fst, events );
 
 no_midi_in: ;
 	/* Process AUDIO */
-	float* ins[plugin->numInputs];
-	float* outs[plugin->numOutputs];
+	float* ins[ fst_num_ins(fst) ];
+	float* outs[ fst_num_outs(fst) ];
 
 	// swap area ( nonused ports )
 	float swap[jvst->buffer_size];
 	memset ( swap, 0, jvst->buffer_size * sizeof(float) );
 
 	// Get addresses of input buffers
-	for (i = 0; i < plugin->numInputs; ++i) {
+	for (i = 0; i < fst_num_ins(fst); ++i) {
 		if ( i < jvst->numIns ) { 
 			ins[i] = (float*) jack_port_get_buffer (jvst->inports[i], nframes);
 		} else {
@@ -197,7 +196,7 @@ no_midi_in: ;
 	}
 
 	// Initialize output buffers
-	for (i = 0; i < plugin->numOutputs; ++i) {
+	for (i = 0; i < fst_num_outs(fst); ++i) {
 		if ( i < jvst->numOuts ) {
 			// Get address
 			outs[i]  = (float*) jack_port_get_buffer (jvst->outports[i], nframes);
@@ -218,11 +217,7 @@ no_midi_in: ;
 	if (jvst->bypassed) goto midi_out;
 
 	// Deal with plugin
-	if (plugin->flags & effFlagsCanReplacing) {
-		plugin->processReplacing (plugin, ins, outs, nframes);
-	} else {
-		plugin->process (plugin, ins, outs, nframes);
-	}
+	fst_process( fst, ins, outs, nframes );
 
 #ifndef NO_VUMETER
 	/* Compute output level for VU Meter */
