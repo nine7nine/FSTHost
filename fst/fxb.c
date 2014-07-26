@@ -1,3 +1,5 @@
+#include <stdio.h>
+
 #include "fst.h"
 
 /** Root chunk identifier for Programs (fxp) and Banks (fxb). */

@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include "jfst.h"
 
 #define SYSEX_RINGBUFFER_SIZE 16 * SYSEX_MAX_SIZE
