@@ -248,6 +248,26 @@ bool fst_run_editor (FST* fst, bool popup) {
 	}
 }
 
+char* fst_get_port_name ( FST* fst, int32_t port_number, FSTPortType type ) {
+	VstPinProperties vpp;
+
+	intptr_t success = 0;
+	switch ( type ) {
+	case FST_PORT_IN:
+		success = fst_call_dispatcher(fst, effGetInputProperties, port_number, 0, &vpp, 0);
+		break;
+	case FST_PORT_OUT:
+		success = fst_call_dispatcher(fst, effGetOutputProperties, port_number, 0, &vpp, 0);
+		break;
+	}
+	if ( success != 1 ) return NULL;
+
+	/* Some plugs return empty label */
+	if ( strlen(vpp.label) == 0 ) return NULL;
+
+	return strdup( vpp.label );
+}
+
 bool fst_get_program_name (FST *fst, short program, char* name, size_t size) {
 	/* VST standard says that progName is 24 bytes but some plugs use more characters */
 	char progName[MAX_PROG_NAME];
@@ -339,7 +359,7 @@ have_dll: ;
 	}
 
 	char* fullpath = realpath(mypath,NULL);
-	if (! fullpath) fullpath = strndup(mypath, sizeof(mypath));
+	if (! fullpath) fullpath = strdup(mypath);
 
 	char* ext = strstr(base, ".dll");
 	if (!ext) ext = strstr(base, ".DLL");
@@ -407,7 +427,7 @@ FST* fst_open (FSTHandle* fhandle) {
 		/* Get plugin name */
 		char tmpstr[32];
 		if ( plugin->dispatcher (plugin, effGetEffectName, 0, 0, tmpstr, 0 ) )
-			fst->name = strndup ( tmpstr, sizeof(tmpstr) );
+			fst->name = strdup ( tmpstr );
 	}
 
 	// We always need some name ;-)

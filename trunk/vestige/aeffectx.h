@@ -119,6 +119,8 @@
 #define effSetChunk 24
 #define effProcessEvents 25
 #define effGetProgramNameIndexed 29
+#define effGetInputProperties 33
+#define effGetOutputProperties 34
 #define effGetEffectName 45
 // missing
 #define effGetParameterProperties 47
@@ -160,50 +162,33 @@
 #define kVstSmpteValid (1 << 14)
 #define kVstClockValid (1 << 15)
 
-typedef struct VstMidiEvent
-{
-	// 00
+#define kVstPinIsActive ( 1 << 0 )
+#define kVstPinIsStereo ( 1 << 1 )
+#define kVstPinUseSpeaker ( 1 << 2 )
+
+typedef struct VstMidiEvent {
 	int32_t type;
-	// 04
 	int32_t byteSize;
-	// 08
 	int32_t deltaFrames;
-	// 0c
 	int32_t flags;
-	// 10
 	int32_t noteLength;
-	// 14
 	int32_t noteOffset;
-	// 18
 	char midiData[4];
-	// 1c
 	char detune;
-	// 1d
 	char noteOffVelocity;
-	// 1e
 	char reserved1;
-	// 1f
 	char reserved2;
 } VstMidiEvent;
 
-typedef struct VstEvent
-{
-	char dump[sizeof( VstMidiEvent )];
+typedef void* VstEvent; // This only general cast for other structs
 
-} VstEvent;
-
-typedef struct VstEvents
-{
-	// 00
+typedef struct VstEvents {
 	int32_t numEvents;
-	// 04
 	intptr_t reserved;
-	// 08
 	VstEvent* events[2];
 } VstEvents;
 
-typedef struct VstParameterProperties
-{
+typedef struct VstParameterProperties {
 	float stepFloat;
 	float smallStepFloat;
 	float largeStepFloat;
@@ -216,8 +201,7 @@ typedef struct VstParameterProperties
 	char shortLabel[8];
 } VstParameterProperties;
 
-enum VstParameterFlags
-{
+enum VstParameterFlags {
 	kVstParameterIsSwitch                = 1 << 0, /* parameter is a switch (on/off) */
 	kVstParameterUsesIntegerMinMax       = 1 << 1, /* minInteger, maxInteger valid */
 	kVstParameterUsesFloatStep           = 1 << 2, /* stepFloat, smallStepFloat, largeStepFloat valid */
@@ -227,81 +211,57 @@ enum VstParameterFlags
 	kVstParameterCanRamp                 = 1 << 6  /* set if parameter value can ramp up/down */
 };
 
-typedef struct VstTimeInfo
-{
-	// 00
+typedef struct VstTimeInfo {
 	double samplePos;
-	// 08
 	double sampleRate;
-	// 10 - 18
 	double nanoSeconds;
 	double ppqPos;
-	// 20
 	double tempo;
-	// 28, 30, 38
 	double barStartPos;
 	double cycleStartPos;
 	double cycleEndPos;
-	// 40
 	int32_t timeSigNumerator;
-	// 44
 	int32_t timeSigDenominator;
-	// 48, 4c, 50
 	int32_t smpteOffset;
 	int32_t smpteFrameRate;
 	int32_t samplesToNextClock;
-	// 54
 	int32_t flags;
 
 } VstTimeInfo;
 
-typedef struct AEffect {
-	// Never use c++!!!
-	// 00-03
+typedef struct AEffect { // Never use c++!!!
 	int32_t magic;
-	// dispatcher 04-07
 	intptr_t (VSTCALLBACK *dispatcher) (struct AEffect *, int32_t, int32_t, intptr_t, void *, float);
-	// process, quite sure 08-0b
 	void (VSTCALLBACK *process)( struct AEffect * , float **, float **, int32_t );
-	// setParameter 0c-0f
 	void (VSTCALLBACK *setParameter)( struct AEffect * , int32_t, float );
-	// getParameter 10-13
 	float (VSTCALLBACK *getParameter)( struct AEffect * , int32_t );
-	// programs 14-17
 	int32_t numPrograms;
-	// Params 18-1b
 	int32_t numParams;
-	// Input 1c-1f
 	int32_t numInputs;
-	// Output 20-23
 	int32_t numOutputs;
-	// flags 24-27
 	int32_t flags;
-	// Fill somewhere 28-2b
 	intptr_t *resvd1;
 	intptr_t *resvd2;
-	// Zeroes 2c-2f 30-33 34-37 38-3b
 	int32_t empty3[3];
-	// 1.0f 3c-3f
 	float ioRatio;
-	// An object? pointer 40-43
 	void *ptr3;
-	// Zeroes 44-47
 	void *user;
-	// Id 48-4b
 	int32_t uniqueID;
-	// version 4c-4f
 	int32_t version;
-	// processReplacing 50-53
 	void (VSTCALLBACK *processReplacing)( struct AEffect* , float**, float**, int32_t );
-	// processReplacing 54-57
 	void (VSTCALLBACK *processDoubleReplacing)( struct AEffect*, double**, double**, int32_t );
-	// future ?
 	char future[56];
 } AEffect;
 
-typedef struct VstPatchChunkInfo
-{
+typedef struct VstPinProperties {
+	char label[64];
+	int32_t flags;
+	int32_t arrangementType;
+	char shortLabel[8]; // This is broken in most plugins
+	char future[48];
+} VstPinProperties;
+
+typedef struct VstPatchChunkInfo {
 	int32_t version;        // Format Version (should be 1)
 	int32_t pluginUniqueID; // UniqueID of the plug-in
 	int32_t pluginVersion;  // Plug-in Version
