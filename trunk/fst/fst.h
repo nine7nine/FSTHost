@@ -1,8 +1,6 @@
 #ifndef __fst_h__
 #define __fst_h__
 
-#include <stdio.h>
-#include <setjmp.h>
 #include <pthread.h>
 #include <stdbool.h>
 

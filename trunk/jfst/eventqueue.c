@@ -14,7 +14,7 @@ static inline void event_queue_send ( EventQueue* eq, Event* ev ) {
 	eq_index_next( &eq->front );
 
 	if ( eq->front == eq->rear ) {
-		printf ( "Event Queue overflow !\n" );
+		fst_error ( "Event Queue overflow !" );
 		eq_index_next( &eq->rear );
 	}
 

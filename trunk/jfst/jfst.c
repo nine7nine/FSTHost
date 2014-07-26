@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <sys/mman.h>
 
 #include "jfst.h"
