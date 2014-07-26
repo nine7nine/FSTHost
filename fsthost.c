@@ -20,7 +20,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
-#include <libgen.h>
 #include <glib.h>
 #include <semaphore.h>
 #include <signal.h>
