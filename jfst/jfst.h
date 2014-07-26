@@ -121,7 +121,7 @@ typedef struct _JackVST {
 /* jfst.c */
 JackVST* jvst_new();
 bool jvst_init( JackVST* jvst, int32_t max_in, int32_t max_out );
-bool jvst_load(JackVST* jvst, const char* plug_spec, bool want_state_and_amc);
+bool jvst_load(JackVST* jvst, const char* plug_spec, bool want_state_and_amc, bool state_can_fail);
 bool jvst_load_state(JackVST* jvst, const char * filename);
 bool jvst_save_state(JackVST* jvst, const char * filename);
 bool jvst_session_callback( JackVST* jvst, const char* appname );

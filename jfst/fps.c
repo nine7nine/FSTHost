@@ -232,7 +232,7 @@ bool fps_load(JackVST* jvst, const char* filename) {
    /* If plugin is not already loaded  - try load it now */
    if (! jvst->fst) {
        char* plug_path = fps_get_plugin_file( plugin_state_node );
-       if (! jvst_load( jvst, plug_path, false ) ) return FALSE;
+       if (! jvst_load( jvst, plug_path, false, false ) ) return false;
    }
 
    /* Cleanup midi filters */

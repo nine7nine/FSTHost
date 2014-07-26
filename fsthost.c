@@ -92,10 +92,15 @@ static void signal_handler (int signum) {
 
 static bool idle ( JackVST* jvst ) {
 	jvst_idle ( jvst, APPNAME_ARCH );
-	return TRUE;
+	return true;
 }
 
-#ifndef NO_GTK
+#ifdef NO_GTK
+static void edit_close_handler ( void* arg ) {
+	JackVST* jvst = (JackVST*) arg;
+	g_idle_add( (GSourceFunc) jvst_quit, jvst);
+}
+#else
 static bool gui_resize_aux ( JackVST* jvst ) {
 	gtk_gui_resize( jvst );
 	return FALSE;
@@ -156,6 +161,7 @@ static void usage(char* appname) {
 	fprintf(stderr, format, "-k channel", "MIDI Channel (0: all, 17: none)");
 	fprintf(stderr, format, "-i num_in", "Jack number In ports");
 	fprintf(stderr, format, "-j <connect_to>", "Connect Audio Out to <connect_to>");
+	fprintf(stderr, format, "-l", "save state to state_file on SIGUSR1 (require -s)");
 	fprintf(stderr, format, "-m mode_midi_cc", "Bypass/Resume MIDI CC (default: 122)");
 	fprintf(stderr, format, "-p", "Connect MIDI In port to all physical");
 	fprintf(stderr, format, "-P", "Self MIDI Program Change handling");
@@ -173,6 +179,7 @@ struct SepThread {
 	const char* plug_spec;
 	sem_t sem;
 	bool loaded;
+	bool state_can_fail;
 };
 
 static DWORD WINAPI
@@ -181,7 +188,7 @@ sep_thread ( LPVOID arg ) {
 
 	fst_set_thread_priority ( "SepThread", ABOVE_NORMAL_PRIORITY_CLASS, THREAD_PRIORITY_ABOVE_NORMAL );
 
-	bool loaded = st->loaded = jvst_load ( st->jvst, st->plug_spec, true );
+	bool loaded = st->loaded = jvst_load ( st->jvst, st->plug_spec, true, st->state_can_fail );
 
 	sem_post( &st->sem );
 
@@ -190,16 +197,12 @@ sep_thread ( LPVOID arg ) {
 	return 0;
 }
 
-static void edit_close_handler ( void* arg ) {
-	JackVST* jvst = (JackVST*) arg;
-	g_idle_add( (GSourceFunc) jvst_quit, jvst);
-}
-
-bool jvst_load_sep_th (JackVST* jvst, const char* plug_spec, bool want_state_and_amc) {
+bool jvst_load_sep_th (JackVST* jvst, const char* plug_spec, bool want_state_and_amc, bool state_can_fail) {
 
 	struct SepThread st;
 	st.jvst = jvst;
 	st.plug_spec = plug_spec;
+	st.state_can_fail = state_can_fail;
 	sem_init( &st.sem, 0, 0 );
 	CreateThread( NULL, 0, sep_thread, &st, 0, 0 );
 
@@ -217,6 +220,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	int32_t		opt_maxOuts = -1;
 	bool		opt_generate_dbinfo = false;
 	bool		opt_list_plugins = false;
+	bool		sigusr1_save_state = false;
 	bool		want_midi_physical = false;
 	bool		separate_threads = false;
 	bool		serv = false;
@@ -239,10 +243,10 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
         // Parse command line options
 	cmdline2arg(&argc, &argv, cmdline);
 	short c;
-	while ( (c = getopt (argc, argv, "AbBd:egs:S:c:k:i:j:LnNm:pPo:t:Tu:U:V")) != -1) {
+	while ( (c = getopt (argc, argv, "AbBd:egs:S:c:k:i:j:lLnNm:pPo:t:Tu:U:V")) != -1) {
 		switch (c) {
 			case 'A': jvst->want_port_aliases = true; break;
-			case 'b': jvst->bypassed = TRUE; break;
+			case 'b': jvst->bypassed = true; break;
 			case 'd': jvst->dbinfo_file = optarg; break;
 			case 'e': jvst->with_editor = WITH_EDITOR_HIDE; break;
 			case 'g': opt_generate_dbinfo = true; break;
@@ -254,7 +258,8 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 			case 'k': midi_filter_one_channel_set(&jvst->channel, strtol(optarg, NULL, 10)); break;
 			case 'i': opt_maxIns = strtol(optarg, NULL, 10); break;
 			case 'j': connect_to = optarg; break;
-			case 'p': want_midi_physical = TRUE; break;
+			case 'l': sigusr1_save_state = true; break;
+			case 'p': want_midi_physical = true; break;
 			case 'P': jvst->midi_pc = MIDI_PC_SELF; break; /* used but not enabled */
 			case 'o': opt_maxOuts = strtol(optarg, NULL, 10); break;
 			case 'n': jvst->with_editor = WITH_EDITOR_NO; break;
@@ -288,9 +293,9 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	/* Load plugin - in this thread or dedicated */
 	bool loaded;
 	if ( separate_threads ) {
-		loaded = jvst_load_sep_th ( jvst, custom_path, true );
+		loaded = jvst_load_sep_th ( jvst, custom_path, true, sigusr1_save_state );
 	} else {
-		loaded = jvst_load ( jvst, custom_path, true );
+		loaded = jvst_load ( jvst, custom_path, true, sigusr1_save_state );
 	}
 
 	/* Well .. Are we loaded plugin ? */
@@ -312,9 +317,12 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	sigemptyset(&sa.sa_mask);
 	sa.sa_flags = 0;
 	sa.sa_handler = &signal_handler;
-	sigaction(SIGINT, &sa, NULL); // clean quit
-	sigaction(SIGUSR1, &sa, NULL); // save state ( ladish support )
-	sigaction(SIGUSR2, &sa, NULL); // open editor
+	sigaction(SIGINT, &sa, NULL); // SIGINT for clean quit
+	sigaction(SIGUSR2, &sa, NULL);// SIGUSR2 open editor
+
+	// SIGUSR1 for save state ( ladish support )
+	if (sigusr1_save_state && jvst->default_state_file)
+		sigaction(SIGUSR1, &sa, NULL);
 
 #ifdef HAVE_LASH
 	jvst_lash_init(jvst, &argc, &argv);
@@ -346,12 +354,12 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 #ifdef NO_GTK
 	// Create GTK or GlibMain thread
 	if (jvst->with_editor != WITH_EDITOR_NO) {
-		puts("run editor");
+		puts("Run Editor");
+		fst_set_window_close_callback( jvst->fst, edit_close_handler, jvst );
 		fst_run_editor (jvst->fst, false);
 	} else {
 		puts("GUI Disabled - start GlibMainLoop");
 	}
-	fst_set_window_close_callback( jvst->fst, edit_close_handler, jvst );
 	g_main_loop_run ( glib_main_loop );
 #else
 	// Create GTK or GlibMain thread
@@ -361,7 +369,6 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 		gtk_gui_start(jvst);
 	} else {
 		puts("GUI Disabled - start GlibMainLoop");
-		fst_set_window_close_callback( jvst->fst, edit_close_handler, jvst );
 		g_main_loop_run ( glib_main_loop );
 	}
 #endif
