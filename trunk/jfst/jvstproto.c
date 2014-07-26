@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <string.h>
-#include <stdio.h>
 #include <glib.h>
 
 #include "../serv/serv.h"
