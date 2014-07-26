@@ -127,6 +127,11 @@ typedef struct _FST {
 	bool			canSendVstMidiEvent;
 } FST;
 
+typedef enum {
+	FST_PORT_IN,
+	FST_PORT_OUT
+} FSTPortType;
+
 enum FxFileType {
 	FXBANK		= 0,
 	FXPROGRAM	= 1
@@ -206,6 +211,7 @@ intptr_t fst_call_dispatcher (FST *fst, int32_t opcode, int32_t index, intptr_t 
 void fst_program_change (FST *fst, int32_t program);
 bool fst_get_program_name (FST *fst, short program, char* name, size_t size);
 bool fst_set_program_name (FST *fst, const char* name);
+char* fst_get_port_name ( FST* fst, int32_t port_number, FSTPortType type );
 
 bool fst_run_editor (FST*, bool popup);
 bool fst_show_editor (FST *fst);

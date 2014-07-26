@@ -152,6 +152,7 @@ static void usage(char* appname) {
 	fprintf(stderr, format, "-s <state_file>", "Load <state_file>");
 	fprintf(stderr, format, "-S <port>", "Start CTRL server on port <port>. Use 0 for random.");
 	fprintf(stderr, format, "-c <client_name>", "Jack Client name");
+	fprintf(stderr, format, "-A", "Set plugin port names as aliases");
 	fprintf(stderr, format, "-k channel", "MIDI Channel (0: all, 17: none)");
 	fprintf(stderr, format, "-i num_in", "Jack number In ports");
 	fprintf(stderr, format, "-j <connect_to>", "Connect Audio Out to <connect_to>");
@@ -164,7 +165,7 @@ static void usage(char* appname) {
 	fprintf(stderr, format, "-T", "Separate threads");
 	fprintf(stderr, format, "-u uuid", "JackSession UUID");
 	fprintf(stderr, format, "-U SysExID", "SysEx ID (1-127). 0 is default (do not use it)");
-	fprintf(tderr, format, "-V", "Disable Volume control / filtering CC7 messages");
+	fprintf(stderr, format, "-V", "Disable Volume control / filtering CC7 messages");
 }
 
 struct SepThread {
@@ -238,8 +239,9 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
         // Parse command line options
 	cmdline2arg(&argc, &argv, cmdline);
 	short c;
-	while ( (c = getopt (argc, argv, "bBd:egs:S:c:k:i:j:LnNm:pPo:t:Tu:U:V")) != -1) {
+	while ( (c = getopt (argc, argv, "AbBd:egs:S:c:k:i:j:LnNm:pPo:t:Tu:U:V")) != -1) {
 		switch (c) {
+			case 'A': jvst->want_port_aliases = true; break;
 			case 'b': jvst->bypassed = TRUE; break;
 			case 'd': jvst->dbinfo_file = optarg; break;
 			case 'e': jvst->with_editor = WITH_EDITOR_HIDE; break;

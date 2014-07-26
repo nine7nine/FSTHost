@@ -55,6 +55,32 @@ static void jvst_destroy (JackVST* jvst) {
 	free(jvst);
 }
 
+static void jvst_set_aliases ( JackVST* jvst, FSTPortType type ) {
+	int32_t count;
+	jack_port_t** ports;
+	switch ( type ) {
+	case FST_PORT_IN:
+		count = jvst->numIns;
+		ports = jvst->inports;
+		break;
+	case FST_PORT_OUT:
+		count = jvst->numOuts;
+		ports = jvst->outports;
+		break;
+	default: return;
+	}
+
+	// Set port alias
+	int32_t i;
+	for ( i=0; i < count; i++ ) {
+		char* name = fst_get_port_name ( jvst->fst, i, type );
+		if ( ! name ) continue;
+
+		jack_port_set_alias ( ports[i], name );
+		free ( name );
+	}
+}
+
 bool jvst_init( JackVST* jvst, int32_t max_in, int32_t max_out ) {
 	FST* fst = jvst->fst;
 
@@ -69,6 +95,12 @@ bool jvst_init( JackVST* jvst, int32_t max_in, int32_t max_out ) {
 
 	bool want_midi_out = fst_want_midi_out ( jvst->fst );
 	if ( ! jvst_jack_init ( jvst, want_midi_out ) ) return false;
+
+	// Port aliases
+	if ( jvst->want_port_aliases ) {
+		jvst_set_aliases ( jvst, FST_PORT_IN );
+		jvst_set_aliases ( jvst, FST_PORT_OUT );
+	}
 
 	/* Sysex init */
 	if ( ! jvst_sysex_init ( jvst ) ) return false;
