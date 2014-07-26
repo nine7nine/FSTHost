@@ -173,7 +173,7 @@ static bool jvst_load_directly (JackVST* jvst, const char* plug_spec ) {
 	return ( jvst->fst ) ? true : false;
 }
 
-bool jvst_load (JackVST* jvst, const char* plug_spec, bool want_state_and_amc) {
+bool jvst_load (JackVST* jvst, const char* plug_spec, bool want_state_and_amc, bool state_can_fail) {
 	/* Try load directly */
 	bool loaded = false;
 	if ( plug_spec )
@@ -181,8 +181,10 @@ bool jvst_load (JackVST* jvst, const char* plug_spec, bool want_state_and_amc) {
 
 	/* load state if requested - state file may contain plugin path
 	   NOTE: it can call jvst_load */
-	if ( want_state_and_amc && jvst->default_state_file )
-		loaded = jvst_load_state (jvst, jvst->default_state_file);
+	if ( want_state_and_amc && jvst->default_state_file ) {
+		bool state_loaded = jvst_load_state (jvst, jvst->default_state_file);
+		if ( ! state_can_fail ) loaded = state_loaded;
+	}
 
 	/* bind Jack to Audio Master Callback */
 	if ( loaded && want_state_and_amc )
