@@ -195,10 +195,10 @@ bool jvst_load (JackVST* jvst, const char* plug_spec, bool want_state_and_amc, b
 }
 
 void jvst_bypass(JackVST* jvst, bool bypass) {
-	if (bypass & !jvst->bypassed) {
+	if ( bypass && !jvst->bypassed ) {
 		jvst->bypassed = TRUE;
 		fst_call ( jvst->fst, SUSPEND );
-	} else if (!bypass & jvst->bypassed) {
+	} else if ( !bypass && jvst->bypassed ) {
 		fst_call ( jvst->fst, RESUME );
 		jvst->bypassed = FALSE;
 	}
