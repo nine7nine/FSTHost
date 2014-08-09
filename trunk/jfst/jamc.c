@@ -3,9 +3,6 @@
 #include "jfst.h"
 #include "../fst/amc.h"
 
-/* fsthost.c - FIXME */
-extern void gui_resize(JackVST* jvst);
-
 static void jvstamc_automate ( AMC* amc, int32_t param ) {
 	JackVST* jvst = (JackVST*) amc->user_ptr;
 	if ( ! jvst ) return;
@@ -196,9 +193,10 @@ static void jvstamc_window_resize ( struct _AMC* amc, int32_t width, int32_t hei
 	if ( ! jvst || ! fst ) return;
 	fst->width = width;
 	fst->height = height;
-	fst_call ( jvst->fst, EDITOR_RESIZE );
+	fst_call ( fst, EDITOR_RESIZE );
 	/* Resize also GTK window in popup (embedded) mode */
-	gui_resize( jvst );
+	if ( jvst->gui_resize )
+		jvst->gui_resize( jvst );
 }
 
 static intptr_t jvstamc_get_sample_rate ( struct _AMC* amc ) {

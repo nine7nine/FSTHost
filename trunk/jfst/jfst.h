@@ -92,6 +92,7 @@ typedef struct _JackVST {
     uint8_t         out_level; /* for VU-meter */
     bool            bbt_sync;
     uint16_t        ctrl_port_number;
+    void (*gui_resize) ( struct _JackVST* );
 
     MidiLearn       midi_learn;
 
@@ -125,7 +126,7 @@ bool jvst_load(JackVST* jvst, const char* plug_spec, bool want_state_and_amc, bo
 bool jvst_load_state(JackVST* jvst, const char * filename);
 bool jvst_save_state(JackVST* jvst, const char * filename);
 bool jvst_session_callback( JackVST* jvst, const char* appname );
-void jvst_idle(JackVST* jvst, const char* appname);
+bool jvst_idle(JackVST* jvst, const char* appname);
 void jvst_close ( JackVST* jvst );
 void jvst_bypass(JackVST* jvst, bool bypass);
 

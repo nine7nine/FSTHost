@@ -19,9 +19,6 @@ extern void jvst_sysex_notify ( JackVST* jvst );
 /* info.c */
 extern FST* fst_info_load_open ( const char* dbpath, const char* plug_spec );
 
-/* fsthost.c - FIXME */
-extern void jvst_quit(JackVST* jvst);
-
 JackVST* jvst_new() {
 	JackVST* jvst = calloc (1, sizeof (JackVST));
 
@@ -132,8 +129,8 @@ void jvst_close ( JackVST* jvst ) {
 	jvst_destroy( jvst );
 }
 
-/* return true if want quit */
-void jvst_session_handler( JackVST* jvst, jack_session_event_t* event, const char* appname ) {
+/* return false if want quit */
+bool jvst_session_handler( JackVST* jvst, jack_session_event_t* event, const char* appname ) {
 	puts("session callback");
 
 	// Save state
@@ -151,15 +148,15 @@ void jvst_session_handler( JackVST* jvst, jack_session_event_t* event, const cha
 
 	jack_session_reply(jvst->client, event);
 
-	bool quit = false;
-	if (event->type == JackSessionSaveAndQuit) {
-		puts("JackSession manager ask for quit");
-		quit = true;
-	}
+	bool quit = (event->type == JackSessionSaveAndQuit);
 
 	jack_session_event_free(event);
 
-        if ( quit ) jvst_quit ( jvst );
+        if ( quit ) {
+		puts("JackSession manager ask for quit");
+		return false;
+	}
+	return true;
 }
 
 /* plug_spec could be path, dll name or eff/plug name */
@@ -171,7 +168,7 @@ static bool jvst_load_directly (JackVST* jvst, const char* plug_spec ) {
 	if ( ! jvst->dbinfo_file ) return false;
 	printf ( "... and now for something completely different ... try load using XML DB\n" );
 	jvst->fst = fst_info_load_open ( jvst->dbinfo_file, plug_spec );
-	return ( jvst->fst ) ? true : false;
+	return ( jvst->fst );
 }
 
 bool jvst_load (JackVST* jvst, const char* plug_spec, bool want_state_and_amc, bool state_can_fail) {
@@ -204,7 +201,8 @@ void jvst_bypass(JackVST* jvst, bool bypass) {
 	}
 }
 
-void jvst_idle(JackVST* jvst, const char* appname) {
+/* Return false if want quit */
+bool jvst_idle(JackVST* jvst, const char* appname) {
 	// Handle SysEx Input
 	jvst_sysex_handler(jvst);
 
@@ -219,16 +217,16 @@ void jvst_idle(JackVST* jvst, const char* appname) {
 			break;
 		case EVENT_PC:
 			// Self Program change support
-			if (jvst->midi_pc != MIDI_PC_SELF) break;
-			
-			fst_program_change(jvst->fst, ev->value);
+			if (jvst->midi_pc == MIDI_PC_SELF)
+				fst_program_change(jvst->fst, ev->value);
 			break;
 		case EVENT_GRAPH:
 			// Attempt to connect MIDI ports to control app if Graph order change
 			jvst_connect_to_ctrl_app(jvst);
 			break;
 		case EVENT_SESSION:
-			jvst_session_handler(jvst, ev->ptr, appname);
+			if ( ! jvst_session_handler(jvst, ev->ptr, appname) )
+				return false;
 			break;
 		}
 	}
@@ -239,17 +237,20 @@ void jvst_idle(JackVST* jvst, const char* appname) {
 		ml->map[ml->cc] = ml->param;
 		ml->wait = false;
 
+		printf("MIDIMAP CC: %d => ", ml->cc);
 		char name[32];
 		bool success = fst_call_dispatcher( jvst->fst, effGetParamName, ml->param, 0, name, 0 );
 		if (success) {
-			printf("MIDIMAP CC: %d => %s\n", ml->cc, name);
+			printf("%s\n", name);
 		} else {
-			printf("MIDIMAP CC: %d => %d\n", ml->cc, ml->param);
+			printf("%d\n", ml->param);
 		}
 	}
 
 	// Send notify if we want notify and something change
 	if (jvst->sysex_want_notify) jvst_sysex_notify(jvst);
+
+	return true;
 }
 
 typedef enum {
@@ -267,7 +268,7 @@ static JVST_FileType get_file_type ( const char * filename ) {
 	if ( !strcasecmp(file_ext, ".fxp") ) return JVST_FILE_TYPE_FXP;
 	if ( !strcasecmp(file_ext, ".fxb") ) return JVST_FILE_TYPE_FXB;
 
-	printf("Unkown file type\n");
+	puts("Unkown file type");
 	return JVST_FILE_TYPE_UNKNOWN;
 }
 

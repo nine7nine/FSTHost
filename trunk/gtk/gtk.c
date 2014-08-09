@@ -755,6 +755,13 @@ idle_cb(JackVST *jvst) {
 	return TRUE;
 }
 
+// Editor Window is embedded and want resize window
+static void gtk_gui_resize ( JackVST* jvst ) {
+	FST* fst = jvst->fst;
+	if ( fst->editor_popup && fst->window )
+		gtk_widget_set_size_request(gtk_socket, fst->width, fst->height);
+}
+
 // Really ugly auxiliary function for create buttons ;-)
 static GtkWidget*
 make_img_button(const gchar *stock_id, const gchar *tooltip, bool toggle,
@@ -775,8 +782,7 @@ make_img_button(const gchar *stock_id, const gchar *tooltip, bool toggle,
 	return button;
 }
 
-bool
-gtk_gui_start (JackVST* jvst) {
+bool gtk_gui_start (JackVST* jvst) {
 //	printf("GTK Thread WineID: %d | LWP: %d\n", GetCurrentThreadId (), (int) syscall (SYS_gettid));
 
 	// create a GtkWindow containing a GtkSocket...
@@ -865,6 +871,8 @@ gtk_gui_start (JackVST* jvst) {
 
 	gtk_container_add (GTK_CONTAINER (window), vpacker);
 
+	jvst->gui_resize = &gtk_gui_resize;
+
 	// Nasty hack - this also emit signal which do the rest ;-)
 	if (jvst->with_editor == WITH_EDITOR_SHOW)
 		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(editor_button), TRUE);
@@ -892,13 +900,6 @@ int fst_xerror_handler( Display *disp, XErrorEvent *ev ) {
 		printf( "Xerror:  Wine : %s\n", error_text );
 		return wine_error_handler( disp, ev );
 	}
-}
-
-// Editor Window is embedded and want resize window
-void gtk_gui_resize ( JackVST* jvst ) {
-	FST* fst = jvst->fst;
-	if ( fst->editor_popup && fst->window )
-		gtk_widget_set_size_request(gtk_socket, fst->width, fst->height);
 }
 
 void gtk_gui_init(int *argc, char **argv[]) {

@@ -47,7 +47,6 @@ bool jvst_proto_close ( JackVST* jvst );
 #ifndef NO_GTK
 extern void gtk_gui_init (int* argc, char** argv[]);
 extern int gtk_gui_start (JackVST * jvst);
-extern void gtk_gui_resize ( JackVST* jvst );
 extern void gtk_gui_quit();
 #endif
 
@@ -91,8 +90,11 @@ static void signal_handler (int signum) {
 }
 
 static bool idle ( JackVST* jvst ) {
-	jvst_idle ( jvst, APPNAME_ARCH );
-	return true;
+	if ( ! jvst_idle ( jvst, APPNAME_ARCH ) ) {
+		jvst_quit(jvst);
+		return FALSE;
+	}
+	return TRUE;
 }
 
 #ifdef NO_GTK
@@ -100,18 +102,7 @@ static void edit_close_handler ( void* arg ) {
 	JackVST* jvst = (JackVST*) arg;
 	g_idle_add( (GSourceFunc) jvst_quit, jvst);
 }
-#else
-static bool gui_resize_aux ( JackVST* jvst ) {
-	gtk_gui_resize( jvst );
-	return FALSE;
-}
 #endif
-
-void gui_resize ( JackVST* jvst ) {
-#ifndef NO_GTK
-	g_idle_add( (GSourceFunc) gui_resize_aux, jvst );
-#endif
-}
 
 static void cmdline2arg(int *argc, char ***pargv, LPSTR cmdline) {
 	LPWSTR* szArgList = CommandLineToArgvW(GetCommandLineW(), argc);
@@ -348,8 +339,10 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 		g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 100, (GSourceFunc) fst_event_callback, NULL, NULL);
 
 	/* Socket stuff */
-	if ( serv && ! jvst_proto_init(jvst) )
-		goto sock_err;
+	if ( serv && ! jvst_proto_init(jvst) ) {
+		jvst_close(jvst);
+		return 1;
+	}
 
 #ifdef NO_GTK
 	// Create GTK or GlibMain thread
@@ -375,7 +368,6 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	/* Close CTRL socket */
 	jvst_proto_close ( jvst );
 
-sock_err:
 	jvst_close(jvst);
 
 	puts("Game Over");
