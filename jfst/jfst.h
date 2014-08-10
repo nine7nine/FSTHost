@@ -119,6 +119,10 @@ typedef struct _JackVST {
     jack_ringbuffer_t* ringbuffer;
 } JackVST;
 
+static inline void jvst_set_gui_resize_cb ( JackVST* jvst, void (*f) ) {
+	jvst->gui_resize = f;
+}
+
 /* jfst.c */
 JackVST* jvst_new();
 bool jvst_init( JackVST* jvst, int32_t max_in, int32_t max_out );

@@ -871,7 +871,7 @@ bool gtk_gui_start (JackVST* jvst) {
 
 	gtk_container_add (GTK_CONTAINER (window), vpacker);
 
-	jvst->gui_resize = &gtk_gui_resize;
+	jvst_set_gui_resize_cb( jvst, gtk_gui_resize );
 
 	// Nasty hack - this also emit signal which do the rest ;-)
 	if (jvst->with_editor == WITH_EDITOR_SHOW)
