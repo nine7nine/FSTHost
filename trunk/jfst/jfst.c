@@ -117,8 +117,6 @@ bool jvst_init( JackVST* jvst, int32_t max_in, int32_t max_out ) {
 }
 
 void jvst_close ( JackVST* jvst ) {
-	puts("Jack Deactivate");
-	jack_deactivate ( jvst->client );
 	jack_client_close ( jvst->client );
 
 	fst_close(jvst->fst);

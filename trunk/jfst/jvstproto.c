@@ -69,7 +69,7 @@ static bool jvst_proto_client_dispatch ( JackVST* jvst, int client_sock ) {
 	char* sep = strchr ( msg, ':' );
 	if ( sep != NULL ) {
 		*sep = '\0';
-		value = strtol ( sep + 1, NULL, 10 );
+		value = strtol ( ++sep, NULL, 10 );
 	}
 
 	switch ( proto_lookup ( msg ) ) {

@@ -303,6 +303,12 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	if ( ! jvst_init ( jvst, opt_maxIns, opt_maxOuts ) )
 		return 1;
 
+	/* Socket stuff */
+	if ( serv && ! jvst_proto_init(jvst) ) {
+		jvst_close(jvst);
+		return 1;
+	}
+
 	// Handling signals
 	struct sigaction sa;
 	sigemptyset(&sa.sa_mask);
@@ -329,20 +335,15 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	glib_main_loop = g_main_loop_new(NULL, FALSE);
 	g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 750, (GSourceFunc) idle, jvst, NULL);
 
-	// Auto connect on start
+	// Autoconnect AUDIO on start
 	if (connect_to) jvst_connect_audio(jvst, connect_to);
-	if (want_midi_physical && fst_want_midi_in(jvst->fst))
-		jvst_connect_midi_to_physical(jvst);
+
+	// Autoconnect MIDI on start
+	if (want_midi_physical) jvst_connect_midi_to_physical(jvst);
 
 	// Add FST event callback to Gblib main loop
 	if ( ! separate_threads )
 		g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 100, (GSourceFunc) fst_event_callback, NULL, NULL);
-
-	/* Socket stuff */
-	if ( serv && ! jvst_proto_init(jvst) ) {
-		jvst_close(jvst);
-		return 1;
-	}
 
 #ifdef NO_GTK
 	// Create GTK or GlibMain thread
@@ -365,6 +366,10 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 		g_main_loop_run ( glib_main_loop );
 	}
 #endif
+
+	puts("Jack Deactivate");
+	jack_deactivate ( jvst->client );
+
 	/* Close CTRL socket */
 	jvst_proto_close ( jvst );
 
