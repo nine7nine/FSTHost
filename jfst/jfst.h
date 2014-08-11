@@ -33,7 +33,8 @@ enum WithEditor {
 enum SysExWant {
    SYSEX_WANT_NO          = 0,
    SYSEX_WANT_IDENT_REPLY = 1,
-   SYSEX_WANT_DUMP        = 2
+   SYSEX_WANT_DUMP        = 2,
+   SYSEX_WANT_DONE        = 3
 };
 
 enum PROTO_CMD {

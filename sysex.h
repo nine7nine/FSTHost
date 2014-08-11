@@ -22,6 +22,7 @@
 #define SYSEX_TYPE_DUMP  0
 #define SYSEX_TYPE_RQST  1
 #define SYSEX_TYPE_OFFER 2
+#define SYSEX_TYPE_DONE 3
 #define SYSEX_AUTO_ID 0
 
 #define SYSEX_IDENT_REQUEST {SYSEX_BEGIN,SYSEX_NON_REALTIME,0x7F,SYSEX_GENERAL_INFORMATION,SYSEX_IDENTITY_REQUEST,SYSEX_END}
@@ -90,5 +91,15 @@ typedef struct {
 	uint8_t plugin_name[24]; /* Last is always 0 */
 	const uint8_t end;
 } SysExDumpV1;
+
+#define SYSEX_DONE {SYSEX_BEGIN,SYSEX_MYID,SYSEX_VERSION,SYSEX_TYPE_DONE,0,SYSEX_END}
+typedef struct {
+	const uint8_t begin;
+	const uint8_t id;
+	const uint8_t version;
+	const uint8_t type;
+	uint8_t uuid;
+	const uint8_t end;
+} SysExDone;
 
 #endif /* __sysex_h__ */

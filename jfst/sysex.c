@@ -53,6 +53,7 @@ void jvst_sysex_rt_send ( JackVST* jvst, void *port_buffer ) {
 
 	size_t sysex_size;
 	jack_midi_data_t* sysex_data;
+	SysExDone sxd = SYSEX_DONE;
 	switch(jvst->sysex_want) {
 	case SYSEX_WANT_IDENT_REPLY:
 		sysex_data = (jack_midi_data_t*) &jvst->sysex_ident_reply;
@@ -61,6 +62,11 @@ void jvst_sysex_rt_send ( JackVST* jvst, void *port_buffer ) {
 	case SYSEX_WANT_DUMP:
 		sysex_data = (jack_midi_data_t*) &jvst->sysex_dump;
 		sysex_size = sizeof(SysExDumpV1);
+		break;
+	case SYSEX_WANT_DONE:
+		sxd.uuid = jvst->sysex_ident_reply.model[0];
+		sysex_data = (jack_midi_data_t*) &sxd;
+		sysex_size = sizeof(SysExDone);
 		break;
 	default: goto pco_ret; // error - skip processing for now
 	}
@@ -82,8 +88,9 @@ void jvst_send_sysex(JackVST* jvst, enum SysExWant sysex_want) {
 
 	pthread_mutex_lock (&jvst->sysex_lock);
 
-	uint8_t id;
-	if (sysex_want == SYSEX_WANT_DUMP) {
+	uint8_t id = 0;
+	switch ( sysex_want ) {
+	case SYSEX_WANT_DUMP:;
 		char progName[32];
 		SysExDumpV1* sxd = &jvst->sysex_dump;
 		fst_get_program_name(jvst->fst, jvst->fst->current_program, progName, sizeof(progName));
@@ -97,15 +104,19 @@ void jvst_send_sysex(JackVST* jvst, enum SysExWant sysex_want) {
 		sysex_makeASCII(sxd->program_name, progName, 24);
 		sysex_makeASCII(sxd->plugin_name, jvst->client_name, 24);
 		id = sxd->uuid;
-	} else {
-		/* Assume WANT_IDENT_REPLY */
+		break;
+	case SYSEX_WANT_IDENT_REPLY:
+	case SYSEX_WANT_DONE:
 		id = jvst->sysex_ident_reply.model[0];
+		break;
+	case SYSEX_WANT_NO: /* ERROR */
+		break;
 	}
 
 	jvst->sysex_want = sysex_want;
 	pthread_cond_wait (&jvst->sysex_sent, &jvst->sysex_lock);
 	pthread_mutex_unlock (&jvst->sysex_lock);
-	printf("SysEx Dumped (type: %d ID: %d)\n", sysex_want, id);
+	printf("SysEx Sent (type: %d ID: %d)\n", sysex_want, id);
 }
 
 void jvst_queue_sysex(JackVST* jvst, jack_midi_data_t* data, size_t size) {
@@ -157,6 +168,8 @@ jvst_parse_sysex_input(JackVST* jvst, jack_midi_data_t* data, size_t size) {
 
 				// Copy sysex state for preserve resending SysEx Dump
 				memcpy(&jvst->sysex_dump,sysex,sizeof(SysExDumpV1));
+
+				jvst_send_sysex(jvst, SYSEX_WANT_DONE);
 				break;
 			case SYSEX_TYPE_RQST: ;
 				SysExDumpRequestV1* sysex_request = (SysExDumpRequestV1*) data;

@@ -26,7 +26,7 @@ JackVST* jvst_new() {
 	pthread_cond_init (&jvst->sysex_sent, NULL);
 
 	jvst->with_editor = WITH_EDITOR_SHOW;
-	jvst->volume = -1;
+	jvst->volume = 1; // 63 here mean zero
 	jvst->tempo = -1; // -1 here mean get it from Jack
 	/* Local Keyboard MIDI CC message (122) is probably not used by any VST */
 	jvst->want_state_cc = 122;
