@@ -29,8 +29,9 @@
 //#define DEBUG_CALLBACKS
 //#define DEBUG_TIME
 
-#ifdef DEBUG_CALLBACKS
 extern void fst_error (const char *fmt, ...);
+
+#ifdef DEBUG_CALLBACKS
 #define SHOW_CALLBACK fst_error
 #else
 #define SHOW_CALLBACK(...)

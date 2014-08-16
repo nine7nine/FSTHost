@@ -158,7 +158,6 @@ static void usage(char* appname) {
 	fprintf(stderr, format, "-P", "Self MIDI Program Change handling");
 	fprintf(stderr, format, "-o num_out", "Jack number Out ports");
 	fprintf(stderr, format, "-B", "Use BBT JackTransport sync");
-	fprintf(stderr, format, "-t tempo", "Set fixed Tempo rather than using JackTransport");
 	fprintf(stderr, format, "-T", "Separate threads");
 	fprintf(stderr, format, "-u uuid", "JackSession UUID");
 	fprintf(stderr, format, "-U SysExID", "SysEx ID (1-127). 0 is default (do not use it)");
@@ -256,7 +255,6 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 			case 'n': jvst->with_editor = WITH_EDITOR_NO; break;
 			case 'N': jvst->sysex_want_notify = true; break;
 			case 'm': jvst->want_state_cc = strtol(optarg, NULL, 10); break;
-			case 't': jvst->tempo = strtod(optarg, NULL); break;
 			case 'T': separate_threads = true;
 			case 'u': jvst->uuid = optarg; break;
 			case 'U': jvst_sysex_set_uuid( jvst, strtol(optarg, NULL, 10) ); break;
