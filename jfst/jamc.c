@@ -3,6 +3,8 @@
 #include "jfst.h"
 #include "../fst/amc.h"
 
+//#define DEBUG_TIME
+
 static void jvstamc_automate ( AMC* amc, int32_t param ) {
 	JackVST* jvst = (JackVST*) amc->user_ptr;
 	if ( ! jvst ) return;
@@ -29,9 +31,7 @@ static VstTimeInfo* jvstamc_get_time ( AMC* amc, int32_t mask ) {
 	// sampleRate - always valid
 	timeInfo->sampleRate = jack_pos.frame_rate;
 	// tempo - valid when kVstTempoValid is set ... but we always set tempo ;-)
-	if ( jvst->tempo != -1 ) {
-		timeInfo->tempo = jvst->tempo;
-	} else if (jack_pos.valid & JackPositionBBT) {
+	if (jack_pos.valid & JackPositionBBT) {
 		timeInfo->tempo = jack_pos.beats_per_minute;
 	} else {
 		timeInfo->tempo = 120;
@@ -54,12 +54,11 @@ static VstTimeInfo* jvstamc_get_time ( AMC* amc, int32_t mask ) {
 	if (jack_pos.valid & JackPositionBBT) {
 		double ppqBar = (jack_pos.bar - 1) * jack_pos.beats_per_bar;
 		double ppqBeat = jack_pos.beat - 1;
-		double ppqTick = (double) jack_pos.tick / jack_pos.ticks_per_beat;
-		if (jack_pos.valid & JackBBTFrameOffset) {
-			jack_nframes_t nframes = jack_get_buffer_size (jvst->client);
-			ppqOffset = (double) jack_pos.bbt_offset / nframes;
-		}
-		BBT_ppqPos = ppqBar + ppqBeat + ppqTick;
+		double ppqTick = jack_pos.tick / jack_pos.ticks_per_beat;
+		if ( jack_pos.valid & JackBBTFrameOffset && jack_pos.bbt_offset > 0 )
+			ppqOffset = jack_pos.bbt_offset / ppq; // ppq is frames per beat
+
+		BBT_ppqPos = ppqBar + ppqBeat + ppqTick + ppqOffset;
 
 		// barStartPos - valid when kVstBarsValid is set
 		if (mask & kVstBarsValid) {
@@ -83,9 +82,6 @@ static VstTimeInfo* jvstamc_get_time ( AMC* amc, int32_t mask ) {
 		timeInfo->ppqPos = VST_ppqPos;
 		timeInfo->barStartPos = VST_barStartPos;
 	}
-
-	// Workadound for warning
-	ppqOffset = ppqOffset;
 
 #ifdef DEBUG_TIME
 	fst_error("amc JACK: Bar %d, Beat %d, Tick %d, Offset %d, BeatsPerBar %f",
@@ -168,13 +164,10 @@ static bool jvstamc_process_events ( AMC* amc, VstEvents* events ) {
 static intptr_t jvstamc_tempo ( struct _AMC* amc, int32_t location ) {
 	JackVST* jvst = (JackVST*) amc->user_ptr;
 	if ( jvst ) {
-		if (jvst->tempo != -1) {
-			return jvst->tempo;
-		} else {
-			jack_position_t jack_pos;
-			jack_transport_query (jvst->client, &jack_pos);
-			if (jack_pos.beats_per_minute) return (intptr_t) jack_pos.beats_per_minute;
-		}
+		jack_position_t jack_pos;
+		jack_transport_query (jvst->client, &jack_pos);
+		if (jack_pos.beats_per_minute)
+			return (intptr_t) jack_pos.beats_per_minute;
 	}
 
 	return 120;
