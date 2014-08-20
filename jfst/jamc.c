@@ -31,11 +31,7 @@ static VstTimeInfo* jvstamc_get_time ( AMC* amc, int32_t mask ) {
 	// sampleRate - always valid
 	timeInfo->sampleRate = jack_pos.frame_rate;
 	// tempo - valid when kVstTempoValid is set ... but we always set tempo ;-)
-	if (jack_pos.valid & JackPositionBBT) {
-		timeInfo->tempo = jack_pos.beats_per_minute;
-	} else {
-		timeInfo->tempo = 120;
-	}
+	timeInfo->tempo = (jack_pos.valid & JackPositionBBT) ? jack_pos.beats_per_minute : 120;
 	// nanoSeconds - valid when kVstNanosValid is set
 	if (mask & kVstNanosValid) {
 		timeInfo->nanoSeconds = jack_pos.usecs / 1000;
@@ -63,7 +59,6 @@ static VstTimeInfo* jvstamc_get_time ( AMC* amc, int32_t mask ) {
 		// barStartPos - valid when kVstBarsValid is set
 		if (mask & kVstBarsValid) {
 			BBT_barStartPos = ppqBar;
-			VST_barStartPos = jack_pos.beats_per_bar * floor(VST_ppqPos / jack_pos.beats_per_bar);
 			timeInfo->flags |= kVstBarsValid;
 		}
 
@@ -73,13 +68,12 @@ static VstTimeInfo* jvstamc_get_time ( AMC* amc, int32_t mask ) {
 			timeInfo->timeSigDenominator = (int32_t) floor (jack_pos.beat_type);
 			timeInfo->flags |= kVstTimeSigValid;
 		}
-	}
 
-	if ( jvst->bbt_sync ) {
 		timeInfo->ppqPos = BBT_ppqPos;
 		timeInfo->barStartPos = BBT_barStartPos;
 	} else {
 		timeInfo->ppqPos = VST_ppqPos;
+		VST_barStartPos = 4 * floor(VST_ppqPos / 4);
 		timeInfo->barStartPos = VST_barStartPos;
 	}
 

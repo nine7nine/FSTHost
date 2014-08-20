@@ -157,7 +157,6 @@ static void usage(char* appname) {
 	fprintf(stderr, format, "-p", "Connect MIDI In port to all physical");
 	fprintf(stderr, format, "-P", "Self MIDI Program Change handling");
 	fprintf(stderr, format, "-o num_out", "Jack number Out ports");
-	fprintf(stderr, format, "-B", "Use BBT JackTransport sync");
 	fprintf(stderr, format, "-T", "Separate threads");
 	fprintf(stderr, format, "-u uuid", "JackSession UUID");
 	fprintf(stderr, format, "-U SysExID", "SysEx ID (1-127). 0 is default (do not use it)");
@@ -233,7 +232,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
         // Parse command line options
 	cmdline2arg(&argc, &argv, cmdline);
 	short c;
-	while ( (c = getopt (argc, argv, "AbBd:egs:S:c:k:i:j:lLnNm:pPo:t:Tu:U:V")) != -1) {
+	while ( (c = getopt (argc, argv, "Abd:egs:S:c:k:i:j:lLnNm:pPo:Tu:U:V")) != -1) {
 		switch (c) {
 			case 'A': jvst->want_port_aliases = true; break;
 			case 'b': jvst->bypassed = true; break;
@@ -241,7 +240,6 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 			case 'e': jvst->with_editor = WITH_EDITOR_HIDE; break;
 			case 'g': opt_generate_dbinfo = true; break;
 			case 'L': opt_list_plugins = true; break;
-			case 'B': jvst->bbt_sync = true; break;
 			case 's': jvst->default_state_file = optarg; break;
 			case 'S': serv=true; jvst->ctrl_port_number = strtol(optarg,NULL,10); break;
 			case 'c': jvst->client_name = optarg; break;

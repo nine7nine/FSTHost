@@ -90,7 +90,6 @@ typedef struct _JackVST {
     enum WithEditor with_editor;
     float           volume; /* where 0.0 mean silence */
     uint8_t         out_level; /* for VU-meter */
-    bool            bbt_sync;
     uint16_t        ctrl_port_number;
     void (*gui_resize) ( struct _JackVST* );
 
