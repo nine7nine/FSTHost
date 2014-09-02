@@ -59,8 +59,8 @@ int main(void) {
 
 //			if ( last_beat != jp.beat ) {
 			if ( last_tick != jp.tick ) {
-				printf("Frame: %010d | Bar: %04d | Beat: %d | Tick: %04d | Offset: %04d | CBFF: %4.2f | CBFBBT: %4.2f\n",
-					jp.frame, jp.bar, jp.beat, jp.tick, jp.bbt_offset, current_beat, ppqBar + ppqBeat + ppqTick
+				printf("Frame: %010d | Bar: %04d | Beat: %d | Tick: %04d | Offset: %04d | CBFF: %4.2f | CBFBBT: %4.2f | PPQ: %4.2f | BPM: %4.2f\n",
+					jp.frame, jp.bar, jp.beat, jp.tick, jp.bbt_offset, current_beat, ppqBar + ppqBeat + ppqTick,ppq, jp.beats_per_minute
 				);
 			}
 
