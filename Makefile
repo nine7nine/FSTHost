@@ -142,7 +142,7 @@ install-man: man
 	install -Dm 0644 fsthost_menu.1 $(DESTDIR)$(MANDIR)/fsthost_menu.1
 
 install-icon:
-	install -Dm 0644 fsthost.xpm $(DESTDIR)$(ICONDIR)/fsthost.xpm
+	install -Dm 0644 gtk/fsthost.xpm $(DESTDIR)$(ICONDIR)/fsthost.xpm
 
 # Rules for install
 install: $(EXES) install-man install-icon
