@@ -165,9 +165,9 @@ jvst_parse_sysex_input(JackVST* jvst, jack_midi_data_t* data, size_t size) {
 		switch( sysex->type ) {
 		case SYSEX_TYPE_DUMP: ;
 			SysExDumpV1* sd = (SysExDumpV1*) sysex;
-		
+
 			printf("OK | state:%d program:%d channel:%d volume:%d\n",
-				sd->state, sd->program, sd->channel, sd->volume);
+				sd->state, sd->program, sd->channel, sd->volume);		
 			jvst_bypass(jvst, (sd->state == SYSEX_STATE_ACTIVE) ? FALSE : TRUE);
 			fst_program_change(jvst->fst, sd->program);
 			midi_filter_one_channel_set(&jvst->channel, sd->channel);
@@ -204,6 +204,7 @@ jvst_parse_sysex_input(JackVST* jvst, jack_midi_data_t* data, size_t size) {
 			}
 			break;
 		case SYSEX_TYPE_RELOAD: ;
+			puts("OK");
 			jvst_load_state ( jvst, NULL );
 			break;
 		default:
