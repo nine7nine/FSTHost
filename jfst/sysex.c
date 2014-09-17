@@ -203,6 +203,15 @@ jvst_parse_sysex_input(JackVST* jvst, jack_midi_data_t* data, size_t size) {
 					puts("NOT FOR US");
 				}
 				break;
+			case SYSEX_TYPE_RELOAD:
+				printf("RELOAD - ");
+				SysExReload* sysex_reload = (SysExReload*) data;
+				if (sysex_reload->uuid == jvst->sysex_dump.uuid) {
+					printf("Not to Us (ID:%d)\n", sysex_reload->uuid);
+					break;
+				}
+				jvst_load_state ( jvst, NULL );
+				break;
 			default:
 				puts("BROKEN");
 			}

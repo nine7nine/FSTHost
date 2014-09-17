@@ -176,8 +176,8 @@ bool jvst_load (JackVST* jvst, const char* plug_spec, bool want_state_and_amc, b
 
 	/* load state if requested - state file may contain plugin path
 	   NOTE: it can call jvst_load */
-	if ( want_state_and_amc && jvst->default_state_file ) {
-		bool state_loaded = jvst_load_state (jvst, jvst->default_state_file);
+	if ( want_state_and_amc ) {
+		bool state_loaded = jvst_load_state (jvst, NULL);
 		if ( ! state_can_fail ) loaded = state_loaded;
 	}
 
@@ -269,8 +269,13 @@ static JVST_FileType get_file_type ( const char * filename ) {
 	return JVST_FILE_TYPE_UNKNOWN;
 }
 
-bool jvst_load_state (JackVST* jvst, const char * filename) {
+bool jvst_load_state (JackVST* jvst, const char* filename) {
 	bool success = false;
+
+	if ( ! filename ) {
+		if ( ! jvst->default_state_file ) return false;
+		filename = jvst->default_state_file;
+	}
 
 	switch ( get_file_type ( filename ) ) {
 	case JVST_FILE_TYPE_FPS:
