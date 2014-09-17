@@ -176,7 +176,7 @@ bool jvst_load (JackVST* jvst, const char* plug_spec, bool want_state_and_amc, b
 
 	/* load state if requested - state file may contain plugin path
 	   NOTE: it can call jvst_load */
-	if ( want_state_and_amc ) {
+	if ( want_state_and_amc && jvst->default_state_file) {
 		bool state_loaded = jvst_load_state (jvst, NULL);
 		if ( ! state_can_fail ) loaded = state_loaded;
 	}
