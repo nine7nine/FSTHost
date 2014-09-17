@@ -136,6 +136,15 @@ void jvst_queue_sysex(JackVST* jvst, jack_midi_data_t* data, size_t size) {
 	}
 }
 
+static void jvst_sync2sysex( JackVST* jvst ) {
+	SysExDumpV1* sd = (SysExDumpV1*) &jvst->sysex_dump;
+
+	jvst_bypass(jvst, (sd->state == SYSEX_STATE_ACTIVE) ? FALSE : TRUE);
+	fst_program_change(jvst->fst, sd->program);
+	midi_filter_one_channel_set(&jvst->channel, sd->channel);
+	jvst_set_volume(jvst, sd->volume);
+}
+
 /* Process Sysex messages in non-realtime thread */
 static inline void
 jvst_parse_sysex_input(JackVST* jvst, jack_midi_data_t* data, size_t size) {
@@ -168,13 +177,10 @@ jvst_parse_sysex_input(JackVST* jvst, jack_midi_data_t* data, size_t size) {
 
 			printf("OK | state:%d program:%d channel:%d volume:%d\n",
 				sd->state, sd->program, sd->channel, sd->volume);		
-			jvst_bypass(jvst, (sd->state == SYSEX_STATE_ACTIVE) ? FALSE : TRUE);
-			fst_program_change(jvst->fst, sd->program);
-			midi_filter_one_channel_set(&jvst->channel, sd->channel);
-			jvst_set_volume(jvst, sd->volume);
 
 			// Copy sysex state for preserve resending SysEx Dump
 			memcpy(&jvst->sysex_dump,sd,sizeof(SysExDumpV1));
+			jvst_sync2sysex( jvst );
 
 			jvst_send_sysex(jvst, SYSEX_WANT_DONE);
 			break;
@@ -206,6 +212,7 @@ jvst_parse_sysex_input(JackVST* jvst, jack_midi_data_t* data, size_t size) {
 		case SYSEX_TYPE_RELOAD: ;
 			puts("OK");
 			jvst_load_state ( jvst, NULL );
+			jvst_sync2sysex( jvst );
 			break;
 		default:
 			puts("BROKEN");
