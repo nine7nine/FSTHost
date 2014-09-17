@@ -26,6 +26,7 @@
 #define SYSEX_TYPE_RELOAD 4
 #define SYSEX_AUTO_ID 0
 
+/* ----------------- Universal SysEx ---------------------------- */
 #define SYSEX_IDENT_REQUEST {SYSEX_BEGIN,SYSEX_NON_REALTIME,0x7F,SYSEX_GENERAL_INFORMATION,SYSEX_IDENTITY_REQUEST,SYSEX_END}
 typedef struct {
 	const uint8_t begin;
@@ -51,14 +52,25 @@ typedef struct {
 	const uint8_t end;
 } SysExIdentReply;
 
-#define SYSEX_OFFER {SYSEX_BEGIN,SYSEX_MYID,SYSEX_VERSION,SYSEX_TYPE_OFFER,{0},0,SYSEX_END}
+/* ------------------- FSTHost own SysEx ------------------------ */
 typedef struct {
 	const uint8_t begin;
 	const uint8_t id;
 	const uint8_t version;
 	const uint8_t type;
-	uint8_t rnid[4]; // Copy of SysExIdentReply.version
+	uint8_t uuid;
+} SysExHeader;
+
+#define SYSEX_OFFER {SYSEX_BEGIN,SYSEX_MYID,SYSEX_VERSION,SYSEX_TYPE_OFFER,0,{0},SYSEX_END}
+typedef struct {
+	const uint8_t begin;
+	const uint8_t id;
+	const uint8_t version;
+	const uint8_t type;
 	uint8_t uuid; // Offered ID
+	/* --- HEADER --- */
+
+	uint8_t rnid[4]; // Copy of SysExIdentReply.version
 	const uint8_t end;
 } SysExIdOffer;
 
@@ -69,6 +81,8 @@ typedef struct {
 	const uint8_t version;
 	const uint8_t type;
 	uint8_t uuid;
+	/* --- HEADER --- */
+
 	const uint8_t end;
 } SysExDumpRequestV1;
 
@@ -84,6 +98,8 @@ typedef struct {
 	const uint8_t version;
 	const uint8_t type;
 	uint8_t uuid;
+	/* --- HEADER --- */
+
 	uint8_t state;
 	uint8_t program;
 	uint8_t channel;
@@ -100,6 +116,8 @@ typedef struct {
 	const uint8_t version;
 	const uint8_t type;
 	uint8_t uuid;
+	/* --- HEADER --- */
+
 	const uint8_t end;
 } SysExDone;
 
@@ -110,7 +128,22 @@ typedef struct {
 	const uint8_t version;
 	const uint8_t type;
 	uint8_t uuid;
+	/* --- HEADER --- */
+
 	const uint8_t end;
 } SysExReload;
 
+static inline const char*
+SysExType2str ( uint8_t type ) {
+	switch ( type ) {
+	case SYSEX_TYPE_DUMP:	return "DUMP";
+	case SYSEX_TYPE_RQST:	return "REQUEST";
+	case SYSEX_TYPE_OFFER:	return "OFFER";
+	case SYSEX_TYPE_DONE:	return "DONE";
+	case SYSEX_TYPE_RELOAD:	return "RELOAD";
+	}
+	return "UNKNOWN";
+}
+
 #endif /* __sysex_h__ */
+

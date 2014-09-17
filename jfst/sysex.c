@@ -116,7 +116,7 @@ void jvst_send_sysex(JackVST* jvst, enum SysExWant sysex_want) {
 	jvst->sysex_want = sysex_want;
 	pthread_cond_wait (&jvst->sysex_sent, &jvst->sysex_lock);
 	pthread_mutex_unlock (&jvst->sysex_lock);
-	printf("SysEx Sent (type: %d ID: %d)\n", sysex_want, id);
+	printf("SysEx Sent (type: %s ID: %d)\n", SysExType2str(sysex_want), id);
 }
 
 void jvst_queue_sysex(JackVST* jvst, jack_midi_data_t* data, size_t size) {
@@ -140,84 +140,74 @@ void jvst_queue_sysex(JackVST* jvst, jack_midi_data_t* data, size_t size) {
 static inline void
 jvst_parse_sysex_input(JackVST* jvst, jack_midi_data_t* data, size_t size) {
 	switch(data[1]) {
-	case SYSEX_MYID:
+	case SYSEX_MYID:;
+		SysExHeader* sysex = (SysExHeader*) data;
+
 		// Our sysex
-		printf("Got Our SysEx - ");
+		printf( "Got Our SysEx Version:%d Type:%s ID:%d - ",
+			sysex->version,
+			SysExType2str( sysex->type ),
+			sysex->uuid
+		);
 
-		// Version
-		printf("version %d - ", data[2]);
-		switch(data[2]) {
-		case 1:
-			// Type
-			switch(data[3]) {
-			case SYSEX_TYPE_DUMP:
-				printf("DUMP - ");
+		if ( sysex->version != 1 ) {
+			puts("not supported");
+			break;
+		}
 
-				SysExDumpV1* sysex = (SysExDumpV1*) data;
-				if (sysex->uuid != jvst->sysex_dump.uuid) {
-					printf("Not to Us (ID:%d)\n", sysex->uuid);
-					break;
-				}
+		if ( sysex->type != SYSEX_TYPE_OFFER &&
+		     sysex->uuid != jvst->sysex_dump.uuid
+		) {
+			puts("Not to Us");
+			break;
+		}
 
-				printf("OK | uuid:%d state:%d program:%d channel:%d volume:%d\n", sysex->uuid,
-					sysex->state, sysex->program, sysex->channel, sysex->volume);
-				jvst_bypass(jvst, (sysex->state == SYSEX_STATE_ACTIVE) ? FALSE : TRUE);
-				fst_program_change(jvst->fst, sysex->program);
-				midi_filter_one_channel_set(&jvst->channel, sysex->channel);
-				jvst_set_volume(jvst, sysex->volume);
+		switch( sysex->type ) {
+		case SYSEX_TYPE_DUMP: ;
+			SysExDumpV1* sd = (SysExDumpV1*) sysex;
+		
+			printf("OK | state:%d program:%d channel:%d volume:%d\n",
+				sd->state, sd->program, sd->channel, sd->volume);
+			jvst_bypass(jvst, (sd->state == SYSEX_STATE_ACTIVE) ? FALSE : TRUE);
+			fst_program_change(jvst->fst, sd->program);
+			midi_filter_one_channel_set(&jvst->channel, sd->channel);
+			jvst_set_volume(jvst, sd->volume);
 
-				// Copy sysex state for preserve resending SysEx Dump
-				memcpy(&jvst->sysex_dump,sysex,sizeof(SysExDumpV1));
+			// Copy sysex state for preserve resending SysEx Dump
+			memcpy(&jvst->sysex_dump,sd,sizeof(SysExDumpV1));
 
-				jvst_send_sysex(jvst, SYSEX_WANT_DONE);
-				break;
-			case SYSEX_TYPE_RQST: ;
-				SysExDumpRequestV1* sysex_request = (SysExDumpRequestV1*) data;
-				printf("REQUEST - ID %X - ", sysex_request->uuid);
-				if (sysex_request->uuid == jvst->sysex_dump.uuid) {
-					puts("OK");
-					jvst_send_sysex(jvst, SYSEX_WANT_DUMP);
-				} else {
-					puts("Not to Us");
-				}
-				/* If we got DumpRequest then it mean FHControl is here and we wanna notify */
-				jvst->sysex_want_notify = true;
-				break;
-			case SYSEX_TYPE_OFFER: ;
-				SysExIdOffer* sysex_id_offer = (SysExIdOffer*) data;
-				printf("ID OFFER - %X - ", sysex_id_offer->uuid);
-				printf("RndID:");
-				unsigned short g = 0;
-				while ( g < sizeof(sysex_id_offer->rnid) ) printf(" %02X", sysex_id_offer->rnid[g++]);
-				printf(" - ");
+			jvst_send_sysex(jvst, SYSEX_WANT_DONE);
+			break;
+		case SYSEX_TYPE_RQST:
+			puts("OK");
+			jvst_send_sysex(jvst, SYSEX_WANT_DUMP);
+			/* If we got DumpRequest then it mean FHControl is here and we wanna notify */
+			jvst->sysex_want_notify = true;
+			break;
+		case SYSEX_TYPE_OFFER: ;
+			SysExIdOffer* sysex_id_offer = (SysExIdOffer*) sysex;
+			printf("RndID:");
+			unsigned short g = 0;
+			while ( g < sizeof(sysex_id_offer->rnid) ) printf(" %02X", sysex_id_offer->rnid[g++]);
+			printf(" - ");
 
-				if (jvst->sysex_ident_reply.model[0] != SYSEX_AUTO_ID) {
-					puts("UNEXPECTED");
-				} else if (memcmp(sysex_id_offer->rnid, jvst->sysex_ident_reply.version, 
-				     sizeof(jvst->sysex_ident_reply.version)*sizeof(uint8_t)) == 0)
-				{
-					puts("OK");
-					jvst_sysex_set_uuid( jvst, sysex_id_offer->uuid );
-					jvst_send_sysex(jvst, SYSEX_WANT_IDENT_REPLY);
-				} else {
-					puts("NOT FOR US");
-				}
-				break;
-			case SYSEX_TYPE_RELOAD:
-				printf("RELOAD - ");
-				SysExReload* sysex_reload = (SysExReload*) data;
-				if (sysex_reload->uuid == jvst->sysex_dump.uuid) {
-					printf("Not to Us (ID:%d)\n", sysex_reload->uuid);
-					break;
-				}
-				jvst_load_state ( jvst, NULL );
-				break;
-			default:
-				puts("BROKEN");
+			if (jvst->sysex_ident_reply.model[0] != SYSEX_AUTO_ID) {
+				puts("UNEXPECTED");
+			} else if (memcmp(sysex_id_offer->rnid, jvst->sysex_ident_reply.version, 
+			     sizeof(jvst->sysex_ident_reply.version)*sizeof(uint8_t)) == 0)
+			{
+				puts("OK");
+				jvst_sysex_set_uuid( jvst, sysex_id_offer->uuid );
+				jvst_send_sysex(jvst, SYSEX_WANT_IDENT_REPLY);
+			} else {
+				puts("NOT FOR US");
 			}
 			break;
+		case SYSEX_TYPE_RELOAD: ;
+			jvst_load_state ( jvst, NULL );
+			break;
 		default:
-			puts("not supported");
+			puts("BROKEN");
 		}
 		break;
 	case SYSEX_NON_REALTIME:
