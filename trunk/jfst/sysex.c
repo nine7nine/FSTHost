@@ -116,7 +116,7 @@ void jvst_send_sysex(JackVST* jvst, enum SysExWant sysex_want) {
 	jvst->sysex_want = sysex_want;
 	pthread_cond_wait (&jvst->sysex_sent, &jvst->sysex_lock);
 	pthread_mutex_unlock (&jvst->sysex_lock);
-	printf("SysEx Sent (type: %s ID: %d)\n", SysExType2str(sysex_want), id);
+	printf("SysEx Sent %s ID:%d\n", SysExType2str(sysex_want), id);
 }
 
 void jvst_queue_sysex(JackVST* jvst, jack_midi_data_t* data, size_t size) {
