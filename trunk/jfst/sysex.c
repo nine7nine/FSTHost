@@ -48,7 +48,7 @@ void jvst_sysex_set_uuid (JackVST* jvst, uint8_t uuid) {
 }
 
 void jvst_sysex_rt_send ( JackVST* jvst, void *port_buffer ) {
-	if (jvst->sysex_want == SYSEX_WANT_NO) return;
+	if (jvst->sysex_want == SYSEX_TYPE_NONE) return;
 
 	// Are our lock is ready for us ?
 	// If not then we try next time
@@ -58,15 +58,15 @@ void jvst_sysex_rt_send ( JackVST* jvst, void *port_buffer ) {
 	jack_midi_data_t* sysex_data;
 	SysExDone sxd = SYSEX_DONE;
 	switch(jvst->sysex_want) {
-	case SYSEX_WANT_IDENT_REPLY:
+	case SYSEX_TYPE_REPLY:
 		sysex_data = (jack_midi_data_t*) &jvst->sysex_ident_reply;
 		sysex_size = sizeof(SysExIdentReply);
 		break;
-	case SYSEX_WANT_DUMP:
+	case SYSEX_TYPE_DUMP:
 		sysex_data = (jack_midi_data_t*) &jvst->sysex_dump;
 		sysex_size = sizeof(SysExDumpV1);
 		break;
-	case SYSEX_WANT_DONE:
+	case SYSEX_TYPE_DONE:
 		sxd.uuid = jvst->sysex_ident_reply.model[0];
 		sysex_data = (jack_midi_data_t*) &sxd;
 		sysex_size = sizeof(SysExDone);
@@ -77,7 +77,7 @@ void jvst_sysex_rt_send ( JackVST* jvst, void *port_buffer ) {
 	/* Note: we always send sysex on first frame */
 	if ( jack_midi_event_write(port_buffer, 0, sysex_data, sysex_size) )
 		fst_error("SysEx error: jack_midi_event_write failed.");
-	jvst->sysex_want = SYSEX_WANT_NO;
+	jvst->sysex_want = SYSEX_TYPE_NONE;
 	
 pco_ret:
 	pthread_cond_signal(&jvst->sysex_sent);
@@ -85,15 +85,15 @@ pco_ret:
 }
 
 // Prepare data for RT thread and wait for send
-void jvst_send_sysex(JackVST* jvst, enum SysExWant sysex_want) {
+void jvst_send_sysex(JackVST* jvst, SysExType type) {
 	/* Do not send anything if we are not connected */
 	if (! jack_port_connected ( jvst->ctrl_outport  ) ) return;
 
 	pthread_mutex_lock (&jvst->sysex_lock);
 
 	uint8_t id = 0;
-	switch ( sysex_want ) {
-	case SYSEX_WANT_DUMP:;
+	switch ( type ) {
+	case SYSEX_TYPE_DUMP:;
 		char progName[32];
 		SysExDumpV1* sxd = &jvst->sysex_dump;
 		fst_get_program_name(jvst->fst, jvst->fst->current_program, progName, sizeof(progName));
@@ -108,18 +108,20 @@ void jvst_send_sysex(JackVST* jvst, enum SysExWant sysex_want) {
 		sysex_makeASCII(sxd->plugin_name, jvst->client_name, 24);
 		id = sxd->uuid;
 		break;
-	case SYSEX_WANT_IDENT_REPLY:
-	case SYSEX_WANT_DONE:
+	case SYSEX_TYPE_REPLY:
+	case SYSEX_TYPE_DONE:
 		id = jvst->sysex_ident_reply.model[0];
 		break;
-	case SYSEX_WANT_NO: /* ERROR */
-		break;
+	default:
+		printf("SysEx Type:%s ID:%d not supprted to send\n", SysExType2str(type), id);
+		pthread_mutex_unlock (&jvst->sysex_lock);
+		return;
 	}
 
-	jvst->sysex_want = sysex_want;
+	jvst->sysex_want = type;
 	pthread_cond_wait (&jvst->sysex_sent, &jvst->sysex_lock);
 	pthread_mutex_unlock (&jvst->sysex_lock);
-	printf("SysEx Sent Type:%s ID:%d\n", SysExType2str(sysex_want), id);
+	printf("SysEx Sent Type:%s ID:%d\n", SysExType2str(type), id);
 }
 
 void jvst_queue_sysex(JackVST* jvst, jack_midi_data_t* data, size_t size) {
@@ -185,11 +187,11 @@ jvst_parse_sysex_input(JackVST* jvst, jack_midi_data_t* data, size_t size) {
 			memcpy(&jvst->sysex_dump,sd,sizeof(SysExDumpV1));
 			jvst_sync2sysex( jvst );
 
-			jvst_send_sysex(jvst, SYSEX_WANT_DONE);
+			jvst_send_sysex(jvst, SYSEX_TYPE_DONE);
 			break;
 		case SYSEX_TYPE_RQST:
 			puts("OK");
-			jvst_send_sysex(jvst, SYSEX_WANT_DUMP);
+			jvst_send_sysex(jvst, SYSEX_TYPE_DUMP);
 			/* If we got DumpRequest then it mean FHControl is here and we wanna notify */
 			jvst->sysex_want_notify = true;
 			break;
@@ -207,7 +209,7 @@ jvst_parse_sysex_input(JackVST* jvst, jack_midi_data_t* data, size_t size) {
 			{
 				puts("OK");
 				jvst_sysex_set_uuid( jvst, sysex_id_offer->uuid );
-				jvst_send_sysex(jvst, SYSEX_WANT_IDENT_REPLY);
+				jvst_send_sysex(jvst, SYSEX_TYPE_REPLY);
 			} else {
 				puts("NOT FOR US");
 			}
@@ -229,7 +231,7 @@ jvst_parse_sysex_input(JackVST* jvst, jack_midi_data_t* data, size_t size) {
 			data[2] = 0x7F; // veil
 			if ( memcmp(data, &sxir, sizeof(SysExIdentRqst) ) == 0) {
 				puts("Got Identity request");
-				jvst_send_sysex(jvst, SYSEX_WANT_IDENT_REPLY);
+				jvst_send_sysex(jvst, SYSEX_TYPE_REPLY);
 			}
 		}
 		break;
@@ -261,5 +263,5 @@ void jvst_sysex_notify(JackVST* jvst) {
 		d->channel != midi_filter_one_channel_get( &jvst->channel ) ||
 		d->state   != ( (jvst->bypassed) ? SYSEX_STATE_NOACTIVE : SYSEX_STATE_ACTIVE ) ||
 		d->volume  != jvst_get_volume(jvst)
-	) jvst_send_sysex(jvst, SYSEX_WANT_DUMP);
+	) jvst_send_sysex(jvst, SYSEX_TYPE_DUMP);
 }

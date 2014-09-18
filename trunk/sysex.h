@@ -19,12 +19,17 @@
 #define SYSEX_IDENTITY_REPLY 0x02
 #define SYSEX_MYID 0x5B
 #define SYSEX_VERSION 1
-#define SYSEX_TYPE_DUMP  0
-#define SYSEX_TYPE_RQST  1
-#define SYSEX_TYPE_OFFER 2
-#define SYSEX_TYPE_DONE 3
-#define SYSEX_TYPE_RELOAD 4
 #define SYSEX_AUTO_ID 0
+
+typedef enum {
+	SYSEX_TYPE_NONE, // Stopper ;-)
+	SYSEX_TYPE_DUMP,
+	SYSEX_TYPE_RQST,
+	SYSEX_TYPE_REPLY,
+	SYSEX_TYPE_OFFER,
+	SYSEX_TYPE_DONE,
+	SYSEX_TYPE_RELOAD
+} SysExType;
 
 /* ----------------- Universal SysEx ---------------------------- */
 #define SYSEX_IDENT_REQUEST {SYSEX_BEGIN,SYSEX_NON_REALTIME,0x7F,SYSEX_GENERAL_INFORMATION,SYSEX_IDENTITY_REQUEST,SYSEX_END}
@@ -134,10 +139,12 @@ typedef struct {
 } SysExReload;
 
 static inline const char*
-SysExType2str ( uint8_t type ) {
+SysExType2str ( SysExType type ) {
 	switch ( type ) {
+	case SYSEX_TYPE_NONE:	return "UNKNOWN";
 	case SYSEX_TYPE_DUMP:	return "DUMP";
 	case SYSEX_TYPE_RQST:	return "REQUEST";
+	case SYSEX_TYPE_REPLY:	return "REPLY";
 	case SYSEX_TYPE_OFFER:	return "OFFER";
 	case SYSEX_TYPE_DONE:	return "DONE";
 	case SYSEX_TYPE_RELOAD:	return "RELOAD";

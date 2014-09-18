@@ -125,7 +125,7 @@ volume_handler (GtkVScale *slider, gpointer ptr) {
 static void
 sysex_handler (GtkToggleButton *but, gpointer ptr) {
 	JackVST* jvst = (JackVST*) ptr;
-	jvst_send_sysex(jvst, SYSEX_WANT_DUMP);
+	jvst_send_sysex(jvst, SYSEX_TYPE_DUMP);
 }
 
 static void
