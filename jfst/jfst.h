@@ -30,13 +30,6 @@ enum WithEditor {
    WITH_EDITOR_SHOW = 2
 };
 
-enum SysExWant {
-   SYSEX_WANT_NO          = 0,
-   SYSEX_WANT_IDENT_REPLY = 1,
-   SYSEX_WANT_DUMP        = 2,
-   SYSEX_WANT_DONE        = 3
-};
-
 enum PROTO_CMD {
 	CMD_UNKNOWN,
 	CMD_EDITOR_OPEN,
@@ -103,7 +96,7 @@ typedef struct _JackVST {
     /* SysEx send support */
     pthread_mutex_t   sysex_lock;
     pthread_cond_t    sysex_sent;
-    enum SysExWant    sysex_want;
+    SysExType         sysex_want;
     bool              sysex_want_notify;
     SysExDumpV1       sysex_dump;
     SysExIdentReply   sysex_ident_reply;
@@ -144,7 +137,7 @@ unsigned short jvst_get_volume(JackVST* jvst);
 
 /* sysex.c */
 void jvst_sysex_set_uuid(JackVST* jvst, uint8_t uuid);
-void jvst_send_sysex(JackVST* jvst, enum SysExWant);
+void jvst_send_sysex(JackVST* jvst, SysExType type);
 
 /* process.c */
 void jvst_process( JackVST* jvst, jack_nframes_t nframes );

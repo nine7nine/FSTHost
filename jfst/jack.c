@@ -144,7 +144,7 @@ void jvst_connect_to_ctrl_app(JackVST* jvst) {
         jack_free(jports);
 
 	/* Now we are connected to CTRL APP - send announce */
-	if (done) jvst_send_sysex(jvst, SYSEX_WANT_IDENT_REPLY);
+	if (done) jvst_send_sysex(jvst, SYSEX_TYPE_REPLY);
 }
 
 static jack_port_t** jack_audio_port_init ( jack_client_t* client, const char* prefix, unsigned long flags, int32_t num ) {
