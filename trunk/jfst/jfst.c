@@ -12,9 +12,10 @@ extern bool fps_load(JackVST* jvst, const char* filename);
 extern void jvstamc_init ( JackVST* jvst, AMC* amc );
 
 /* sysex.c */
-extern bool jvst_sysex_init ( JackVST* jvst );
+extern void jvst_sysex_init ( JackVST* jvst );
 extern void jvst_sysex_handler ( JackVST* jvst );
 extern void jvst_sysex_notify ( JackVST* jvst );
+extern void jvst_sysex_gen_random_id ( JackVST* jvst );
 
 /* info.c */
 extern FST* fst_info_load_open ( const char* dbpath, const char* plug_spec );
@@ -43,6 +44,8 @@ JackVST* jvst_new() {
 
 	jvst->transposition = midi_filter_transposition_init ( &jvst->filters );
 	midi_filter_one_channel_init( &jvst->filters, &jvst->channel );
+	
+	jvst_sysex_init ( jvst );
 
 	return jvst;
 }
@@ -99,9 +102,6 @@ bool jvst_init( JackVST* jvst, int32_t max_in, int32_t max_out ) {
 		jvst_set_aliases ( jvst, FST_PORT_OUT );
 	}
 
-	/* Sysex init */
-	if ( ! jvst_sysex_init ( jvst ) ) return false;
-
 	// Lock our crucial memory ( which is used in process callback )
 	// TODO: this is not all
 	mlock ( jvst, sizeof(JackVST) );
@@ -111,6 +111,8 @@ bool jvst_init( JackVST* jvst, int32_t max_in, int32_t max_out ) {
 	fst_call_dispatcher (fst, effSetSampleRate, 0, 0, NULL, (float) jvst->sample_rate);
 	fst_call_dispatcher (fst, effSetBlockSize, 0, (intptr_t) jvst->buffer_size, NULL, 0.0f);
 	printf("Sample Rate: %d | Block Size: %d\n", jvst->sample_rate, jvst->buffer_size);
+
+	jvst_sysex_gen_random_id ( jvst );
 
 	return true;
 }

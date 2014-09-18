@@ -11,22 +11,16 @@ static void sysex_makeASCII(uint8_t* ascii_midi_dest, char* name, size_t size_de
 	memset(ascii_midi_dest + i, 0, size_dest - i - 1); /* Set rest to 0 */
 }
 
-bool jvst_sysex_init ( JackVST* jvst ) {
-	// Little trick (const entries)
+void jvst_sysex_init ( JackVST* jvst ) {
+	// Init Sysex structures - little trick (const entries)
 	SysExIdentReply sxir = SYSEX_IDENT_REPLY;
 	memcpy(&jvst->sysex_ident_reply, &sxir, sizeof(SysExIdentReply));
 
 	SysExDumpV1 sxd = SYSEX_DUMP;
 	memcpy(&jvst->sysex_dump, &sxd, sizeof(SysExDumpV1));
+}
 
-	/* Init MIDI Input sysex buffer */
-	jvst->sysex_ringbuffer = jack_ringbuffer_create(SYSEX_RINGBUFFER_SIZE);
-	if (! jvst->sysex_ringbuffer) {
-		fst_error("Cannot create JACK ringbuffer.");
-		return false;
-	}
-	jack_ringbuffer_mlock(jvst->sysex_ringbuffer);
-
+void jvst_sysex_gen_random_id ( JackVST* jvst ) {
 	/* Generate random ID */
 	srand(GetTickCount()); /* Init ramdom generator */
 	printf("Random SysEx ID:");
@@ -36,7 +30,16 @@ bool jvst_sysex_init ( JackVST* jvst ) {
 		printf(" %02X", jvst->sysex_ident_reply.version[g]);
 	}
 	putchar('\n');
+}
 
+bool jvst_sysex_jack_init ( JackVST* jvst ) {
+	/* Init MIDI Input sysex buffer */
+	jvst->sysex_ringbuffer = jack_ringbuffer_create(SYSEX_RINGBUFFER_SIZE);
+	if (! jvst->sysex_ringbuffer) {
+		fst_error("Cannot create JACK ringbuffer.");
+		return false;
+	}
+	jack_ringbuffer_mlock(jvst->sysex_ringbuffer);
 	return true;
 }
 
