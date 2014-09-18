@@ -10,6 +10,9 @@
 
 #define RINGBUFFER_SIZE 16 * sizeof(struct MidiMessage)
 
+/* sysex.c */
+extern bool jvst_sysex_jack_init ( JackVST* jvst );
+
 void jvst_set_volume(JackVST* jvst, short volume) {
 	if (jvst->volume != -1) jvst->volume = powf(volume / 63.0f, 2);
 }
@@ -228,6 +231,9 @@ bool jvst_jack_init( JackVST* jvst, bool want_midi_out ) {
 	// Register Control MIDI Output port
 	jvst->ctrl_outport = jack_port_register(jvst->client, "ctrl-out",
 		JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
+
+	/* Sysex init */
+        if ( ! jvst_sysex_jack_init ( jvst ) ) return false;
 
 	return true;
 }
