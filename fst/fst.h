@@ -117,7 +117,7 @@ typedef struct _FST {
 	bool			program_changed;
 
 	/* Info */
-	intptr_t		vst_version;
+	int			vst_version;
 	bool			isSynth;
 	bool			canReceiveVstEvents;
 	bool			canReceiveVstMidiEvent;
