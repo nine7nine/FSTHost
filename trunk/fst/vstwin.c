@@ -409,7 +409,7 @@ FST* fst_open (FSTHandle* fhandle) {
 
 	// Open Plugin
 	plugin->dispatcher (plugin, effOpen, 0, 0, NULL, 0.0f);
-	fst->vst_version = plugin->dispatcher (plugin, effGetVstVersion, 0, 0, NULL, 0.0f);
+	fst->vst_version = (int) plugin->dispatcher (plugin, effGetVstVersion, 0, 0, NULL, 0.0f);
 
 	if (fst->vst_version >= 2) {
 		fst->canReceiveVstEvents = fst_canDo(fst, "receiveVstEvents");
