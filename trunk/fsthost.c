@@ -25,6 +25,7 @@
 #include <signal.h>
 
 #include "jfst/jfst.h"
+#include "xmldb/info.h"
 
 #define VERSION "1.5.5"
 #ifdef __x86_64__
@@ -34,10 +35,6 @@
 #endif
 #define APPNAME "fsthost"
 #define APPNAME_ARCH APPNAME ARCH
-
-/* list.c */
-extern char* fst_info_default_path(const char* appname);
-extern int fst_info_list(const char* dbpath);
 
 /* jvstproto.c */
 bool jvst_proto_init ( JackVST* jvst );
