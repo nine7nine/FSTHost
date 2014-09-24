@@ -4,6 +4,7 @@
 #include <libxml/parser.h>
 #include <libxml/tree.h>
 
+#include "info.h"
 #include "../fst/fst.h"
 
 #ifdef __x86_64__

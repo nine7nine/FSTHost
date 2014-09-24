@@ -3,6 +3,7 @@
 
 #include "jfst.h"
 #include "../fst/amc.h"
+#include "../xmldb/info.h"
 
 /* fps.c */
 extern bool fps_save(JackVST* jvst, const char* filename);

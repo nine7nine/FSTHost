@@ -218,7 +218,4 @@ bool fst_show_editor (FST *fst);
 int fst_load_fxfile ( FST *fst, const char *filename );
 int fst_save_fxfile (FST * fst, const char * filename, enum FxFileType fileType);
 
-/* Support for XML Database (info.c) */
-int fst_info_update(const char *dbpath, const char *fst_path);
-
 #endif /* __fst_h__ */
