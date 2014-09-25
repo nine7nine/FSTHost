@@ -258,9 +258,6 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 		}
 	}
 
-	/* If usere didn't provide dbinfo path use default */
-	if (! jvst->dbinfo_file ) jvst->dbinfo_file = fst_info_default_path(APPNAME);
-
 	/* If use want to list plugins then abandon other tasks */
 	if (opt_list_plugins) return fst_info_list ( jvst->dbinfo_file );
 

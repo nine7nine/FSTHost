@@ -13,6 +13,7 @@
 #define ARCH "32"
 #endif
 
+extern xmlDoc* fst_info_read_xmldb ( const char* dbpath );
 static bool need_save = FALSE;
 
 static xmlChar *
@@ -121,7 +122,7 @@ static void scandirectory( const char *dir, xmlNode *xml_rn ) {
 }
 
 char* fst_info_get_plugin_path(const char* dbpath, const char* plug_spec) {
-	xmlDoc* xml_db = xmlReadFile(dbpath, NULL, 0);
+	xmlDoc* xml_db = fst_info_read_xmldb ( dbpath );
 	if (!xml_db) return NULL;
 
 	char* base = basename ( (char*) plug_spec );
@@ -179,16 +180,16 @@ FST* fst_info_load_open ( const char* dbpath, const char* plug_spec ) {
 }
 
 int fst_info_update(const char *dbpath, const char *fst_path) {
-	xmlDoc*  xml_db = NULL;
 	xmlNode* xml_rn = NULL;
 
-	xmlKeepBlanksDefault(0);
-	xml_db = xmlReadFile(dbpath, NULL, 0);
+	xmlDoc* xml_db = fst_info_read_xmldb ( dbpath );
 	if (xml_db) {
 		xml_rn = xmlDocGetRootElement(xml_db);
 	} else {
-		printf("Could not open/parse file %s. Create new one.\n", dbpath);
+	//	printf("Could not open/parse file %s. Create new one.\n", xml_db->name);
 		xml_db = xmlNewDoc(BAD_CAST "1.0");
+		xml_db->name = (dbpath) ? (char*) dbpath : fst_info_default_path();
+
 		xml_rn = xmlNewDocRawNode(xml_db, NULL, BAD_CAST "fst_database", NULL);
 		xmlDocSetRootElement(xml_db, xml_rn);
 	}
@@ -207,11 +208,10 @@ int fst_info_update(const char *dbpath, const char *fst_path) {
 		}
 	}
 
-
 	if (need_save) {
-		FILE * f = fopen (dbpath, "wb");
+		FILE * f = fopen (xml_db->name, "wb");
 		if (! f) {
-			printf ("Could not open xml database: %s\n", dbpath);
+			printf ("Could not open xml database: %s\n", xml_db->name);
 			return 8;
 		}
 
