@@ -3,6 +3,7 @@
 #include <stdio.h>
 
 #include "../fst/fst.h"
+#include "../xmldb/info.h"
 
 volatile bool quit = false;
 static void signal_handler (int signum) {
@@ -58,6 +59,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	int i;
 	for ( i=0; i < argc - 1; i++ ) {
 		fst[i] = fst_load_open(argv[i+1]);
+		if (! fst[i]) fst[i] = fst_info_load_open ( "fsthost", argv[i+1] );
 		if (! fst[i]) return 1;
 
 		fst_call ( fst[i], RESUME );

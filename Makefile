@@ -163,7 +163,7 @@ $(EXTRASUBDIRS:%=%/__clean__): dummy
 	cd `dirname $@` && $(RM) $(CLEAN_FILES)
 
 fsthost_list: xmldb/list_$(LBITS).o
-	gcc flist.c $< $(shell pkg-config --cflags --libs libxml-2.0) -O2 -g -o $@
+	gcc flist.c $< $(shell pkg-config --cflags --libs libxml-2.0) -O2 -g -I. -o $@
 
 ### Target specific build rules
 define compile
