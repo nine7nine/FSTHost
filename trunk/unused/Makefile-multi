@@ -5,7 +5,8 @@ DLLS                  =
 EXES                  = multi
 
 CEXTRA                =
-CEXTRA                += -m32 -fPIC -g -Wall -Wno-multichar -O2 -frounding-math -fsignaling-nans -mfpmath=sse -msse2
+CEXTRA                += -m32 -fPIC -g -Wall -Wno-multichar -O2 -mfpmath=sse -msse2
+CEXTRA                += $(shell pkg-config --cflags libxml-2.0)
 CXXEXTRA              = -mno-cygwin
 RCEXTRA               =
 INCLUDE_PATH          = -I. -I/usr/include -I/usr/include -I/usr/include/wine -I/usr/include/wine/windows
@@ -20,8 +21,8 @@ BIN_INST_PATH         =
 
 ### multi.exe sources and settings
 multi_MODULE        = multi
-multi_C_SRCS        = fst/fst.c fst/amc.c fst/vstwin.c unused/multi.c
-multi_LDFLAGS       = -m32 -mwindows
+multi_C_SRCS        = $(wildcard fst/*.c) $(wildcard xmldb/*.c) unused/multi.c
+multi_LDFLAGS       = -m32 -mwindows $(shell pkg-config --libs libxml-2.0)
 multi_DLL_PATH      =
 multi_DLLS          = 
 multi_LIBRARY_PATH  = -lpthread

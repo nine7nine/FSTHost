@@ -38,14 +38,17 @@ static void cmdline2arg(int *argc, char ***pargv, LPSTR cmdline) {
 
 int WINAPI
 WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
+	int i;
 	int	argc = -1;
 	char**	argv = NULL;
 	cmdline2arg(&argc, &argv, cmdline);
 
-	if ( argc < 1 ) {
+	if ( argc < 2 ) {
 		puts ( "Kibel" );
 		return 1;
 	}
+
+	int fst_count = argc - 1;
 
 	// Handling signals
 	struct sigaction sa;
@@ -56,26 +59,43 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 
 	FST* fst[argc];
 
-	int i;
-	for ( i=0; i < argc - 1; i++ ) {
-		fst[i] = fst_load_open(argv[i+1]);
-		if (! fst[i]) fst[i] = fst_info_load_open ( "fsthost", argv[i+1] );
+	puts ( "...... LOADING ....." );
+	for ( i=0; i < fst_count; i++ ) {
+		fst[i] = fst_info_load_open ( NULL, argv[i+1] );
 		if (! fst[i]) return 1;
-
-		fst_call ( fst[i], RESUME );
-
 //		fst_run_editor(fst[i], false);
 	}
 
-	fst_error("CTRL+C to cancel");
+	puts ( "Sleep 5s" );
+	sleep ( 5 );
+
+	puts ( "...... RESUMING ....." );
+	for ( i=0; i < fst_count; i++ ) {
+		fst_call ( fst[i], RESUME );
+	}
+
+	puts ("CTRL+C to cancel");
 	while ( ! quit ) {
 		fst_event_callback();
 		usleep ( 300000 );
 	}
 
-	for ( i=0; i < argc - 1; i++ ) {
+	puts ( "Sleep 5s" );
+	sleep ( 5 );
+
+	puts ( "...... SUSPENDING ....." );
+	for ( i=0; i < fst_count; i++ ) {
+		fst_call ( fst[i], SUSPEND );
+	}
+
+	puts ( "Sleep 5s" );
+	sleep ( 5 );
+
+	for ( i=0; i < fst_count; i++ ) {
 		fst_close(fst[i]);
 	}
+
+	puts ( "DONE" );
 
 	return 0;
 }
