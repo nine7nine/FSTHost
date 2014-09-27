@@ -18,9 +18,6 @@ extern void jvst_sysex_handler ( JackVST* jvst );
 extern void jvst_sysex_notify ( JackVST* jvst );
 extern void jvst_sysex_gen_random_id ( JackVST* jvst );
 
-/* info.c */
-extern FST* fst_info_load_open ( const char* dbpath, const char* plug_spec );
-
 JackVST* jvst_new() {
 	JackVST* jvst = calloc (1, sizeof (JackVST));
 
@@ -160,22 +157,15 @@ bool jvst_session_handler( JackVST* jvst, jack_session_event_t* event, const cha
 }
 
 /* plug_spec could be path, dll name or eff/plug name */
-static bool jvst_load_directly (JackVST* jvst, const char* plug_spec ) {
-	printf( "yo... lets see... ( try load directly )\n" );
-	jvst->fst = fst_load_open ( plug_spec );
-	if ( jvst->fst ) return true;
-
-	if ( ! jvst->dbinfo_file ) return false;
-	printf ( "... and now for something completely different ... try load using XML DB\n" );
-	jvst->fst = fst_info_load_open ( jvst->dbinfo_file, plug_spec );
-	return ( jvst->fst );
-}
-
 bool jvst_load (JackVST* jvst, const char* plug_spec, bool want_state_and_amc, bool state_can_fail) {
+	printf( "yo... lets see...\n" );
+
 	/* Try load directly */
 	bool loaded = false;
-	if ( plug_spec )
-		loaded = jvst_load_directly ( jvst, plug_spec );
+	if ( plug_spec ) {
+		jvst->fst = fst_info_load_open ( jvst->dbinfo_file, plug_spec );
+		loaded = ( jvst->fst != NULL );
+	}
 
 	/* load state if requested - state file may contain plugin path
 	   NOTE: it can call jvst_load */

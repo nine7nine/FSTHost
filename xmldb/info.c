@@ -171,11 +171,17 @@ free_p_cont:	xmlFree ( p );
 }
 
 FST* fst_info_load_open ( const char* dbpath, const char* plug_spec ) {
+	fst_error ( "Try load directly" );
+	FST* fst = fst_load_open ( plug_spec );
+	if ( fst ) return fst;
+
+	fst_error ( "Try load using XML DB" );
 	char *p = fst_info_get_plugin_path ( dbpath, plug_spec );
 	if (!p) return NULL;
 
-	FST* fst = fst_load_open (p);
+	fst = fst_load_open (p);
 	free(p);
+
 	return fst; /* Could be NULL */
 }
 
