@@ -20,6 +20,7 @@ fst_new () {
 	FST* fst = calloc (1, sizeof (FST));
 
 	pthread_mutex_init (&fst->lock, NULL);
+	pthread_mutex_init (&fst->process_lock, NULL);
 	//fst->current_program = 0; - calloc done this
 	pthread_mutex_init (&(fst->event_call.lock), NULL);
 	pthread_cond_init (&(fst->event_call.called), NULL);
@@ -536,9 +537,33 @@ static inline void fst_destroy_editor ( FST* fst ) {
 static inline void fst_suspend ( FST* fst ) {
 	AEffect* plugin = fst->plugin;
 	fst_error("Suspend plugin");
+	fst_process_lock ( fst );
 	plugin->dispatcher (plugin, effStopProcess, 0, 0, NULL, 0.0f);
 	plugin->dispatcher (plugin, effMainsChanged, 0, 0, NULL, 0.0f);
+	fst_process_unlock ( fst );
 }
+
+static inline void
+fst_update_current_program(FST* fst) {
+	AEffect* plugin = fst->plugin;
+	int32_t newProg = plugin->dispatcher ( plugin, effGetProgram, 0, 0, NULL, 0 );
+	if ( newProg != fst->current_program ) {
+		fst->current_program = newProg;
+		char progName[MAX_PROG_NAME];
+		plugin->dispatcher ( plugin, effGetProgramName, 0, 0, progName, 0 );
+		fst_error ("Program: %d : %s", newProg, progName);
+	}
+}
+
+static inline void fst_plugin_idle ( FST* fst ) {
+	if (fst->wantIdle)
+		fst->plugin->dispatcher (fst->plugin, effIdle, 0, 0, NULL, 0);  
+
+	if (fst->window)
+		fst->plugin->dispatcher (fst->plugin, effEditIdle, 0, 0, NULL, 0);
+}
+
+
 
 static inline void fst_event_handler (FST* fst) {
 	FSTEventCall* ec = &( fst->event_call );
@@ -562,8 +587,10 @@ static inline void fst_event_handler (FST* fst) {
 		break;
 	case RESUME:
 		fst_error("Resume plugin");
+		fst_process_lock ( fst );
 		plugin->dispatcher (plugin, effMainsChanged, 0, 1, NULL, 0.0f);
 		plugin->dispatcher (plugin, effStartProcess, 0, 0, NULL, 0.0f);
+		fst_process_unlock ( fst );
 		break;
 	case EDITOR_OPEN:
 		fst_create_editor(fst);
@@ -576,12 +603,16 @@ static inline void fst_event_handler (FST* fst) {
 		break;
 	case PROGRAM_CHANGE:
 		plugin->dispatcher (plugin, effBeginSetProgram, 0, 0, NULL, 0);
+		fst_process_lock ( fst );
 		plugin->dispatcher (plugin, effSetProgram, 0, ec->program, NULL, 0);
+
+		// NOTE: some plugins needs effIdle call for update program
+		fst_plugin_idle ( fst );
+
+		fst_process_unlock ( fst );
 		plugin->dispatcher (plugin, effEndSetProgram, 0, 0, NULL, 0);
-		/* NOTE: Can't ask plugin (effGetProgram) here cause some plugs
-		         need idle call first */
-		fst->current_program = ec->program;
-		fst->program_changed = TRUE;
+
+		fst_update_current_program ( fst );
 		break;
 	case DISPATCHER:
 		dp->retval = plugin->dispatcher( plugin, dp->opcode, dp->index, dp->val, dp->ptr, dp->opt );
@@ -595,29 +626,12 @@ static inline void fst_event_handler (FST* fst) {
 	pthread_cond_signal (&ec->called);
 }
 
-static inline void
-fst_update_current_program(FST* fst) {
-	AEffect* plugin = fst->plugin;
-	int32_t newProg = plugin->dispatcher ( plugin, effGetProgram, 0, 0, NULL, 0 );
-	if (newProg != fst->current_program || fst->program_changed) {
-		fst->program_changed = FALSE;
-		fst->current_program = newProg;
-		char progName[MAX_PROG_NAME];
-		plugin->dispatcher ( plugin, effGetProgramName, 0, 0, progName, 0 );
-		fst_error ("Program: %d : %s", newProg, progName);
-	}
-}
-
 static void fst_event_dispatcher() {
 	FST* fst;
 	for (fst = fst_first; fst; fst = fst->next) {
-		if (fst->wantIdle)
-			fst->plugin->dispatcher (fst->plugin, effIdle, 0, 0, NULL, 0);  
+		fst_plugin_idle ( fst );
 
-		if (fst->window)
-			fst->plugin->dispatcher (fst->plugin, effEditIdle, 0, 0, NULL, 0);
-
-		fst_update_current_program(fst);
+		fst_update_current_program ( fst );
 
 		fst_event_handler(fst);
 	}

@@ -143,10 +143,13 @@ void jvst_process( JackVST* jvst, jack_nframes_t nframes ) {
 	int32_t i;
 	FST* fst = jvst->fst;
 
-	// ******************* Process MIDI Input ************************************
+	// Skip processing if we are during SetProgram
+	if ( ! fst_process_trylock ( fst ) ) return;
 
 	// Do not process anything if MIDI IN port is not connected
 	if ( ! jack_port_connected ( jvst->midi_inport ) ) goto no_midi_in;
+
+	// ******************* Process MIDI Input ************************************
 
 	// NOTE: we process MIDI even in bypass mode for want_state handling and our SysEx
 	void *port_buffer = jack_port_get_buffer( jvst->midi_inport, nframes );
@@ -236,4 +239,6 @@ midi_out:
 	// Process MIDI Output
 	process_midi_output(jvst, nframes);
 	process_ctrl_output(jvst, nframes);
+
+	fst_process_unlock ( fst );
 }

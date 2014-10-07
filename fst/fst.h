@@ -99,6 +99,7 @@ typedef struct _FST {
 
 	char*			name;
 	pthread_mutex_t		lock;
+	pthread_mutex_t		process_lock;
 	bool			wantIdle;
 	int			MainThreadId;
 
@@ -114,7 +115,6 @@ typedef struct _FST {
 	void*			window_close_user_ptr;
 
 	int32_t			current_program;
-	bool			program_changed;
 
 	/* Info */
 	int			vst_version;
@@ -181,6 +181,10 @@ static inline float fst_get_param ( FST* fst, int32_t param ) {
 static inline void fst_set_param ( FST* fst, int32_t param, float value ) {
 	fst->plugin->setParameter( fst->plugin, param, value );
 }
+
+static inline bool fst_process_trylock ( FST* fst ) { return ( pthread_mutex_trylock ( &(fst->process_lock) ) == 0 ); }
+static inline void fst_process_lock ( FST* fst ) { pthread_mutex_lock ( &(fst->process_lock) ); }
+static inline void fst_process_unlock ( FST* fst ) { pthread_mutex_unlock ( &(fst->process_lock) ); }
 
 static inline int32_t	fst_num_params	( FST* fst ) { return fst->plugin->numParams; }
 static inline int32_t	fst_num_presets	( FST* fst ) { return fst->plugin->numPrograms; }
