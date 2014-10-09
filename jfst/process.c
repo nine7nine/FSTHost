@@ -143,7 +143,7 @@ void jvst_process( JackVST* jvst, jack_nframes_t nframes ) {
 	int32_t i;
 	FST* fst = jvst->fst;
 
-	// Skip processing if we are during SetProgram
+	// Skip processing if we are during SetProgram, Suspend, Resume
 	if ( ! fst_process_trylock ( fst ) ) return;
 
 	// Do not process anything if MIDI IN port is not connected
@@ -190,13 +190,8 @@ no_midi_in: ;
 	memset ( swap, 0, jvst->buffer_size * sizeof(float) );
 
 	// Get addresses of input buffers
-	for (i = 0; i < fst_num_ins(fst); ++i) {
-		if ( i < jvst->numIns ) { 
-			ins[i] = (float*) jack_port_get_buffer (jvst->inports[i], nframes);
-		} else {
-			ins[i] = swap;
-		}
-	}
+	for (i = 0; i < fst_num_ins(fst); ++i)
+		ins[i] = ( i < jvst->numIns ) ? (float*) jack_port_get_buffer(jvst->inports[i],nframes) : swap;
 
 	// Initialize output buffers
 	for (i = 0; i < fst_num_outs(fst); ++i) {
