@@ -27,7 +27,7 @@
 #include "jfst/jfst.h"
 #include "xmldb/info.h"
 
-#define VERSION "1.5.5"
+#define VERSION "1.5.5.1"
 #ifdef __x86_64__
 #define ARCH "64"
 #else
