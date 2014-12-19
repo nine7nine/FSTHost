@@ -326,7 +326,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 750, (GSourceFunc) idle, jvst, NULL);
 
 	// Autoconnect AUDIO on start
-	if (connect_to) jvst_connect_audio(jvst, connect_to);
+	jvst_connect_audio(jvst, connect_to);
 
 	// Autoconnect MIDI on start
 	if (want_midi_physical) jvst_connect_midi_to_physical(jvst);

@@ -83,8 +83,16 @@ static bool jack_connect_wrap ( jack_client_t* client , const char* source_port,
 }
 
 void jvst_connect_audio(JackVST *jvst, const char *audio_to) {
+	unsigned long flags = JackPortIsInput;
+
+	// NULL mean connect to first physical
+	if ( ! audio_to ) {
+		audio_to = "";
+		flags |= JackPortIsPhysical;
+	}
+
 	// Connect audio port
-	const char **jports = jack_get_ports(jvst->client, audio_to, JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput);
+	const char **jports = jack_get_ports(jvst->client, audio_to, JACK_DEFAULT_AUDIO_TYPE, flags);
 	if (!jports) {
 		printf("Can't find any ports for %s\n", audio_to);
 		return;
