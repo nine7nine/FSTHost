@@ -28,8 +28,8 @@ Pawel Piatek <xj@wp.pl>
 
 =cut
 
-use strict;
-use warnings;
+use v5.14;
+#use warnings;
 #use Data::Dumper;
 use XML::LibXML;
 
@@ -55,7 +55,7 @@ BEGIN {
 			$Gtk = $pkg;
 		};
 	}
-	die "Can't find modules Gtk[23]" unless ( $Gtk );
+	die 'Can\'t find modules Gtk[23]' unless ( $Gtk );
 }
 
 use constant {
@@ -67,7 +67,6 @@ use constant {
 our $FSTHOST_GUI = GUI_NORMAL; # default
 our %FSTHOST_OPTIONS = (
 	'p' => '',
-	'j' => '""'
 );
 our $filename = $ENV{'HOME'} . '/.fsthost.xml';
 
@@ -80,10 +79,15 @@ sub get_cmd_from_tv {
 	my $arch = $model->get ($iter, 1);
 	my $path = $model->get ($iter, 2);
 
-	my $opts;
-	( $opts .= " -$_ $FSTHOST_OPTIONS{$_}" ) for ( keys %FSTHOST_OPTIONS );
-
-	return "env FSTHOST_GUI=$FSTHOST_GUI fsthost$arch $opts \"$path\" >/dev/null 2>&1 &";
+	my @opts = map { '-'.$_.' '.$FSTHOST_OPTIONS{$_} } keys %FSTHOST_OPTIONS;
+	my @tcmd = (
+		'env FSTHOST_GUI='.$FSTHOST_GUI,
+		'fsthost' . $arch,
+		@opts,
+		"\"$path\"",
+		'>/dev/null 2>&1 &'
+	);
+	return join ( ' ', @tcmd );
 }
 
 sub start_fsthost { 
@@ -91,10 +95,10 @@ sub start_fsthost {
 
 	my $cmd = get_cmd_from_tv ($tv);
 	if ( not $cmd ) {
-		print "Empty cmd ?\n";
+		say 'Empty cmd ?';
 		return;
 	}
-	print "spawn: $cmd\n";
+	say 'spawn: ', $cmd;
 	system ( $cmd );
 }
 
@@ -123,9 +127,9 @@ sub ctp_button_toggle {
 sub connect_button_toggle {
 	my ( $b, $data ) = @_;
 	if ( $b->get_active() ) {
-		$FSTHOST_OPTIONS{'j'} = '""';
-	} else {
 		delete $FSTHOST_OPTIONS{'j'};
+	} else {
+		$FSTHOST_OPTIONS{'j'} = '!';
 	}
 	tv_selection_changed ( $data->{'tv'}, $data->{'label'} );
 }
@@ -133,30 +137,28 @@ sub connect_button_toggle {
 sub read_xml_db {
 	my $fst = shift;
 
-	my $parser = new XML::LibXML ();
+	my $parser = XML::LibXML->new();
 	my $doc    = $parser->parse_file($filename);
 	my $root = $doc->documentElement();
 	my @nodes = $root->getChildrenByTagName('fst');
-	foreach my $N (@nodes) {
+	foreach my $N ( @nodes ) {
 		my $F = $N->getAttribute('file');
 		$fst->{$F}->{'path'} = $N->getAttribute('path');
 		$fst->{$F}->{'arch'} = $N->getAttribute('arch');
 
-		foreach my $FN ($N->childNodes()) {
-			next unless ($FN->nodeType == XML_ELEMENT_NODE);
-			$fst->{$F}->{$FN->nodeName} = $FN->textContent();
-		}
+		my @childs = grep { $_->nodeType == XML_ELEMENT_NODE } $N->childNodes();
+		map { $fst->{$F}->{$_->nodeName} = $_->textContent() } @childs;
 	}
 }
-sub close_main_window { our $window; $window->destroy(); $window = undef; }
-sub gtk_vbox { return ($Gtk eq 'Gtk3') ? new Gtk3::Box ('vertical', 0) : new Gtk2::VBox (); }
+sub close_main_window { my $w=shift; $w->destroy(); our $window = undef; }
+sub gtk_vbox { return ($Gtk eq 'Gtk3') ? Gtk3::Box->new('vertical', 0) : Gtk2::VBox->new(); }
 sub show_it {
 	my $fst = shift;
 	our $window;
 
 	# Main Window
 	$window = ($Gtk.'::Window')->new( 'toplevel' );
-	$window->signal_connect('delete_event' => \&close_main_window );
+	$window->signal_connect( delete_event => \&close_main_window );
 	$window->set_icon_name ( 'fsthost' );
 	$window->set_title ( 'FSTHost Menu (' . $Gtk . ')' );
 	$window->set_border_width(5);
@@ -299,13 +301,12 @@ $menu->show_all();
 # Tray (status) icon
 my $tray_icon = ( $Gtk.'::StatusIcon' )->new_from_icon_name ( 'fsthost' );
 $tray_icon->set_tooltip_text ( 'FSTHost Menu' );
+$tray_icon->set_title ( 'FSTHost Menu' );
+$tray_icon->set_name ( 'FSTHost Menu' );
 $tray_icon->signal_connect( 'activate', \&tray_icon_activate, \%fst );
 $tray_icon->signal_connect( 'popup-menu', \&tray_icon_menu, $menu );
 $tray_icon->set_visible(1);
 
-unless ( $ARGV[0] && $ARGV[0] eq 'hide' ) {
-	show_it ( \%fst );
-}
+show_it ( \%fst ) unless ( $ARGV[0] && $ARGV[0] eq 'hide' );
 
 $Gtk->main();
-
