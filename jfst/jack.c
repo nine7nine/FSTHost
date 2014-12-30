@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <sys/mman.h>
 #include <math.h>
+#include <string.h>
 
 #include "jfst.h"
 
@@ -85,8 +86,9 @@ static bool jack_connect_wrap ( jack_client_t* client , const char* source_port,
 void jvst_connect_audio(JackVST *jvst, const char *audio_to) {
 	unsigned long flags = JackPortIsInput;
 
-	// NULL mean connect to first physical
-	if ( ! audio_to ) {
+	if ( audio_to ) { // ! mean don't connect
+		if ( !strcmp(audio_to,"!") ) return;
+	} else { // NULL mean connect to first physical
 		audio_to = "";
 		flags |= JackPortIsPhysical;
 	}

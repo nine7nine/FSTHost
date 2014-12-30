@@ -17,8 +17,6 @@
 
 */
 
-#include <math.h>
-
 #include "amc.h"
 
 /* The following audioMaster opcode handlings are copied

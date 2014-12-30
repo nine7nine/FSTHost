@@ -1,3 +1,4 @@
+#include <math.h>
 #include "jfst.h"
 
 /* sysex.c */
@@ -217,7 +218,7 @@ no_midi_in: ;
 	// Deal with plugin
 	fst_process( fst, ins, outs, nframes );
 
-#ifndef NO_VUMETER
+#ifdef VUMETER
 	/* Compute output level for VU Meter */
 	float avg_level = 0;
 	jack_nframes_t n;
