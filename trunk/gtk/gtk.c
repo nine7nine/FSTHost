@@ -67,7 +67,7 @@ struct RemoveFilterData {
 	GtkWidget* hpacker;
 };
 
-#ifndef NO_VUMETER
+#ifdef VUMETER
 static	GtkWidget* vumeter;
 static	guint vumeter_level = 0;
 #define VUMETER_SIZE 50
@@ -722,7 +722,7 @@ idle_cb(JackVST *jvst) {
 		g_signal_handler_unblock(volume_slider, volume_signal);
 	}
 
-#ifndef NO_VUMETER
+#ifdef VUMETER
 	// VU Meter
 	vumeter_level = jvst->out_level;
 	gtk_widget_queue_draw ( vumeter );
@@ -857,7 +857,7 @@ bool gtk_gui_start (JackVST* jvst) {
 	gtk_box_pack_start(GTK_BOX(hpacker), cpu_usage, FALSE, FALSE, 0);
 	gtk_widget_set_tooltip_text(cpu_usage, "CPU Usage");
 	//----------------------------------------------------------------------------------
-#ifndef NO_VUMETER
+#ifdef VUMETER
 	vumeter = gtk_drawing_area_new();
 	gtk_widget_set_size_request(vumeter, VUMETER_SIZE, 20);
 	g_signal_connect(G_OBJECT(vumeter), "draw", G_CALLBACK(vumeter_draw_handler), NULL);

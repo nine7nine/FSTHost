@@ -148,10 +148,10 @@ static void usage(char* appname) {
 	fprintf(stderr, format, "-A", "Set plugin port names as aliases");
 	fprintf(stderr, format, "-k channel", "MIDI Channel (0: all, 17: none)");
 	fprintf(stderr, format, "-i num_in", "Jack number In ports");
-	fprintf(stderr, format, "-j <connect_to>", "Connect Audio Out to <connect_to>");
+	fprintf(stderr, format, "-j <connect_to>", "Connect Audio Out to <connect_to>. ! for no connect");
 	fprintf(stderr, format, "-l", "save state to state_file on SIGUSR1 (require -s)");
 	fprintf(stderr, format, "-m mode_midi_cc", "Bypass/Resume MIDI CC (default: 122)");
-	fprintf(stderr, format, "-p", "Connect MIDI In port to all physical");
+	fprintf(stderr, format, "-p", "Disable connecting MIDI In port to all physical");
 	fprintf(stderr, format, "-P", "Self MIDI Program Change handling");
 	fprintf(stderr, format, "-o num_out", "Jack number Out ports");
 	fprintf(stderr, format, "-T", "Separate threads");
@@ -207,7 +207,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	bool		opt_generate_dbinfo = false;
 	bool		opt_list_plugins = false;
 	bool		sigusr1_save_state = false;
-	bool		want_midi_physical = false;
+	bool		want_midi_physical = true;
 	bool		separate_threads = false;
 	bool		serv = false;
 	const char*	connect_to = NULL;
@@ -244,7 +244,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 			case 'i': opt_maxIns = strtol(optarg, NULL, 10); break;
 			case 'j': connect_to = optarg; break;
 			case 'l': sigusr1_save_state = true; break;
-			case 'p': want_midi_physical = true; break;
+			case 'p': want_midi_physical = false; break;
 			case 'P': jvst->midi_pc = MIDI_PC_SELF; break; /* used but not enabled */
 			case 'o': opt_maxOuts = strtol(optarg, NULL, 10); break;
 			case 'n': jvst->with_editor = WITH_EDITOR_NO; break;

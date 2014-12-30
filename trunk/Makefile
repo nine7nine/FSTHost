@@ -12,12 +12,10 @@ LASH_EXISTS        := $(shell if pkg-config --exists lash-1.0; then echo yes; el
 PKG_CONFIG_MODULES := glib-2.0
 PKG_CONFIG_MODULES += jack
 PKG_CONFIG_MODULES += libxml-2.0
+PKG_CONFIG_MODULES += gtk+-$(GTK).0
 
 ifeq ($(GTK),2)
-PKG_CONFIG_MODULES += gtk+-2.0
 override VUMETER = 0
-else ifeq ($(GTK),3)
-PKG_CONFIG_MODULES += gtk+-3.0
 endif
 
 ifeq ($(LASH_EXISTS),yes)
@@ -28,8 +26,8 @@ endif
 CEXTRA             := $(shell pkg-config --cflags $(PKG_CONFIG_MODULES))
 CEXTRA             += -g -O2 -Wall -Wno-deprecated-declarations -Wno-multichar -frounding-math -fsignaling-nans -mfpmath=sse -msse2
 
-ifeq ($(VUMETER),0)
-CEXTRA             += -DNO_VUMETER
+ifeq ($(VUMETER),1)
+CEXTRA             += -DVUMETER
 endif
 
 ifeq ($(LASH_EXISTS),yes)
