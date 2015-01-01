@@ -36,6 +36,8 @@
 #define APPNAME "fsthost"
 #define APPNAME_ARCH APPNAME ARCH
 
+#define STR_NO_CONNECT "!"
+
 /* jvstproto.c */
 bool jvst_proto_init ( JackVST* jvst );
 bool jvst_proto_close ( JackVST* jvst );
@@ -148,7 +150,7 @@ static void usage(char* appname) {
 	fprintf(stderr, format, "-A", "Set plugin port names as aliases");
 	fprintf(stderr, format, "-k channel", "MIDI Channel (0: all, 17: none)");
 	fprintf(stderr, format, "-i num_in", "Jack number In ports");
-	fprintf(stderr, format, "-j <connect_to>", "Connect Audio Out to <connect_to>. ! for no connect");
+	fprintf(stderr, format, "-j <connect_to>", "Connect Audio Out to <connect_to>. " STR_NO_CONNECT " for no connect");
 	fprintf(stderr, format, "-l", "save state to state_file on SIGUSR1 (require -s)");
 	fprintf(stderr, format, "-m mode_midi_cc", "Bypass/Resume MIDI CC (default: 122)");
 	fprintf(stderr, format, "-p", "Disable connecting MIDI In port to all physical");
@@ -207,7 +209,6 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	bool		opt_generate_dbinfo = false;
 	bool		opt_list_plugins = false;
 	bool		sigusr1_save_state = false;
-	bool		want_midi_physical = true;
 	bool		separate_threads = false;
 	bool		serv = false;
 	const char*	connect_to = NULL;
@@ -244,7 +245,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 			case 'i': opt_maxIns = strtol(optarg, NULL, 10); break;
 			case 'j': connect_to = optarg; break;
 			case 'l': sigusr1_save_state = true; break;
-			case 'p': want_midi_physical = false; break;
+			case 'p': jvst->want_auto_midi_physical = false; break;
 			case 'P': jvst->midi_pc = MIDI_PC_SELF; break; /* used but not enabled */
 			case 'o': opt_maxOuts = strtol(optarg, NULL, 10); break;
 			case 'n': jvst->with_editor = WITH_EDITOR_NO; break;
@@ -256,6 +257,12 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 			case 'V': jvst->volume = -1; break;
 			default: usage (argv[0]); return 1;
 		}
+	}
+
+	/* Under Jack Session Manager Control "-p -j !" is forced */
+	if ( getenv("SESSION_DIR") ) {
+		jvst->want_auto_midi_physical = false;
+		connect_to = STR_NO_CONNECT;
 	}
 
 	/* If use want to list plugins then abandon other tasks */
@@ -327,9 +334,6 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 
 	// Autoconnect AUDIO on start
 	jvst_connect_audio(jvst, connect_to);
-
-	// Autoconnect MIDI on start
-	if (want_midi_physical) jvst_connect_midi_to_physical(jvst);
 
 	// Add FST event callback to Gblib main loop
 	if ( ! separate_threads )

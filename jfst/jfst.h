@@ -79,6 +79,7 @@ typedef struct _JackVST {
     jack_port_t**   outports;
     bool            bypassed;
     bool            want_port_aliases;
+    bool            want_auto_midi_physical;
     short           want_state_cc;
     enum WithEditor with_editor;
     float           volume; /* where 0.0 mean silence */
