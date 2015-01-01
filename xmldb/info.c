@@ -14,15 +14,15 @@
 #endif
 
 extern xmlDoc* fst_info_read_xmldb ( const char* dbpath );
-static bool need_save = FALSE;
+static bool need_save = false;
 
-static xmlChar *
+static inline xmlChar *
 int2str(xmlChar *str, int buf_len, int integer) {
    xmlStrPrintf(str, buf_len, BAD_CAST "%d", integer);
    return str;
 }
 
-static xmlChar *
+static inline xmlChar *
 bool2str(xmlChar *str, int buf_len, bool boolean) {
    xmlStrPrintf(str, buf_len, BAD_CAST ( (boolean) ? "TRUE" : "FALSE" ));
    return str;
@@ -31,7 +31,7 @@ bool2str(xmlChar *str, int buf_len, bool boolean) {
 static bool
 fst_exists(char *path, xmlNode *xml_rn) {
 	char fullpath[PATH_MAX];
-	if (! realpath(path,fullpath)) return 10;
+	if (! realpath(path,fullpath)) return false;
 
 	xmlNode* fst_node;
 	for (fst_node = xml_rn->children; fst_node; fst_node = fst_node->next) {
@@ -39,11 +39,11 @@ fst_exists(char *path, xmlNode *xml_rn) {
 
 		if (! xmlStrcmp(xmlGetProp(fst_node, BAD_CAST "path"), BAD_CAST fullpath)) {
 			printf("%s already exists\n", path);
-			return TRUE;
+			return true;
 		}
 	}
 
-	return FALSE;
+	return false;
 }
 
 static void fst_add2db(FST* fst, xmlNode *xml_rn) {
@@ -69,7 +69,7 @@ static void fst_add2db(FST* fst, xmlNode *xml_rn) {
 	xmlNewChild(fst_node, NULL,BAD_CAST "numOutputs", int2str(tmpstr,sizeof tmpstr,fst->plugin->numOutputs));
 	xmlNewChild(fst_node, NULL,BAD_CAST "numParams", int2str(tmpstr,sizeof tmpstr,fst->plugin->numParams));
 	xmlNewChild(fst_node, NULL,BAD_CAST "hasEditor", 
-		bool2str(tmpstr,sizeof tmpstr, fst->plugin->flags & effFlagsHasEditor ? TRUE : FALSE));
+		bool2str(tmpstr,sizeof tmpstr, fst->plugin->flags & effFlagsHasEditor ? true : false));
 
 	/* TODO: Category need some changes in vestige (additional enum)
 	if( (info->Category = read_string( fp )) == NULL ) goto error;
@@ -87,7 +87,7 @@ static void fst_get_info(char* path, xmlNode *xml_rn) {
 
 	fst_close(fst);
 
-	need_save = TRUE;
+	need_save = true;
 }
 
 static void scandirectory( const char *dir, xmlNode *xml_rn ) {
@@ -221,7 +221,7 @@ int fst_info_update(const char *dbpath, const char *fst_path) {
 			return 8;
 		}
 
-		xmlDocFormatDump(f, xml_db, TRUE);
+		xmlDocFormatDump(f, xml_db, true);
 		fclose(f);
 	}
 
