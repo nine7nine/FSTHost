@@ -84,9 +84,9 @@ fps_check_this(FST *fst, char *field, char *value) {
 }
 
 static int
-fps_process_node(JackVST* jvst, xmlNode *a_node) {
+fps_process_node(JFST* jfst, xmlNode *a_node) {
     xmlNode *cur_node;
-    FST* fst = jvst->fst;
+    FST* fst = jfst->fst;
 
     for (cur_node = a_node; cur_node; cur_node = cur_node->next) {
        if (cur_node->type != XML_ELEMENT_NODE) continue;
@@ -108,7 +108,7 @@ fps_process_node(JackVST* jvst, xmlNode *a_node) {
           if ( cc < 0 || cc >= 128 || index < 0 || index >= fst_num_params(fst) )
              continue;
 
-          jvst->midi_learn.map[cc] = index;
+          jfst->midi_learn.map[cc] = index;
        // Param
        } else if (xmlStrcmp(cur_node->name, BAD_CAST "param") == 0) {
           if ( fst_has_chunks(fst) ) {
@@ -125,14 +125,14 @@ fps_process_node(JackVST* jvst, xmlNode *a_node) {
        // MIDI Channel
        } else if (xmlStrcmp(cur_node->name, BAD_CAST "channel") == 0) {
 	  int channel = strtol((const char*) xmlGetProp(cur_node, BAD_CAST "number"), NULL, 10);
-          midi_filter_one_channel_set( &jvst->channel, channel );
+          midi_filter_one_channel_set( &jfst->channel, channel );
        // MIDI Transposition
        } else if (xmlStrcmp(cur_node->name, BAD_CAST "transposition") == 0) {
 	  int value = strtol((const char*) xmlGetProp(cur_node, BAD_CAST "value"), NULL, 10);
-          midi_filter_transposition_set( jvst->transposition, value );
+          midi_filter_transposition_set( jfst->transposition, value );
        // MIDI Filter
        } else if (xmlStrcmp(cur_node->name, BAD_CAST "filter") == 0 &&
-                  midi_filter_one_channel_get(&jvst->channel) < 1)
+                  midi_filter_one_channel_get(&jfst->channel) < 1)
        {
          const char* prop = NULL;
          MIDIFILTER mf = {0};
@@ -156,28 +156,28 @@ fps_process_node(JackVST* jvst, xmlNode *a_node) {
          prop = (const char*) xmlGetProp(cur_node, BAD_CAST "rvalue");
 	 mf.rvalue = (prop) ? strtol(prop, NULL, 10) : 0;
 
-         midi_filter_add( &jvst->filters, &mf );
+         midi_filter_add( &jfst->filters, &mf );
        // MIDI Program Change handling type
        } else if (xmlStrcmp(cur_node->name, BAD_CAST "midi_pc") == 0) {
           if ( xmlStrcmp(xmlGetProp(cur_node, BAD_CAST "type"), BAD_CAST "plugin") == 0 ) {
-              jvst->midi_pc = MIDI_PC_PLUG;
+              jfst->midi_pc = MIDI_PC_PLUG;
           } else if ( xmlStrcmp(xmlGetProp(cur_node, BAD_CAST "type"), BAD_CAST "self") == 0 ) {
-              jvst->midi_pc = MIDI_PC_SELF;
+              jfst->midi_pc = MIDI_PC_SELF;
           } else {
               printf("FPS: midi_pc : wrong value - allowed: \"plugin\" or \"self\"\n");
           }
        // Volume
        } else if (xmlStrcmp(cur_node->name, BAD_CAST "volume") == 0) {
-          jvst_set_volume(jvst, strtol((const char*) xmlGetProp(cur_node, BAD_CAST "level"), NULL, 10));
+          jfst_set_volume(jfst, strtol((const char*) xmlGetProp(cur_node, BAD_CAST "level"), NULL, 10));
        // Bypass/Resume MIDI CC
        } else if (xmlStrcmp(cur_node->name, BAD_CAST "mode") == 0) {
 	  short cc = (short) strtol((const char*) xmlGetProp(cur_node, BAD_CAST "cc"), NULL, 10);
           if (cc >= 0 && cc <= 127)
-             jvst->want_state_cc = cc;
+             jfst->want_state_cc = cc;
        // SysExDump UUID
        } else if (xmlStrcmp(cur_node->name, BAD_CAST "sysex") == 0) {
 	  uint8_t uuid = (uint8_t) strtol((const char*) xmlGetProp(cur_node, BAD_CAST "uuid"), NULL, 10);
-          jvst_sysex_set_uuid(jvst, uuid);
+          jfst_sysex_set_uuid(jfst, uuid);
        // Current Program
        } else if (xmlStrcmp(cur_node->name, BAD_CAST "program") == 0) {
           short currentProgram = strtol((const char*) xmlGetProp(cur_node, BAD_CAST "number"), NULL, 10);
@@ -210,7 +210,7 @@ fps_process_node(JackVST* jvst, xmlNode *a_node) {
 
           g_free(chunk_data);
        } else {
-          if (! fps_process_node(jvst, cur_node->children))
+          if (! fps_process_node(jfst, cur_node->children))
 		return FALSE;
        }
     }
@@ -218,7 +218,7 @@ fps_process_node(JackVST* jvst, xmlNode *a_node) {
     return TRUE;
 }
 
-bool fps_load(JackVST* jvst, const char* filename) {
+bool fps_load(JFST* jfst, const char* filename) {
    printf("Try load plugin state file: %s\n", filename);
 
    xmlDoc* doc = xmlReadFile(filename, NULL, 0);
@@ -230,15 +230,15 @@ bool fps_load(JackVST* jvst, const char* filename) {
    xmlNode* plugin_state_node = xmlDocGetRootElement(doc);
 
    /* If plugin is not already loaded  - try load it now */
-   if (! jvst->fst) {
+   if (! jfst->fst) {
        char* plug_path = fps_get_plugin_file( plugin_state_node );
-       if (! jvst_load( jvst, plug_path, false, false ) ) return false;
+       if (! jfst_load( jfst, plug_path, false, false ) ) return false;
    }
 
    /* Cleanup midi filters */
-   midi_filter_cleanup(&jvst->filters, false);
+   midi_filter_cleanup(&jfst->filters, false);
 
-   bool success = fps_process_node(jvst, plugin_state_node);
+   bool success = fps_process_node(jfst, plugin_state_node);
 
    xmlFreeDoc(doc);
 
@@ -246,7 +246,7 @@ bool fps_load(JackVST* jvst, const char* filename) {
 }
 
 // SAVE --------------
-bool fps_save (JackVST* jvst, const char* filename) {
+bool fps_save (JFST* jfst, const char* filename) {
    unsigned int cc;
    xmlChar tString[64];
    xmlNode *cur_node;
@@ -257,7 +257,7 @@ bool fps_save (JackVST* jvst, const char* filename) {
       return FALSE;
    }
 
-   FST* fst = jvst->fst;
+   FST* fst = jfst->fst;
    xmlDoc  *doc = xmlNewDoc(BAD_CAST "1.0");
    xmlNode *plugin_state_node = xmlNewDocRawNode(doc, NULL, BAD_CAST "plugin_state", NULL);
    xmlDocSetRootElement(doc, plugin_state_node);
@@ -273,7 +273,7 @@ bool fps_save (JackVST* jvst, const char* filename) {
 
    // MIDI Map
    for (cc = 0; cc < 128; cc++ ) {
-      int32_t paramIndex = jvst->midi_learn.map[cc];
+      int32_t paramIndex = jfst->midi_learn.map[cc];
       if ( paramIndex < 0 || paramIndex >= fst_num_params(fst) ) continue;
 
       fst_call_dispatcher( fst, effGetParamName, paramIndex, 0, tString, 0 );
@@ -286,15 +286,15 @@ bool fps_save (JackVST* jvst, const char* filename) {
 
    // MIDI Channel
    cur_node = xmlNewChild(plugin_state_node, NULL, BAD_CAST "channel", NULL);
-   xmlNewProp(cur_node, BAD_CAST "number", int2str(tString, sizeof tString, midi_filter_one_channel_get(&jvst->channel)));
+   xmlNewProp(cur_node, BAD_CAST "number", int2str(tString, sizeof tString, midi_filter_one_channel_get(&jfst->channel)));
 
    // MIDI Transposition
    cur_node = xmlNewChild(plugin_state_node, NULL, BAD_CAST "transposition", NULL);
-   xmlNewProp(cur_node, BAD_CAST "value", int2str(tString, sizeof tString, midi_filter_transposition_get(jvst->transposition)));
+   xmlNewProp(cur_node, BAD_CAST "value", int2str(tString, sizeof tString, midi_filter_transposition_get(jfst->transposition)));
 
    // MIDI Filter
    MIDIFILTER *mf;
-   for (mf = jvst->filters; mf; mf = mf->next) {
+   for (mf = jfst->filters; mf; mf = mf->next) {
       if (mf->built_in) continue; /* Skip built-in filters */
 
       cur_node = xmlNewChild(plugin_state_node, NULL, BAD_CAST "filter", NULL);
@@ -313,30 +313,30 @@ bool fps_save (JackVST* jvst, const char* filename) {
 
    // MIDI Program Change handling type
    cur_node = xmlNewChild(plugin_state_node, NULL, BAD_CAST "midi_pc", NULL);
-   xmlStrPrintf(tString, sizeof tString, BAD_CAST ((jvst->midi_pc == MIDI_PC_SELF) ? "self" : "plugin"));
+   xmlStrPrintf(tString, sizeof tString, BAD_CAST ((jfst->midi_pc == MIDI_PC_SELF) ? "self" : "plugin"));
    xmlNewProp(cur_node, BAD_CAST "type", tString);
 
    // Volume
-   if (jvst->volume != -1) {
-      int level = jvst_get_volume(jvst);
+   if (jfst->volume != -1) {
+      int level = jfst_get_volume(jfst);
       cur_node = xmlNewChild(plugin_state_node, NULL, BAD_CAST "volume", NULL);
       xmlNewProp(cur_node, BAD_CAST "level", int2str(tString, sizeof tString, level));
    }
 
    // Bypass/Resume MIDI CC
-   if (jvst->want_state_cc >= 0 && jvst->want_state_cc <= 127) {
+   if (jfst->want_state_cc >= 0 && jfst->want_state_cc <= 127) {
       cur_node = xmlNewChild(plugin_state_node, NULL, BAD_CAST "mode", NULL);
-      int cc = (int) jvst->want_state_cc;
+      int cc = (int) jfst->want_state_cc;
       xmlNewProp(cur_node, BAD_CAST "cc", int2str(tString, sizeof tString, cc));
    }
 
    // SysExDump UUID
    cur_node = xmlNewChild(plugin_state_node, NULL, BAD_CAST "sysex", NULL);
-   xmlNewProp(cur_node, BAD_CAST "uuid", int2str(tString, sizeof tString, jvst->sysex_dump.uuid));
+   xmlNewProp(cur_node, BAD_CAST "uuid", int2str(tString, sizeof tString, jfst->sysex_dump.uuid));
 
    // Current Program
    cur_node = xmlNewChild(plugin_state_node, NULL, BAD_CAST "program", NULL);
-   xmlNewProp(cur_node, BAD_CAST "number", int2str(tString, sizeof tString, (int) jvst->fst->current_program));
+   xmlNewProp(cur_node, BAD_CAST "number", int2str(tString, sizeof tString, (int) jfst->fst->current_program));
 
    // Chunk
    if ( fst_has_chunks(fst) ) {

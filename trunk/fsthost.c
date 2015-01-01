@@ -38,30 +38,30 @@
 
 #define STR_NO_CONNECT "!"
 
-/* jvstproto.c */
-bool jvst_proto_init ( JackVST* jvst );
-bool jvst_proto_close ( JackVST* jvst );
+/* jfstproto.c */
+bool jfst_proto_init ( JFST* jfst );
+bool jfst_proto_close ( JFST* jfst );
 
 /* gtk.c */
 #ifndef NO_GTK
 extern void gtk_gui_init (int* argc, char** argv[]);
-extern int gtk_gui_start (JackVST * jvst);
+extern int gtk_gui_start (JFST * jfst);
 extern void gtk_gui_quit();
 #endif
 
 /* lash.c */
 #ifdef HAVE_LASH
-extern void jvst_lash_init(JackVST *jvst, int* argc, char** argv[]);
+extern void jfst_lash_init(JFST *jfst, int* argc, char** argv[]);
 #endif
 
 GMainLoop* glib_main_loop;
-volatile JackVST *jvst_first = NULL;
+volatile JFST *jfst_first = NULL;
 
-void jvst_quit(JackVST* jvst) {
+void jfst_quit(JFST* jfst) {
 #ifdef NO_GTK
 	g_main_loop_quit(glib_main_loop);
 #else
-	if (jvst->with_editor == WITH_EDITOR_NO) {
+	if (jfst->with_editor == WITH_EDITOR_NO) {
 		g_main_loop_quit(glib_main_loop);
 	} else {
 		gtk_gui_quit();
@@ -70,27 +70,27 @@ void jvst_quit(JackVST* jvst) {
 }
 
 static void signal_handler (int signum) {
-	JackVST *jvst = (JackVST*) jvst_first;
+	JFST *jfst = (JFST*) jfst_first;
 
 	switch(signum) {
 	case SIGINT:
 		puts("Caught signal to terminate (SIGINT)");
-		g_idle_add( (GSourceFunc) jvst_quit, jvst);
+		g_idle_add( (GSourceFunc) jfst_quit, jfst);
 		break;
 	case SIGUSR1:
 		puts("Caught signal to save state (SIGUSR1)");
-		jvst_save_state(jvst, jvst->default_state_file);
+		jfst_save_state(jfst, jfst->default_state_file);
 		break;
 	case SIGUSR2:
 		puts("Caught signal to open editor (SIGUSR2)");
-		g_idle_add( (GSourceFunc) fst_run_editor, jvst->fst);
+		g_idle_add( (GSourceFunc) fst_run_editor, jfst->fst);
 		break;
 	}
 }
 
-static bool idle ( JackVST* jvst ) {
-	if ( ! jvst_idle ( jvst, APPNAME_ARCH ) ) {
-		jvst_quit(jvst);
+static bool idle ( JFST* jfst ) {
+	if ( ! jfst_idle ( jfst, APPNAME_ARCH ) ) {
+		jfst_quit(jfst);
 		return FALSE;
 	}
 	return TRUE;
@@ -98,8 +98,8 @@ static bool idle ( JackVST* jvst ) {
 
 #ifdef NO_GTK
 static void edit_close_handler ( void* arg ) {
-	JackVST* jvst = (JackVST*) arg;
-	g_idle_add( (GSourceFunc) jvst_quit, jvst);
+	JFST* jfst = (JFST*) arg;
+	g_idle_add( (GSourceFunc) jfst_quit, jfst);
 }
 #endif
 
@@ -163,7 +163,7 @@ static void usage(char* appname) {
 }
 
 struct SepThread {
-	JackVST* jvst;
+	JFST* jfst;
 	const char* plug_spec;
 	sem_t sem;
 	bool loaded;
@@ -176,7 +176,7 @@ sep_thread ( LPVOID arg ) {
 
 	fst_set_thread_priority ( "SepThread", ABOVE_NORMAL_PRIORITY_CLASS, THREAD_PRIORITY_ABOVE_NORMAL );
 
-	bool loaded = st->loaded = jvst_load ( st->jvst, st->plug_spec, true, st->state_can_fail );
+	bool loaded = st->loaded = jfst_load ( st->jfst, st->plug_spec, true, st->state_can_fail );
 
 	sem_post( &st->sem );
 
@@ -185,10 +185,10 @@ sep_thread ( LPVOID arg ) {
 	return 0;
 }
 
-bool jvst_load_sep_th (JackVST* jvst, const char* plug_spec, bool want_state_and_amc, bool state_can_fail) {
+bool jfst_load_sep_th (JFST* jfst, const char* plug_spec, bool want_state_and_amc, bool state_can_fail) {
 
 	struct SepThread st;
-	st.jvst = jvst;
+	st.jfst = jfst;
 	st.plug_spec = plug_spec;
 	st.state_can_fail = state_can_fail;
 	sem_init( &st.sem, 0, 0 );
@@ -216,12 +216,12 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 
 	printf("FSTHost Version: %s (%s)\n", VERSION, ARCH "bit");
 
-	JackVST*	jvst = jvst_new();
-	jvst_first = jvst;
+	JFST*	jfst = jfst_new();
+	jfst_first = jfst;
 
 	// Handle FSTHOST_GUI environment
 	char* menv = getenv("FSTHOST_GUI");
-	if ( menv ) jvst->with_editor = strtol(menv, NULL, 10);
+	if ( menv ) jfst->with_editor = strtol(menv, NULL, 10);
 
 	// Handle FSTHOST_THREADS environment
 	menv = getenv("FSTHOST_THREADS");
@@ -232,48 +232,48 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	short c;
 	while ( (c = getopt (argc, argv, "Abd:egs:S:c:k:i:j:lLnNm:pPo:Tu:U:V")) != -1) {
 		switch (c) {
-			case 'A': jvst->want_port_aliases = true; break;
-			case 'b': jvst->bypassed = true; break;
-			case 'd': jvst->dbinfo_file = optarg; break;
-			case 'e': jvst->with_editor = WITH_EDITOR_HIDE; break;
+			case 'A': jfst->want_port_aliases = true; break;
+			case 'b': jfst->bypassed = true; break;
+			case 'd': jfst->dbinfo_file = optarg; break;
+			case 'e': jfst->with_editor = WITH_EDITOR_HIDE; break;
 			case 'g': opt_generate_dbinfo = true; break;
 			case 'L': opt_list_plugins = true; break;
-			case 's': jvst->default_state_file = optarg; break;
-			case 'S': serv=true; jvst->ctrl_port_number = strtol(optarg,NULL,10); break;
-			case 'c': jvst->client_name = optarg; break;
-			case 'k': midi_filter_one_channel_set(&jvst->channel, strtol(optarg, NULL, 10)); break;
+			case 's': jfst->default_state_file = optarg; break;
+			case 'S': serv=true; jfst->ctrl_port_number = strtol(optarg,NULL,10); break;
+			case 'c': jfst->client_name = optarg; break;
+			case 'k': midi_filter_one_channel_set(&jfst->channel, strtol(optarg, NULL, 10)); break;
 			case 'i': opt_maxIns = strtol(optarg, NULL, 10); break;
 			case 'j': connect_to = optarg; break;
 			case 'l': sigusr1_save_state = true; break;
-			case 'p': jvst->want_auto_midi_physical = false; break;
-			case 'P': jvst->midi_pc = MIDI_PC_SELF; break; /* used but not enabled */
+			case 'p': jfst->want_auto_midi_physical = false; break;
+			case 'P': jfst->midi_pc = MIDI_PC_SELF; break; /* used but not enabled */
 			case 'o': opt_maxOuts = strtol(optarg, NULL, 10); break;
-			case 'n': jvst->with_editor = WITH_EDITOR_NO; break;
-			case 'N': jvst->sysex_want_notify = true; break;
-			case 'm': jvst->want_state_cc = strtol(optarg, NULL, 10); break;
+			case 'n': jfst->with_editor = WITH_EDITOR_NO; break;
+			case 'N': jfst->sysex_want_notify = true; break;
+			case 'm': jfst->want_state_cc = strtol(optarg, NULL, 10); break;
 			case 'T': separate_threads = true;
-			case 'u': jvst->uuid = optarg; break;
-			case 'U': jvst_sysex_set_uuid( jvst, strtol(optarg, NULL, 10) ); break;
-			case 'V': jvst->volume = -1; break;
+			case 'u': jfst->uuid = optarg; break;
+			case 'U': jfst_sysex_set_uuid( jfst, strtol(optarg, NULL, 10) ); break;
+			case 'V': jfst->volume = -1; break;
 			default: usage (argv[0]); return 1;
 		}
 	}
 
 	/* Under Jack Session Manager Control "-p -j !" is forced */
 	if ( getenv("SESSION_DIR") ) {
-		jvst->want_auto_midi_physical = false;
+		jfst->want_auto_midi_physical = false;
 		connect_to = STR_NO_CONNECT;
 	}
 
 	/* If use want to list plugins then abandon other tasks */
-	if (opt_list_plugins) return fst_info_list ( jvst->dbinfo_file );
+	if (opt_list_plugins) return fst_info_list ( jfst->dbinfo_file );
 
 	/* We have more arguments than getops options */
 	if (optind < argc) custom_path = argv[optind];
 
 	/* If NULL then Generate using VST_PATH */
 	if (opt_generate_dbinfo) {
-		int ret = fst_info_update ( jvst->dbinfo_file, custom_path );
+		int ret = fst_info_update ( jfst->dbinfo_file, custom_path );
 		if (ret > 0) usage ( argv[0] );
 		return ret;
 	}
@@ -281,9 +281,9 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	/* Load plugin - in this thread or dedicated */
 	bool loaded;
 	if ( separate_threads ) {
-		loaded = jvst_load_sep_th ( jvst, custom_path, true, sigusr1_save_state );
+		loaded = jfst_load_sep_th ( jfst, custom_path, true, sigusr1_save_state );
 	} else {
-		loaded = jvst_load ( jvst, custom_path, true, sigusr1_save_state );
+		loaded = jfst_load ( jfst, custom_path, true, sigusr1_save_state );
 	}
 
 	/* Well .. Are we loaded plugin ? */
@@ -297,12 +297,12 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	fst_set_thread_priority ( "Main", ABOVE_NORMAL_PRIORITY_CLASS, THREAD_PRIORITY_ABOVE_NORMAL );
 
 	// Init Jack
-	if ( ! jvst_init ( jvst, opt_maxIns, opt_maxOuts ) )
+	if ( ! jfst_init ( jfst, opt_maxIns, opt_maxOuts ) )
 		return 1;
 
 	/* Socket stuff */
-	if ( serv && ! jvst_proto_init(jvst) ) {
-		jvst_close(jvst);
+	if ( serv && ! jfst_proto_init(jfst) ) {
+		jfst_close(jfst);
 		return 1;
 	}
 
@@ -315,25 +315,25 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	sigaction(SIGUSR2, &sa, NULL);// SIGUSR2 open editor
 
 	// SIGUSR1 for save state ( ladish support )
-	if (sigusr1_save_state && jvst->default_state_file)
+	if (sigusr1_save_state && jfst->default_state_file)
 		sigaction(SIGUSR1, &sa, NULL);
 
 #ifdef HAVE_LASH
-	jvst_lash_init(jvst, &argc, &argv);
+	jfst_lash_init(jfst, &argc, &argv);
 #endif
 
 	// Activate plugin
-	if (! jvst->bypassed) fst_call ( jvst->fst, RESUME );
+	if (! jfst->bypassed) fst_call ( jfst->fst, RESUME );
 
 	puts("Jack Activate");
-	jack_activate(jvst->client);
+	jack_activate(jfst->client);
 
 	// Init Glib main event loop
 	glib_main_loop = g_main_loop_new(NULL, FALSE);
-	g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 750, (GSourceFunc) idle, jvst, NULL);
+	g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 750, (GSourceFunc) idle, jfst, NULL);
 
 	// Autoconnect AUDIO on start
-	jvst_connect_audio(jvst, connect_to);
+	jfst_connect_audio(jfst, connect_to);
 
 	// Add FST event callback to Gblib main loop
 	if ( ! separate_threads )
@@ -341,20 +341,20 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 
 #ifdef NO_GTK
 	// Create GTK or GlibMain thread
-	if (jvst->with_editor != WITH_EDITOR_NO) {
+	if (jfst->with_editor != WITH_EDITOR_NO) {
 		puts("Run Editor");
-		fst_set_window_close_callback( jvst->fst, edit_close_handler, jvst );
-		fst_run_editor (jvst->fst, false);
+		fst_set_window_close_callback( jfst->fst, edit_close_handler, jfst );
+		fst_run_editor (jfst->fst, false);
 	} else {
 		puts("GUI Disabled - start GlibMainLoop");
 	}
 	g_main_loop_run ( glib_main_loop );
 #else
 	// Create GTK or GlibMain thread
-	if (jvst->with_editor != WITH_EDITOR_NO) {
+	if (jfst->with_editor != WITH_EDITOR_NO) {
 		puts( "Start GUI" );
 		gtk_gui_init(&argc, &argv);
-		gtk_gui_start(jvst);
+		gtk_gui_start(jfst);
 	} else {
 		puts("GUI Disabled - start GlibMainLoop");
 		g_main_loop_run ( glib_main_loop );
@@ -362,12 +362,12 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 #endif
 
 	puts("Jack Deactivate");
-	jack_deactivate ( jvst->client );
+	jack_deactivate ( jfst->client );
 
 	/* Close CTRL socket */
-	jvst_proto_close ( jvst );
+	jfst_proto_close ( jfst );
 
-	jvst_close(jvst);
+	jfst_close(jfst);
 
 	puts("Game Over");
 

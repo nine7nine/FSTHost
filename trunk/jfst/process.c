@@ -2,27 +2,27 @@
 #include "jfst.h"
 
 /* sysex.c */
-extern void jvst_sysex_handler ( JackVST* jvst );
-extern void jvst_sysex_rt_send ( JackVST* jvst, void *port_buffer );
-extern void jvst_queue_sysex ( JackVST* jvst, jack_midi_data_t* data, size_t size );
+extern void jfst_sysex_handler ( JFST* jfst );
+extern void jfst_sysex_rt_send ( JFST* jfst, void *port_buffer );
+extern void jfst_queue_sysex ( JFST* jfst, jack_midi_data_t* data, size_t size );
 
 /* jack.c */
-extern void jvst_apply_volume ( JackVST* jvst, jack_nframes_t nframes, float** outs );
+extern void jfst_apply_volume ( JFST* jfst, jack_nframes_t nframes, float** outs );
 
-static inline void process_midi_output(JackVST* jvst, jack_nframes_t nframes) {
-	if (! fst_want_midi_out(jvst->fst) ) return;
+static inline void process_midi_output(JFST* jfst, jack_nframes_t nframes) {
+	if (! fst_want_midi_out(jfst->fst) ) return;
 
 	// Do not process anything if MIDI OUT port is not connected
-	if (! jack_port_connected ( jvst->midi_outport ) ) return;
+	if (! jack_port_connected ( jfst->midi_outport ) ) return;
 
 	/* This jack ringbuffer consume code was largely taken from jack-keyboard */
 	/* written by Edward Tomasz Napierala <trasz@FreeBSD.org>                 */
-	void *port_buffer = jack_port_get_buffer(jvst->midi_outport, nframes);
+	void *port_buffer = jack_port_get_buffer(jfst->midi_outport, nframes);
 	/* We need always clear buffer if port is connected someware */
 	jack_midi_clear_buffer(port_buffer);
 
-	jack_nframes_t last_frame_time = jack_last_frame_time(jvst->client);
-	jack_ringbuffer_t* ringbuffer = jvst->ringbuffer;
+	jack_nframes_t last_frame_time = jack_last_frame_time(jfst->client);
+	jack_ringbuffer_t* ringbuffer = jfst->ringbuffer;
 	while (jack_ringbuffer_read_space(ringbuffer)) {
 		struct MidiMessage ev;
 		int read = jack_ringbuffer_peek(ringbuffer, (char*)&ev, sizeof(ev));
@@ -47,18 +47,18 @@ static inline void process_midi_output(JackVST* jvst, jack_nframes_t nframes) {
 	}
 }
 
-static inline void process_ctrl_output(JackVST* jvst, jack_nframes_t nframes) {
-	if ( ! jack_port_connected ( jvst->ctrl_outport ) ) return;
+static inline void process_ctrl_output(JFST* jfst, jack_nframes_t nframes) {
+	if ( ! jack_port_connected ( jfst->ctrl_outport ) ) return;
 
-	void *port_buffer = jack_port_get_buffer(jvst->ctrl_outport, nframes);
+	void *port_buffer = jack_port_get_buffer(jfst->ctrl_outport, nframes);
 	/* We need always clear buffer if port is connected someware */
 	jack_midi_clear_buffer(port_buffer);
 
-	jvst_sysex_rt_send ( jvst, port_buffer );
+	jfst_sysex_rt_send ( jfst, port_buffer );
 }
 
 /* True if this message should be passed to plugin */
-static inline void process_midi_in_msg ( JackVST* jvst, jack_midi_event_t* jackevent, VstEvents* events )
+static inline void process_midi_in_msg ( JFST* jfst, jack_midi_event_t* jackevent, VstEvents* events )
 {
 	/* TODO: SysEx
 	For now we simply drop all SysEx messages because VST standard
@@ -67,7 +67,7 @@ static inline void process_midi_in_msg ( JackVST* jvst, jack_midi_event_t* jacke
 	... but we take over our messages
 	*/
 	if ( jackevent->buffer[0] == SYSEX_BEGIN) {
-		jvst_queue_sysex(jvst, jackevent->buffer, jackevent->size);
+		jfst_queue_sysex(jfst, jackevent->buffer, jackevent->size);
 		return;
 	}
 
@@ -76,7 +76,7 @@ static inline void process_midi_in_msg ( JackVST* jvst, jack_midi_event_t* jacke
 	memcpy(&buf, jackevent->buffer, jackevent->size);
 
 	/* MIDI FILTERS */
-	if ( ! midi_filter_check( &jvst->filters, (uint8_t*) &buf, jackevent->size ) ) return;
+	if ( ! midi_filter_check( &jfst->filters, (uint8_t*) &buf, jackevent->size ) ) return;
 
 	switch ( (buf[0] >> 4) & 0xF ) {
 	case MM_CONTROL_CHANGE: ;
@@ -85,45 +85,45 @@ static inline void process_midi_in_msg ( JackVST* jvst, jack_midi_event_t* jacke
 		uint8_t VALUE = buf[2];
 
 		// Want Mode
-		if (CC == jvst->want_state_cc) {
+		if (CC == jfst->want_state_cc) {
 			// 0-63 mean want bypass
 			if (VALUE >= 0 && VALUE <= 63) {
-				event_queue_send_val ( &jvst->event_queue, EVENT_STATE, WANT_STATE_BYPASS );
+				event_queue_send_val ( &jfst->event_queue, EVENT_STATE, WANT_STATE_BYPASS );
 			// 64-127 mean want resume
 			} else if (VALUE > 63 && VALUE <= 127) {
-				event_queue_send_val ( &jvst->event_queue, EVENT_STATE, WANT_STATE_RESUME );
+				event_queue_send_val ( &jfst->event_queue, EVENT_STATE, WANT_STATE_RESUME );
 			}
 			return;
 		// If Volume control is enabled then grab CC7 messages
-		} else if (CC == 7 && jvst->volume != -1) {
-			jvst_set_volume(jvst, VALUE);
+		} else if (CC == 7 && jfst->volume != -1) {
+			jfst_set_volume(jfst, VALUE);
 			return;
 		}
 
 		// In bypass mode do not touch plugin
-		if (jvst->bypassed) return;
+		if (jfst->bypassed) return;
 
 		// Mapping MIDI CC
-		MidiLearn* ml = &jvst->midi_learn;
+		MidiLearn* ml = &jfst->midi_learn;
 		if ( ml->wait ) {
 			ml->cc = CC;
 		// handle mapped MIDI CC
 		} else if ( ml->map[CC] != -1 ) {
 			int32_t parameter = ml->map[CC];
 			float value = 1.0/127.0 * (float) VALUE;
-			fst_set_param( jvst->fst, parameter, value );
+			fst_set_param( jfst->fst, parameter, value );
 		}
 		break;
 	case MM_PROGRAM_CHANGE:
 		// Self Program Change
-		if (jvst->midi_pc != MIDI_PC_SELF) break;
-		event_queue_send_val ( &jvst->event_queue, EVENT_PC, buf[1] );
+		if (jfst->midi_pc != MIDI_PC_SELF) break;
+		event_queue_send_val ( &jfst->event_queue, EVENT_PC, buf[1] );
 		// OFC don't forward this message to plugin
 		return;
 	}
 
 	// ... wanna play at all ?
-	if ( jvst->bypassed || ! fst_want_midi_in(jvst->fst) ) return;
+	if ( jfst->bypassed || ! fst_want_midi_in(jfst->fst) ) return;
 	
 	/* Prepare MIDI events */
 	VstMidiEvent* midi_event = (VstMidiEvent*) events->events[events->numEvents];
@@ -140,20 +140,20 @@ static inline void process_midi_in_msg ( JackVST* jvst, jack_midi_event_t* jacke
 	events->numEvents++;
 }
 
-void jvst_process( JackVST* jvst, jack_nframes_t nframes ) {
+void jfst_process( JFST* jfst, jack_nframes_t nframes ) {
 	int32_t i;
-	FST* fst = jvst->fst;
+	FST* fst = jfst->fst;
 
 	// Skip processing if we are during SetProgram, Suspend, Resume
 	if ( ! fst_process_trylock ( fst ) ) return;
 
 	// Do not process anything if MIDI IN port is not connected
-	if ( ! jack_port_connected ( jvst->midi_inport ) ) goto no_midi_in;
+	if ( ! jack_port_connected ( jfst->midi_inport ) ) goto no_midi_in;
 
 	// ******************* Process MIDI Input ************************************
 
 	// NOTE: we process MIDI even in bypass mode for want_state handling and our SysEx
-	void *port_buffer = jack_port_get_buffer( jvst->midi_inport, nframes );
+	void *port_buffer = jack_port_get_buffer( jfst->midi_inport, nframes );
 	jack_nframes_t num_jackevents = jack_midi_get_event_count( port_buffer );
 
 	/* Allocate space for VST MIDI - preallocate space for all messages even
@@ -174,7 +174,7 @@ void jvst_process( JackVST* jvst, jack_nframes_t nframes ) {
 		/* Bind MIDI event to collection */
 		events->events[i] = (VstEvent*) &( event_array[i] );
 
-		process_midi_in_msg ( jvst, &jackevent, events );
+		process_midi_in_msg ( jfst, &jackevent, events );
 	}
 
 	// ... let's the music play
@@ -187,21 +187,21 @@ no_midi_in: ;
 	float* outs[ fst_num_outs(fst) ];
 
 	// swap area ( nonused ports )
-	float swap[jvst->buffer_size];
-	memset ( swap, 0, jvst->buffer_size * sizeof(float) );
+	float swap[jfst->buffer_size];
+	memset ( swap, 0, jfst->buffer_size * sizeof(float) );
 
 	// Get addresses of input buffers
 	for (i = 0; i < fst_num_ins(fst); ++i)
-		ins[i] = ( i < jvst->numIns ) ? (float*) jack_port_get_buffer(jvst->inports[i],nframes) : swap;
+		ins[i] = ( i < jfst->numIns ) ? (float*) jack_port_get_buffer(jfst->inports[i],nframes) : swap;
 
 	// Initialize output buffers
 	for (i = 0; i < fst_num_outs(fst); ++i) {
-		if ( i < jvst->numOuts ) {
+		if ( i < jfst->numOuts ) {
 			// Get address
-			outs[i]  = (float*) jack_port_get_buffer (jvst->outports[i], nframes);
+			outs[i]  = (float*) jack_port_get_buffer (jfst->outports[i], nframes);
 	
 			// If bypassed then copy In's to Out's
-			if ( jvst->bypassed && i < jvst->numIns ) {
+			if ( jfst->bypassed && i < jfst->numIns ) {
 				memcpy ( outs[i], ins[i], sizeof (float) * nframes );
 			// Zeroing output buffers
 			} else {
@@ -213,7 +213,7 @@ no_midi_in: ;
 	}
 
 	// Bypass - because all audio jobs are done  - simply return
-	if (jvst->bypassed) goto midi_out;
+	if (jfst->bypassed) goto midi_out;
 
 	// Deal with plugin
 	fst_process( fst, ins, outs, nframes );
@@ -225,16 +225,16 @@ no_midi_in: ;
 	for (n=0; n < nframes; n++) avg_level += fabs( outs[0][n] );
 	avg_level /= nframes;
 
-	jvst->out_level = avg_level * 100;
-	if (jvst->out_level > 100) jvst->out_level = 100;
+	jfst->out_level = avg_level * 100;
+	if (jfst->out_level > 100) jfst->out_level = 100;
 #endif
 
-	jvst_apply_volume ( jvst, nframes, outs );
+	jfst_apply_volume ( jfst, nframes, outs );
 
 midi_out:
 	// Process MIDI Output
-	process_midi_output(jvst, nframes);
-	process_ctrl_output(jvst, nframes);
+	process_midi_output(jfst, nframes);
+	process_ctrl_output(jfst, nframes);
 
 	fst_process_unlock ( fst );
 }
