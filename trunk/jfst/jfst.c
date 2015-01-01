@@ -28,7 +28,8 @@ JackVST* jvst_new() {
 	jvst->volume = 1; // 63 here mean zero
 	/* Local Keyboard MIDI CC message (122) is probably not used by any VST */
 	jvst->want_state_cc = 122;
-	jvst->midi_pc = MIDI_PC_PLUG; // mean that plugin take care of Program Change
+	jvst->midi_pc = MIDI_PC_PLUG; // plugin take care of Program Change
+	jvst->want_auto_midi_physical = true; // By default autoconnect MIDI In port to all physical
 
 	event_queue_init ( &jvst->event_queue );
 
@@ -213,6 +214,9 @@ bool jvst_idle(JackVST* jvst, const char* appname) {
 		case EVENT_GRAPH:
 			// Attempt to connect MIDI ports to control app if Graph order change
 			jvst_connect_to_ctrl_app(jvst);
+			// Autoconnect MIDI IN to all physical ports
+			if (jvst->want_auto_midi_physical)
+				jvst_connect_midi_to_physical(jvst);
 			break;
 		case EVENT_SESSION:
 			if ( ! jvst_session_handler(jvst, ev->ptr, appname) )

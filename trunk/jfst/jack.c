@@ -109,9 +109,6 @@ void jvst_connect_audio(JackVST *jvst, const char *audio_to) {
 }
 
 void jvst_connect_midi_to_physical(JackVST* jvst) {
-	/* plugin have MIDI port at all ? */
-	if ( ! fst_want_midi_in(jvst->fst) ) return;
-
 	const char **jports = jack_get_ports(jvst->client, NULL, JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput|JackPortIsPhysical);
         if (!jports) return;
 
