@@ -200,11 +200,8 @@ bool jfst_idle(JFST* jfst, const char* appname) {
 	Event* ev;
 	while ( (ev = event_queue_get ( &jfst->event_queue )) ) {
 		switch ( ev->type ) {
-		case EVENT_STATE:
-			switch ( ev->value ) {
-			case WANT_STATE_BYPASS: jfst_bypass(jfst,TRUE); break;
-			case WANT_STATE_RESUME: jfst_bypass(jfst,FALSE); break;
-			}
+		case EVENT_BYPASS:
+			jfst_bypass( jfst, ev->value );
 			break;
 		case EVENT_PC:
 			// Self Program change support
