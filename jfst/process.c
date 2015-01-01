@@ -86,13 +86,8 @@ static inline void process_midi_in_msg ( JFST* jfst, jack_midi_event_t* jackeven
 
 		// Want Mode
 		if (CC == jfst->want_state_cc) {
-			// 0-63 mean want bypass
-			if (VALUE >= 0 && VALUE <= 63) {
-				event_queue_send_val ( &jfst->event_queue, EVENT_STATE, WANT_STATE_BYPASS );
-			// 64-127 mean want resume
-			} else if (VALUE > 63 && VALUE <= 127) {
-				event_queue_send_val ( &jfst->event_queue, EVENT_STATE, WANT_STATE_RESUME );
-			}
+			// 0-63 mean bypass, 64-127 mean resume
+			event_queue_send_val ( &jfst->event_queue, EVENT_BYPASS, (VALUE <= 63) );
 			return;
 		// If Volume control is enabled then grab CC7 messages
 		} else if (CC == 7 && jfst->volume != -1) {

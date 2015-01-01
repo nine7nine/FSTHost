@@ -5,7 +5,7 @@
 
 typedef enum {
 	EVENT_PC,
-	EVENT_STATE,
+	EVENT_BYPASS,
 	EVENT_GRAPH,
 	EVENT_SESSION
 } EventType;
