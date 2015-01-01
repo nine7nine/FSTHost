@@ -64,12 +64,12 @@ create_sequencer (const char* client_name, bool isinput)
 }
 
 static void 
-queue_midi (JackVST *jvst, int val1, int val2, int val3)
+queue_midi (JFST *jfst, int val1, int val2, int val3)
 {
 	struct VstMidiEvent *pevent;
 	jack_ringbuffer_data_t vec[2];
 
-	jack_ringbuffer_get_write_vector (jvst->event_queue, vec);
+	jack_ringbuffer_get_write_vector (jfst->event_queue, vec);
 
 	if (vec[0].len < sizeof (struct VstMidiEvent)) {
 		fst_error ("event queue has no write space");
@@ -97,13 +97,13 @@ queue_midi (JackVST *jvst, int val1, int val2, int val3)
 	
 	//printf("Sending: %x %x %x\n",val1,val2,val3);
 
-	jack_ringbuffer_write_advance (jvst->event_queue, sizeof (struct VstMidiEvent));
+	jack_ringbuffer_write_advance (jfst->event_queue, sizeof (struct VstMidiEvent));
 }
 
 void *midireceiver(void *arg)
 {
 	snd_seq_event_t *event;
-	JackVST *jvst = (JackVST* )arg;
+	JFST *jfst = (JFST* )arg;
 	int val;
 
 	struct sched_param scp;
@@ -115,41 +115,41 @@ void *midireceiver(void *arg)
 	
 	while (1) {
 
-		snd_seq_event_input (jvst->seq, &event);
+		snd_seq_event_input (jfst->seq, &event);
 
-		if (jvst->midiquit) {
+		if (jfst->midiquit) {
 			break;
 		}
 
 		switch(event->type){
 		case SND_SEQ_EVENT_NOTEON:
-			queue_midi(jvst,0x90+event->data.note.channel,event->data.note.note,event->data.note.velocity);
+			queue_midi(jfst,0x90+event->data.note.channel,event->data.note.note,event->data.note.velocity);
 			//printf("Noteon, channel: %d note: %d vol: %d\n",event->data.note.channel,event->data.note.note,event->data.note.velocity);
 			break;
 		case SND_SEQ_EVENT_NOTEOFF:
-			queue_midi(jvst,0x80+event->data.note.channel,event->data.note.note,0);
+			queue_midi(jfst,0x80+event->data.note.channel,event->data.note.note,0);
 			//printf("Noteoff, channel: %d note: %d vol: %d\n",event->data.note.channel,event->data.note.note,event->data.note.velocity);
 			break;
 		case SND_SEQ_EVENT_KEYPRESS:
 			//printf("Keypress, channel: %d note: %d vol: %d\n",event->data.note.channel,event->data.note.note,event->data.note.velocity);
-			queue_midi(jvst,0xa0+event->data.note.channel,event->data.note.note,event->data.note.velocity);
+			queue_midi(jfst,0xa0+event->data.note.channel,event->data.note.note,event->data.note.velocity);
 			break;
 		case SND_SEQ_EVENT_CONTROLLER:
-			queue_midi(jvst,0xb0+event->data.control.channel,event->data.control.param,event->data.control.value);
+			queue_midi(jfst,0xb0+event->data.control.channel,event->data.control.param,event->data.control.value);
 			//printf("Control: %d %d %d\n",event->data.control.channel,event->data.control.param,event->data.control.value);
 			break;
 		case SND_SEQ_EVENT_PITCHBEND:
 			val=event->data.control.value + 0x2000;
-			queue_midi(jvst,0xe0+event->data.control.channel,val&127,val>>7);
+			queue_midi(jfst,0xe0+event->data.control.channel,val&127,val>>7);
 			//printf("Pitch: %d %d %d\n",event->data.control.channel,event->data.control.param,event->data.control.value);
 			break;
 		case SND_SEQ_EVENT_CHANPRESS:
 			//printf("chanpress: %d %d %d\n",event->data.control.channel,event->data.control.param,event->data.control.value);
-			queue_midi(jvst,0xd0+event->data.control.channel,event->data.control.value,0);
+			queue_midi(jfst,0xd0+event->data.control.channel,event->data.control.value,0);
 			break;
 		case SND_SEQ_EVENT_PGMCHANGE:
 			//printf("pgmchange: %d %d %d\n",event->data.control.channel,event->data.control.param,event->data.control.value);
-			queue_midi(jvst,0xc0+event->data.control.channel,event->data.control.value,0);
+			queue_midi(jfst,0xc0+event->data.control.channel,event->data.control.value,0);
 			break;
 		default:
 			//printf("Unknown type: %d\n",event->type);
@@ -160,15 +160,15 @@ void *midireceiver(void *arg)
 	return NULL;
 }
 
-void stop_midireceiver (JackVST *jvst)
+void stop_midireceiver (JFST *jfst)
 {
 	int err; 
 	snd_seq_event_t event;
 	snd_seq_t *seq2 = create_sequencer ("jfstquit", true);
 	
-	jvst->midiquit = 1;
+	jfst->midiquit = 1;
 	
-	snd_seq_connect_to (seq2, 0, snd_seq_client_id (jvst->seq),0);
+	snd_seq_connect_to (seq2, 0, snd_seq_client_id (jfst->seq),0);
 	snd_seq_ev_clear      (&event);
 	snd_seq_ev_set_direct (&event);
 	snd_seq_ev_set_subs   (&event);
@@ -182,8 +182,8 @@ void stop_midireceiver (JackVST *jvst)
 
 	snd_seq_drain_output (seq2);
 	snd_seq_close (seq2);
-	pthread_join (jvst->midi_thread,NULL);
-	snd_seq_close (jvst->seq);
+	pthread_join (jfst->midi_thread,NULL);
+	snd_seq_close (jfst->seq);
 }
 
 

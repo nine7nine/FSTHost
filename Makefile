@@ -77,7 +77,7 @@ C_SRCS             += $(wildcard midifilter/*.c)
 # FST
 C_SRCS             += $(wildcard fst/*.c)
 
-# JVST proto stuff
+# JFST proto stuff
 C_SRCS             += $(wildcard serv/*.c)
 
 # XML DB

@@ -5,17 +5,17 @@
 
 //#define DEBUG_TIME
 
-static void jvstamc_automate ( AMC* amc, int32_t param ) {
-	JackVST* jvst = (JackVST*) amc->user_ptr;
-	if ( ! jvst ) return;
+static void jfstamc_automate ( AMC* amc, int32_t param ) {
+	JFST* jfst = (JFST*) amc->user_ptr;
+	if ( ! jfst ) return;
 
-	MidiLearn* ml = &(jvst->midi_learn);
+	MidiLearn* ml = &(jfst->midi_learn);
 	if ( ml->wait ) ml->param = param;
 }
 
-static VstTimeInfo* jvstamc_get_time ( AMC* amc, int32_t mask ) {
-	JackVST* jvst = (JackVST*) amc->user_ptr;
-	if ( ! jvst ) return NULL;
+static VstTimeInfo* jfstamc_get_time ( AMC* amc, int32_t mask ) {
+	JFST* jfst = (JFST*) amc->user_ptr;
+	if ( ! jfst ) return NULL;
 
 	struct VstTimeInfo* timeInfo = &amc->timeInfo;
 
@@ -23,7 +23,7 @@ static VstTimeInfo* jvstamc_get_time ( AMC* amc, int32_t mask ) {
 	timeInfo->flags = ( kVstTransportChanged | kVstTempoValid | kVstPpqPosValid );
 	// Query JackTransport
 	jack_position_t jack_pos;
-	jack_transport_state_t tstate = jack_transport_query (jvst->client, &jack_pos);
+	jack_transport_state_t tstate = jack_transport_query (jfst->client, &jack_pos);
 	// Are we play ?
 	if (tstate == JackTransportRolling) timeInfo->flags |= kVstTransportPlaying;
 	// samplePos - always valid
@@ -101,7 +101,7 @@ static VstTimeInfo* jvstamc_get_time ( AMC* amc, int32_t mask ) {
 }
 
 static void
-queue_midi_message(JackVST* jvst, uint8_t status, uint8_t d1, uint8_t d2, jack_nframes_t delta ) {
+queue_midi_message(JFST* jfst, uint8_t status, uint8_t d1, uint8_t d2, jack_nframes_t delta ) {
 	uint8_t statusHi = (status >> 4) & 0xF;
 	uint8_t statusLo = status & 0xF;
 
@@ -128,9 +128,9 @@ queue_midi_message(JackVST* jvst, uint8_t status, uint8_t d1, uint8_t d2, jack_n
 		ev.data[2] = d2;
 	}
 
-	ev.time = jack_frame_time(jvst->client) + delta;
+	ev.time = jack_frame_time(jfst->client) + delta;
 
-	jack_ringbuffer_t* ringbuffer = jvst->ringbuffer;
+	jack_ringbuffer_t* ringbuffer = jfst->ringbuffer;
 	if (jack_ringbuffer_write_space(ringbuffer) < sizeof(ev)) {
 		fst_error("Not enough space in the ringbuffer, NOTE LOST.");
 		return;
@@ -140,9 +140,9 @@ queue_midi_message(JackVST* jvst, uint8_t status, uint8_t d1, uint8_t d2, jack_n
 	if (written != sizeof(ev)) fst_error("jack_ringbuffer_write failed, NOTE LOST.");
 }
 
-static bool jvstamc_process_events ( AMC* amc, VstEvents* events ) {
-	JackVST* jvst = (JackVST*) amc->user_ptr;
-	if ( ! jvst ) return false;
+static bool jfstamc_process_events ( AMC* amc, VstEvents* events ) {
+	JFST* jfst = (JFST*) amc->user_ptr;
+	if ( ! jfst ) return false;
 
 	int32_t numEvents = events->numEvents;
 	int32_t i;
@@ -150,16 +150,16 @@ static bool jvstamc_process_events ( AMC* amc, VstEvents* events ) {
 		VstMidiEvent* event = (VstMidiEvent*) events->events[i];
 		//printf( "delta = %d\n", event->deltaFrames );
 		char* midiData = event->midiData;
-		queue_midi_message(jvst, midiData[0], midiData[1], midiData[2], event->deltaFrames);
+		queue_midi_message(jfst, midiData[0], midiData[1], midiData[2], event->deltaFrames);
 	}
 	return true;
 }
 
-static intptr_t jvstamc_tempo ( struct _AMC* amc, int32_t location ) {
-	JackVST* jvst = (JackVST*) amc->user_ptr;
-	if ( jvst ) {
+static intptr_t jfstamc_tempo ( struct _AMC* amc, int32_t location ) {
+	JFST* jfst = (JFST*) amc->user_ptr;
+	if ( jfst ) {
 		jack_position_t jack_pos;
-		jack_transport_query (jvst->client, &jack_pos);
+		jack_transport_query (jfst->client, &jack_pos);
 		if (jack_pos.beats_per_minute)
 			return (intptr_t) jack_pos.beats_per_minute;
 	}
@@ -167,51 +167,51 @@ static intptr_t jvstamc_tempo ( struct _AMC* amc, int32_t location ) {
 	return 120;
 }
 
-static void jvstamc_need_idle ( struct _AMC* amc ) {
-	JackVST* jvst = (JackVST*) amc->user_ptr;
-	if ( ! jvst ) return;
-	FST* fst = jvst->fst;
+static void jfstamc_need_idle ( struct _AMC* amc ) {
+	JFST* jfst = (JFST*) amc->user_ptr;
+	if ( ! jfst ) return;
+	FST* fst = jfst->fst;
 	if ( fst ) fst->wantIdle = TRUE;
 }
 
-static void jvstamc_window_resize ( struct _AMC* amc, int32_t width, int32_t height ) {
-	JackVST* jvst = (JackVST*) amc->user_ptr;
-	FST* fst = jvst->fst;
-	if ( ! jvst || ! fst ) return;
+static void jfstamc_window_resize ( struct _AMC* amc, int32_t width, int32_t height ) {
+	JFST* jfst = (JFST*) amc->user_ptr;
+	FST* fst = jfst->fst;
+	if ( ! jfst || ! fst ) return;
 	fst->width = width;
 	fst->height = height;
 	fst_call ( fst, EDITOR_RESIZE );
 	/* Resize also GTK window in popup (embedded) mode */
-	if ( jvst->gui_resize )
-		jvst->gui_resize( jvst );
+	if ( jfst->gui_resize )
+		jfst->gui_resize( jfst );
 }
 
-static intptr_t jvstamc_get_sample_rate ( struct _AMC* amc ) {
-	JackVST* jvst = (JackVST*) amc->user_ptr;
-	return ( jvst ) ? jack_get_sample_rate( jvst->client ) : 44100;
+static intptr_t jfstamc_get_sample_rate ( struct _AMC* amc ) {
+	JFST* jfst = (JFST*) amc->user_ptr;
+	return ( jfst ) ? jack_get_sample_rate( jfst->client ) : 44100;
 }
 
-static intptr_t jvstamc_get_buffer_size ( struct _AMC* amc ) {
-	JackVST* jvst = (JackVST*) amc->user_ptr;
-	return ( jvst) ? jack_get_buffer_size( jvst->client ) : 1024;
+static intptr_t jfstamc_get_buffer_size ( struct _AMC* amc ) {
+	JFST* jfst = (JFST*) amc->user_ptr;
+	return ( jfst) ? jack_get_buffer_size( jfst->client ) : 1024;
 }
 
 /* return true if editor is opened */
-static bool jvstamc_update_display ( struct _AMC* amc ) {
-	JackVST* jvst = (JackVST*) amc->user_ptr;
-	FST* fst = jvst->fst;
-	return ( jvst && fst && fst->window ) ? true : false;
+static bool jfstamc_update_display ( struct _AMC* amc ) {
+	JFST* jfst = (JFST*) amc->user_ptr;
+	FST* fst = jfst->fst;
+	return ( jfst && fst && fst->window ) ? true : false;
 }
 
-void jvstamc_init ( JackVST* jvst, AMC* amc ) {
-	amc->user_ptr		= jvst;
-	amc->Automate		= &jvstamc_automate;
-	amc->GetTime		= &jvstamc_get_time;
-	amc->ProcessEvents	= &jvstamc_process_events;
-	amc->TempoAt		= &jvstamc_tempo;
-	amc->NeedIdle		= &jvstamc_need_idle;
-	amc->SizeWindow		= &jvstamc_window_resize;
-	amc->GetSampleRate	= &jvstamc_get_sample_rate;
-	amc->GetBlockSize	= &jvstamc_get_buffer_size;
-	amc->UpdateDisplay	= &jvstamc_update_display;
+void jfstamc_init ( JFST* jfst, AMC* amc ) {
+	amc->user_ptr		= jfst;
+	amc->Automate		= &jfstamc_automate;
+	amc->GetTime		= &jfstamc_get_time;
+	amc->ProcessEvents	= &jfstamc_process_events;
+	amc->TempoAt		= &jfstamc_tempo;
+	amc->NeedIdle		= &jfstamc_need_idle;
+	amc->SizeWindow		= &jfstamc_window_resize;
+	amc->GetSampleRate	= &jfstamc_get_sample_rate;
+	amc->GetBlockSize	= &jfstamc_get_buffer_size;
+	amc->UpdateDisplay	= &jfstamc_update_display;
 }

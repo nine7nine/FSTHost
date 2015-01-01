@@ -8,12 +8,12 @@
 #define ACK "<OK>"
 
 /* jfst.c */
-void jvst_quit(JackVST* jvst);
+void jfst_quit(JFST* jfst);
 
 static int serv_fd = 0;
 
-static void list_programs ( JackVST* jvst, int client_sock ) {
-	FST* fst = jvst->fst;
+static void list_programs ( JFST* jfst, int client_sock ) {
+	FST* fst = jfst->fst;
 	int32_t i;
 	for ( i = 0; i < fst_num_presets(fst); i++ ) {
 		/* VST standard says that progName is 24 bytes but some plugs use more characters */
@@ -31,9 +31,9 @@ static void list_programs ( JackVST* jvst, int client_sock ) {
         }
 }
 
-static void get_program ( JackVST* jvst, int client_sock ) {
+static void get_program ( JFST* jfst, int client_sock ) {
 	char msg[16];
-	sprintf( msg, "PROGRAM:%d", jvst->fst->current_program );
+	sprintf( msg, "PROGRAM:%d", jfst->fst->current_program );
 	serv_send_client_data ( client_sock, msg, strlen(msg) );
 }
 
@@ -58,7 +58,7 @@ static enum PROTO_CMD proto_lookup ( const char* name ) {
 	return CMD_UNKNOWN;
 }
 
-static bool jvst_proto_client_dispatch ( JackVST* jvst, int client_sock ) {
+static bool jfst_proto_client_dispatch ( JFST* jfst, int client_sock ) {
         char msg[64];
         if ( ! serv_client_get_data ( client_sock, msg, sizeof msg ) )
 		return false;
@@ -74,28 +74,28 @@ static bool jvst_proto_client_dispatch ( JackVST* jvst, int client_sock ) {
 
 	switch ( proto_lookup ( msg ) ) {
 	case CMD_EDITOR_OPEN:
-		fst_run_editor ( jvst->fst, false );
+		fst_run_editor ( jfst->fst, false );
 		break;
 	case CMD_EDITOR_CLOSE:
-		fst_call ( jvst->fst, EDITOR_CLOSE );
+		fst_call ( jfst->fst, EDITOR_CLOSE );
 		break;
 	case CMD_LIST_PROGRAMS:
-		list_programs ( jvst, client_sock );
+		list_programs ( jfst, client_sock );
 		break;
 	case CMD_GET_PROGRAM:
-		get_program ( jvst, client_sock );
+		get_program ( jfst, client_sock );
 		break;
 	case CMD_SET_PROGRAM:
-		fst_program_change ( jvst->fst, value );
+		fst_program_change ( jfst->fst, value );
 		break;
 	case CMD_SUSPEND:
-		jvst_bypass ( jvst, true );
+		jfst_bypass ( jfst, true );
 		break;
 	case CMD_RESUME:
-		jvst_bypass ( jvst, false );
+		jfst_bypass ( jfst, false );
 		break;
 	case CMD_KILL:
-		jvst_quit ( jvst );
+		jfst_quit ( jfst );
 		break;
 	case CMD_UNKNOWN:
 	default:
@@ -109,16 +109,16 @@ static bool jvst_proto_client_dispatch ( JackVST* jvst, int client_sock ) {
 }
 
 static bool handle_client_connection (GIOChannel *source, GIOCondition condition, gpointer data ) {
-	JackVST* jvst = (JackVST*) data;
+	JFST* jfst = (JFST*) data;
 
 	int client_fd = g_io_channel_unix_get_fd ( source );
-	bool ok = jvst_proto_client_dispatch ( jvst, client_fd );
+	bool ok = jfst_proto_client_dispatch ( jfst, client_fd );
 
 	return ok;
 }
 
 static bool handle_server_connection (GIOChannel *source, GIOCondition condition, gpointer data ) {
-	JackVST* jvst = (JackVST*) data;
+	JFST* jfst = (JFST*) data;
 
 	int serv_fd = g_io_channel_unix_get_fd ( source );
 	int client_fd = serv_get_client ( serv_fd );
@@ -130,16 +130,16 @@ static bool handle_server_connection (GIOChannel *source, GIOCondition condition
 		G_PRIORITY_DEFAULT_IDLE,
 		G_IO_IN,
 		(GIOFunc) handle_client_connection,
-		jvst, NULL
+		jfst, NULL
 	);
 
 	return true;
 }
 
 /* Public functions */
-bool jvst_proto_init ( JackVST* jvst ) {
-	puts ( "Starting JVST PROTO control server ..." );
-	serv_fd = serv_get_sock ( jvst->ctrl_port_number );
+bool jfst_proto_init ( JFST* jfst ) {
+	puts ( "Starting JFST PROTO control server ..." );
+	serv_fd = serv_get_sock ( jfst->ctrl_port_number );
 	if ( ! serv_fd ) {
 		fst_error ( "Cannot create CTRL socket :(" );
 		return false;
@@ -152,14 +152,14 @@ bool jvst_proto_init ( JackVST* jvst ) {
 		G_PRIORITY_DEFAULT_IDLE,
 		G_IO_IN,
 		(GIOFunc) handle_server_connection,
-		jvst, NULL
+		jfst, NULL
 	);
 	g_io_channel_unref(channel);
 
 	return true;
 }
 
-bool jvst_proto_close ( JackVST* jvst ) {
+bool jfst_proto_close ( JFST* jfst ) {
 	if ( serv_fd ) serv_close_socket ( serv_fd );
 	return true;
 }

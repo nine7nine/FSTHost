@@ -6,65 +6,65 @@
 #include "../xmldb/info.h"
 
 /* fps.c */
-extern bool fps_save(JackVST* jvst, const char* filename);
-extern bool fps_load(JackVST* jvst, const char* filename);
+extern bool fps_save(JFST* jfst, const char* filename);
+extern bool fps_load(JFST* jfst, const char* filename);
 
 /* jackamc.c */
-extern void jvstamc_init ( JackVST* jvst, AMC* amc );
+extern void jfstamc_init ( JFST* jfst, AMC* amc );
 
 /* sysex.c */
-extern void jvst_sysex_init ( JackVST* jvst );
-extern void jvst_sysex_handler ( JackVST* jvst );
-extern void jvst_sysex_notify ( JackVST* jvst );
-extern void jvst_sysex_gen_random_id ( JackVST* jvst );
+extern void jfst_sysex_init ( JFST* jfst );
+extern void jfst_sysex_handler ( JFST* jfst );
+extern void jfst_sysex_notify ( JFST* jfst );
+extern void jfst_sysex_gen_random_id ( JFST* jfst );
 
-JackVST* jvst_new() {
-	JackVST* jvst = calloc (1, sizeof (JackVST));
+JFST* jfst_new() {
+	JFST* jfst = calloc (1, sizeof (JFST));
 
-	pthread_mutex_init (&jvst->sysex_lock, NULL);
-	pthread_cond_init (&jvst->sysex_sent, NULL);
+	pthread_mutex_init (&jfst->sysex_lock, NULL);
+	pthread_cond_init (&jfst->sysex_sent, NULL);
 
-	jvst->with_editor = WITH_EDITOR_SHOW;
-	jvst->volume = 1; // 63 here mean zero
+	jfst->with_editor = WITH_EDITOR_SHOW;
+	jfst->volume = 1; // 63 here mean zero
 	/* Local Keyboard MIDI CC message (122) is probably not used by any VST */
-	jvst->want_state_cc = 122;
-	jvst->midi_pc = MIDI_PC_PLUG; // plugin take care of Program Change
-	jvst->want_auto_midi_physical = true; // By default autoconnect MIDI In port to all physical
+	jfst->want_state_cc = 122;
+	jfst->midi_pc = MIDI_PC_PLUG; // plugin take care of Program Change
+	jfst->want_auto_midi_physical = true; // By default autoconnect MIDI In port to all physical
 
-	event_queue_init ( &jvst->event_queue );
+	event_queue_init ( &jfst->event_queue );
 
 	/* MidiLearn */
 	short i;
-	MidiLearn* ml = &jvst->midi_learn;
+	MidiLearn* ml = &jfst->midi_learn;
 	ml->wait = FALSE;
 	ml->cc = -1;
 	ml->param = -1;
 	for(i=0; i<128;++i) ml->map[i] = -1;
 
-	jvst->transposition = midi_filter_transposition_init ( &jvst->filters );
-	midi_filter_one_channel_init( &jvst->filters, &jvst->channel );
+	jfst->transposition = midi_filter_transposition_init ( &jfst->filters );
+	midi_filter_one_channel_init( &jfst->filters, &jfst->channel );
 	
-	jvst_sysex_init ( jvst );
+	jfst_sysex_init ( jfst );
 
-	return jvst;
+	return jfst;
 }
 
-static void jvst_destroy (JackVST* jvst) {
-	midi_filter_cleanup( &jvst->filters, true );
-	free(jvst);
+static void jfst_destroy (JFST* jfst) {
+	midi_filter_cleanup( &jfst->filters, true );
+	free(jfst);
 }
 
-static void jvst_set_aliases ( JackVST* jvst, FSTPortType type ) {
+static void jfst_set_aliases ( JFST* jfst, FSTPortType type ) {
 	int32_t count;
 	jack_port_t** ports;
 	switch ( type ) {
 	case FST_PORT_IN:
-		count = jvst->numIns;
-		ports = jvst->inports;
+		count = jfst->numIns;
+		ports = jfst->inports;
 		break;
 	case FST_PORT_OUT:
-		count = jvst->numOuts;
-		ports = jvst->outports;
+		count = jfst->numOuts;
+		ports = jfst->outports;
 		break;
 	default: return;
 	}
@@ -72,7 +72,7 @@ static void jvst_set_aliases ( JackVST* jvst, FSTPortType type ) {
 	// Set port alias
 	int32_t i;
 	for ( i=0; i < count; i++ ) {
-		char* name = fst_get_port_name ( jvst->fst, i, type );
+		char* name = fst_get_port_name ( jfst->fst, i, type );
 		if ( ! name ) continue;
 
 		jack_port_set_alias ( ports[i], name );
@@ -80,61 +80,61 @@ static void jvst_set_aliases ( JackVST* jvst, FSTPortType type ) {
 	}
 }
 
-bool jvst_init( JackVST* jvst, int32_t max_in, int32_t max_out ) {
-	FST* fst = jvst->fst;
+bool jfst_init( JFST* jfst, int32_t max_in, int32_t max_out ) {
+	FST* fst = jfst->fst;
 
 	// Set client name (if user did not provide own)
-	if (!jvst->client_name) jvst->client_name = fst->handle->name;
+	if (!jfst->client_name) jfst->client_name = fst->handle->name;
 
 	// Jack Audio
-	jvst->numIns = (max_in >= 0 && max_in < fst_num_ins(fst)) ? max_in : fst_num_ins(fst);
-	jvst->numOuts = (max_out >= 0 && max_out < fst_num_outs(fst)) ? max_out : fst_num_outs(fst);
+	jfst->numIns = (max_in >= 0 && max_in < fst_num_ins(fst)) ? max_in : fst_num_ins(fst);
+	jfst->numOuts = (max_out >= 0 && max_out < fst_num_outs(fst)) ? max_out : fst_num_outs(fst);
 	printf("Port Layout (FSTHost/plugin) IN: %d/%d OUT: %d/%d\n", 
-		jvst->numIns, fst_num_ins(fst), jvst->numOuts, fst_num_outs(fst));
+		jfst->numIns, fst_num_ins(fst), jfst->numOuts, fst_num_outs(fst));
 
-	bool want_midi_out = fst_want_midi_out ( jvst->fst );
-	if ( ! jvst_jack_init ( jvst, want_midi_out ) ) return false;
+	bool want_midi_out = fst_want_midi_out ( jfst->fst );
+	if ( ! jfst_jack_init ( jfst, want_midi_out ) ) return false;
 
 	// Port aliases
-	if ( jvst->want_port_aliases ) {
-		jvst_set_aliases ( jvst, FST_PORT_IN );
-		jvst_set_aliases ( jvst, FST_PORT_OUT );
+	if ( jfst->want_port_aliases ) {
+		jfst_set_aliases ( jfst, FST_PORT_IN );
+		jfst_set_aliases ( jfst, FST_PORT_OUT );
 	}
 
 	// Lock our crucial memory ( which is used in process callback )
 	// TODO: this is not all
-	mlock ( jvst, sizeof(JackVST) );
+	mlock ( jfst, sizeof(JFST) );
 	mlock ( fst, sizeof(FST) );
 
 	// Set block size / sample rate
-	fst_call_dispatcher (fst, effSetSampleRate, 0, 0, NULL, (float) jvst->sample_rate);
-	fst_call_dispatcher (fst, effSetBlockSize, 0, (intptr_t) jvst->buffer_size, NULL, 0.0f);
-	printf("Sample Rate: %d | Block Size: %d\n", jvst->sample_rate, jvst->buffer_size);
+	fst_call_dispatcher (fst, effSetSampleRate, 0, 0, NULL, (float) jfst->sample_rate);
+	fst_call_dispatcher (fst, effSetBlockSize, 0, (intptr_t) jfst->buffer_size, NULL, 0.0f);
+	printf("Sample Rate: %d | Block Size: %d\n", jfst->sample_rate, jfst->buffer_size);
 
-	jvst_sysex_gen_random_id ( jvst );
+	jfst_sysex_gen_random_id ( jfst );
 
 	return true;
 }
 
-void jvst_close ( JackVST* jvst ) {
-	jack_client_close ( jvst->client );
+void jfst_close ( JFST* jfst ) {
+	jack_client_close ( jfst->client );
 
-	fst_close(jvst->fst);
+	fst_close(jfst->fst);
 
-	free ( jvst->inports );
-	free ( jvst->outports );
+	free ( jfst->inports );
+	free ( jfst->outports );
 
-	jvst_destroy( jvst );
+	jfst_destroy( jfst );
 }
 
 /* return false if want quit */
-bool jvst_session_handler( JackVST* jvst, jack_session_event_t* event, const char* appname ) {
+bool jfst_session_handler( JFST* jfst, jack_session_event_t* event, const char* appname ) {
 	puts("session callback");
 
 	// Save state
 	char filename[MAX_PATH];
 	snprintf( filename, sizeof(filename), "%sstate.fps", event->session_dir );
-	if ( ! jvst_save_state( jvst, filename ) ) {
+	if ( ! jfst_save_state( jfst, filename ) ) {
 		puts("SAVE ERROR");
 		event->flags |= JackSessionSaveError;
 	}
@@ -144,7 +144,7 @@ bool jvst_session_handler( JackVST* jvst, jack_session_event_t* event, const cha
 	snprintf( retval, sizeof(retval), "%s -u %s -s \"${SESSION_DIR}state.fps\"", appname, event->client_uuid);
 	event->command_line = strndup( retval, strlen(retval) + 1  );
 
-	jack_session_reply(jvst->client, event);
+	jack_session_reply(jfst->client, event);
 
 	bool quit = (event->type == JackSessionSaveAndQuit);
 
@@ -158,82 +158,82 @@ bool jvst_session_handler( JackVST* jvst, jack_session_event_t* event, const cha
 }
 
 /* plug_spec could be path, dll name or eff/plug name */
-bool jvst_load (JackVST* jvst, const char* plug_spec, bool want_state_and_amc, bool state_can_fail) {
+bool jfst_load (JFST* jfst, const char* plug_spec, bool want_state_and_amc, bool state_can_fail) {
 	printf( "yo... lets see...\n" );
 
 	/* Try load directly */
 	bool loaded = false;
 	if ( plug_spec ) {
-		jvst->fst = fst_info_load_open ( jvst->dbinfo_file, plug_spec );
-		loaded = ( jvst->fst != NULL );
+		jfst->fst = fst_info_load_open ( jfst->dbinfo_file, plug_spec );
+		loaded = ( jfst->fst != NULL );
 	}
 
 	/* load state if requested - state file may contain plugin path
-	   NOTE: it can call jvst_load */
-	if ( want_state_and_amc && jvst->default_state_file) {
-		bool state_loaded = jvst_load_state (jvst, NULL);
+	   NOTE: it can call jfst_load */
+	if ( want_state_and_amc && jfst->default_state_file) {
+		bool state_loaded = jfst_load_state (jfst, NULL);
 		if ( ! state_can_fail ) loaded = state_loaded;
 	}
 
 	/* bind Jack to Audio Master Callback */
 	if ( loaded && want_state_and_amc )
-		jvstamc_init ( jvst, &( jvst->fst->amc ) );
+		jfstamc_init ( jfst, &( jfst->fst->amc ) );
 
 	return loaded;
 }
 
-void jvst_bypass(JackVST* jvst, bool bypass) {
-	if ( bypass && !jvst->bypassed ) {
-		jvst->bypassed = TRUE;
-		fst_call ( jvst->fst, SUSPEND );
-	} else if ( !bypass && jvst->bypassed ) {
-		fst_call ( jvst->fst, RESUME );
-		jvst->bypassed = FALSE;
+void jfst_bypass(JFST* jfst, bool bypass) {
+	if ( bypass && !jfst->bypassed ) {
+		jfst->bypassed = TRUE;
+		fst_call ( jfst->fst, SUSPEND );
+	} else if ( !bypass && jfst->bypassed ) {
+		fst_call ( jfst->fst, RESUME );
+		jfst->bypassed = FALSE;
 	}
 }
 
 /* Return false if want quit */
-bool jvst_idle(JackVST* jvst, const char* appname) {
+bool jfst_idle(JFST* jfst, const char* appname) {
 	// Handle SysEx Input
-	jvst_sysex_handler(jvst);
+	jfst_sysex_handler(jfst);
 
 	Event* ev;
-	while ( (ev = event_queue_get ( &jvst->event_queue )) ) {
+	while ( (ev = event_queue_get ( &jfst->event_queue )) ) {
 		switch ( ev->type ) {
 		case EVENT_STATE:
 			switch ( ev->value ) {
-			case WANT_STATE_BYPASS: jvst_bypass(jvst,TRUE); break;
-			case WANT_STATE_RESUME: jvst_bypass(jvst,FALSE); break;
+			case WANT_STATE_BYPASS: jfst_bypass(jfst,TRUE); break;
+			case WANT_STATE_RESUME: jfst_bypass(jfst,FALSE); break;
 			}
 			break;
 		case EVENT_PC:
 			// Self Program change support
-			if (jvst->midi_pc == MIDI_PC_SELF)
-				fst_program_change(jvst->fst, ev->value);
+			if (jfst->midi_pc == MIDI_PC_SELF)
+				fst_program_change(jfst->fst, ev->value);
 			break;
 		case EVENT_GRAPH:
 			// Attempt to connect MIDI ports to control app if Graph order change
-			jvst_connect_to_ctrl_app(jvst);
+			jfst_connect_to_ctrl_app(jfst);
 			// Autoconnect MIDI IN to all physical ports
-			if (jvst->want_auto_midi_physical)
-				jvst_connect_midi_to_physical(jvst);
+			if (jfst->want_auto_midi_physical)
+				jfst_connect_midi_to_physical(jfst);
 			break;
 		case EVENT_SESSION:
-			if ( ! jvst_session_handler(jvst, ev->ptr, appname) )
+			if ( ! jfst_session_handler(jfst, ev->ptr, appname) )
 				return false;
 			break;
 		}
 	}
 
 	// MIDI learn support
-	MidiLearn* ml = &jvst->midi_learn;
+	MidiLearn* ml = &jfst->midi_learn;
 	if ( ml->wait && ml->cc >= 0 && ml->param >= 0 ) {
 		ml->map[ml->cc] = ml->param;
 		ml->wait = false;
 
 		printf("MIDIMAP CC: %d => ", ml->cc);
 		char name[32];
-		bool success = fst_call_dispatcher( jvst->fst, effGetParamName, ml->param, 0, name, 0 );
+		bool success = fst_call_dispatcher( jfst->fst, effGetParamName, ml->param, 0, name, 0 );
 		if (success) {
 			printf("%s\n", name);
 		} else {
@@ -242,50 +242,50 @@ bool jvst_idle(JackVST* jvst, const char* appname) {
 	}
 
 	// Send notify if we want notify and something change
-	if (jvst->sysex_want_notify) jvst_sysex_notify(jvst);
+	if (jfst->sysex_want_notify) jfst_sysex_notify(jfst);
 
 	return true;
 }
 
 typedef enum {
-	JVST_FILE_TYPE_FXP,
-	JVST_FILE_TYPE_FXB,
-	JVST_FILE_TYPE_FPS,
-	JVST_FILE_TYPE_UNKNOWN
-} JVST_FileType;
+	JFST_FILE_TYPE_FXP,
+	JFST_FILE_TYPE_FXB,
+	JFST_FILE_TYPE_FPS,
+	JFST_FILE_TYPE_UNKNOWN
+} JFST_FileType;
 
-static JVST_FileType get_file_type ( const char * filename ) {
+static JFST_FileType get_file_type ( const char * filename ) {
 	char* file_ext = strrchr(filename, '.');
-	if (! file_ext) return JVST_FILE_TYPE_UNKNOWN;
+	if (! file_ext) return JFST_FILE_TYPE_UNKNOWN;
 
-	if ( !strcasecmp(file_ext, ".fps") ) return JVST_FILE_TYPE_FPS;
-	if ( !strcasecmp(file_ext, ".fxp") ) return JVST_FILE_TYPE_FXP;
-	if ( !strcasecmp(file_ext, ".fxb") ) return JVST_FILE_TYPE_FXB;
+	if ( !strcasecmp(file_ext, ".fps") ) return JFST_FILE_TYPE_FPS;
+	if ( !strcasecmp(file_ext, ".fxp") ) return JFST_FILE_TYPE_FXP;
+	if ( !strcasecmp(file_ext, ".fxb") ) return JFST_FILE_TYPE_FXB;
 
 	puts("Unkown file type");
-	return JVST_FILE_TYPE_UNKNOWN;
+	return JFST_FILE_TYPE_UNKNOWN;
 }
 
-bool jvst_load_state (JackVST* jvst, const char* filename) {
+bool jfst_load_state (JFST* jfst, const char* filename) {
 	bool success = false;
 
 	if ( ! filename ) {
-		if ( ! jvst->default_state_file ) return false;
-		filename = jvst->default_state_file;
+		if ( ! jfst->default_state_file ) return false;
+		filename = jfst->default_state_file;
 	}
 
 	switch ( get_file_type ( filename ) ) {
-	case JVST_FILE_TYPE_FPS:
-		success = fps_load (jvst, filename);
+	case JFST_FILE_TYPE_FPS:
+		success = fps_load (jfst, filename);
 		break;
 
-	case JVST_FILE_TYPE_FXP:
-	case JVST_FILE_TYPE_FXB:
-		if (! jvst->fst) break;
-		success = fst_load_fxfile (jvst->fst, filename);
+	case JFST_FILE_TYPE_FXP:
+	case JFST_FILE_TYPE_FXB:
+		if (! jfst->fst) break;
+		success = fst_load_fxfile (jfst->fst, filename);
 		break;
 
-	case JVST_FILE_TYPE_UNKNOWN:;
+	case JFST_FILE_TYPE_UNKNOWN:;
 	}
 
 	if (success) {
@@ -297,18 +297,18 @@ bool jvst_load_state (JackVST* jvst, const char* filename) {
 	return success;
 }
 
-bool jvst_save_state (JackVST* jvst, const char * filename) {
+bool jfst_save_state (JFST* jfst, const char * filename) {
 	switch ( get_file_type ( filename ) ) {
-	case JVST_FILE_TYPE_FPS:
-		return fps_save(jvst, filename);
+	case JFST_FILE_TYPE_FPS:
+		return fps_save(jfst, filename);
 
-	case JVST_FILE_TYPE_FXB:
-		return fst_save_fxfile(jvst->fst, filename, FXBANK);
+	case JFST_FILE_TYPE_FXB:
+		return fst_save_fxfile(jfst->fst, filename, FXBANK);
 
-	case JVST_FILE_TYPE_FXP:
-		return fst_save_fxfile (jvst->fst, filename, FXPROGRAM);
+	case JFST_FILE_TYPE_FXP:
+		return fst_save_fxfile (jfst->fst, filename, FXPROGRAM);
 
-	case JVST_FILE_TYPE_UNKNOWN:;
+	case JFST_FILE_TYPE_UNKNOWN:;
 	}
 	return false;
 }
