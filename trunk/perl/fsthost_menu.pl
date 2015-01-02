@@ -58,16 +58,7 @@ BEGIN {
 	die 'Can\'t find modules Gtk[23]' unless ( $Gtk );
 }
 
-use constant {
-	NOGUI => 0, # Disable GUI at all
-	GUI_HIDE => 1,
-	GUI_NORMAL => 2
-};
-
-our $FSTHOST_GUI = GUI_NORMAL; # default
-our %FSTHOST_OPTIONS = (
-	'p' => '',
-);
+our %FSTHOST_OPTIONS;
 our $filename = $ENV{'HOME'} . '/.fsthost.xml';
 
 sub get_cmd_from_tv {
@@ -81,7 +72,6 @@ sub get_cmd_from_tv {
 
 	my @opts = map { '-'.$_.' '.$FSTHOST_OPTIONS{$_} } keys %FSTHOST_OPTIONS;
 	my @tcmd = (
-		'env FSTHOST_GUI='.$FSTHOST_GUI,
 		'fsthost' . $arch,
 		@opts,
 		"\"$path\"",
@@ -110,16 +100,20 @@ sub tv_selection_changed {
 
 sub edit_button_toggle {
 	my ( $b, $data ) = @_;
-	$FSTHOST_GUI = ( $b->get_active() ) ? GUI_NORMAL : GUI_HIDE;
+	if ( $b->get_active() ) {
+		delete $FSTHOST_OPTIONS{'e'};
+	} else {
+		$FSTHOST_OPTIONS{'e'} = '';
+	}
 	tv_selection_changed ( $data->{'tv'}, $data->{'label'} );
 }
 
 sub ctp_button_toggle {
 	my ( $b, $data ) = @_;
 	if ( $b->get_active() ) {
-		$FSTHOST_OPTIONS{'p'} = '';
-	} else {
 		delete $FSTHOST_OPTIONS{'p'};
+	} else {
+		$FSTHOST_OPTIONS{'p'} = '';
 	}
 	tv_selection_changed ( $data->{'tv'}, $data->{'label'} );
 }
