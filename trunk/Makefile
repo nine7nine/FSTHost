@@ -24,7 +24,7 @@ endif
 
 # Shared GCC flags
 CEXTRA             := $(shell pkg-config --cflags $(PKG_CONFIG_MODULES))
-CEXTRA             += -g -O2 -Wall -Wno-deprecated-declarations -Wno-multichar -frounding-math -fsignaling-nans -mfpmath=sse -msse2
+CEXTRA             += -g -O3 -Wall -Wno-deprecated-declarations -Wno-multichar -frounding-math -fsignaling-nans -mfpmath=sse -msse2
 
 ifeq ($(VUMETER),1)
 CEXTRA             += -DVUMETER
@@ -161,7 +161,7 @@ $(EXTRASUBDIRS:%=%/__clean__): dummy
 	cd `dirname $@` && $(RM) $(CLEAN_FILES)
 
 fsthost_list: xmldb/list_$(LBITS).o
-	gcc flist.c $< $(shell pkg-config --cflags --libs libxml-2.0) -O2 -g -I. -o $@
+	gcc flist.c $< $(shell pkg-config --cflags --libs libxml-2.0) -O3 -g -I. -o $@
 
 ### Target specific build rules
 define compile
