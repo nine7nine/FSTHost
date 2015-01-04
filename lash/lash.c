@@ -1,5 +1,6 @@
+#include <stdio.h>
 #include <lash/lash.h>
-#include "jfst.h"
+#include "../jfst/jfst.h"
 
 static lash_client_t *lash_client = NULL;
 
@@ -37,6 +38,7 @@ jfst_lash_save(JFST *jfst) {
 	size_t bytelen;
 	lash_config_t *config;
 	void *chunk;
+	MidiLearn* ml = &jfst->midi_learn;
 
 	for( i=0; i<jfst->fst->plugin->numParams; i++ ) {
 	    char buf[10];
@@ -60,7 +62,7 @@ jfst_lash_save(JFST *jfst) {
 	    
 	    snprintf( buf, 15, "midi_map%d", i );
 	    config = lash_config_new_with_key( buf );
-	    lash_config_set_value_int(config, jfst->midi_map[i]);
+	    lash_config_set_value_int(config, ml->map[i]);
 	    lash_send_config(lash_client, config);
 	    //lash_config_destroy( config );
 	}
@@ -103,7 +105,8 @@ jfst_lash_restore(lash_config_t *config, JFST *jfst ) {
 	    if( cc < 0 || cc>=128 || param<0 || param>=jfst->fst->plugin->numParams ) 
 		return;
 
-	    jfst->midi_map[cc] = param;
+	    MidiLearn* ml = &jfst->midi_learn;
+	    ml->map[cc] = param;
 	    return;
 	}
 
