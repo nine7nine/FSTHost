@@ -131,17 +131,22 @@ sub connect_button_toggle {
 sub read_xml_db {
 	my $fst = shift;
 
-	my $parser = XML::LibXML->new();
+	my $parser = new XML::LibXML ();
 	my $doc    = $parser->parse_file($filename);
 	my $root = $doc->documentElement();
 	my @nodes = $root->getChildrenByTagName('fst');
 	foreach my $N ( @nodes ) {
-		my $F = $N->getAttribute('file');
-		$fst->{$F}->{'path'} = $N->getAttribute('path');
-		$fst->{$F}->{'arch'} = $N->getAttribute('arch');
+		my %H;
 
+		# Get Attributes
+		map { $H{$_->nodeName} = $_->textContent() } $N->attributes();
+		next unless exists $H{'file'};
+
+		# Get Childs
 		my @childs = grep { $_->nodeType == XML_ELEMENT_NODE } $N->childNodes();
-		map { $fst->{$F}->{$_->nodeName} = $_->textContent() } @childs;
+		map { $H{$_->nodeName} = $_->textContent() } @childs;
+
+		$fst->{ $H{'file'} } = \%H;
 	}
 }
 sub close_main_window { my $w=shift; $w->destroy(); our $window = undef; }
