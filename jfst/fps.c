@@ -1,16 +1,17 @@
-#include <glib.h>
 #include <string.h>
 
 #include <libxml/parser.h>
 #include <libxml/tree.h>
 
+#include "base64.h"
+
 #include "jfst.h"
 
 // Concept from: http://stackoverflow.com/questions/122616/how-do-i-trim-leading-trailing-whitespace-in-a-standard-way
 // With small modifications
-static char *
-trim(char * s) {
-    char * p = s;
+static char*
+trim(xmlChar* s) {
+    char* p = (char*) s;
     int l = strlen(p);
 
     while(! isgraph(p[l - 1])) p[--l] = 0;
@@ -18,7 +19,7 @@ trim(char * s) {
 
     memmove(s, p, l + 1);
 
-    return s;
+    return (char*) s;
 }
 // -----------------------------------
 
@@ -47,7 +48,7 @@ fps_get_plugin_file( xmlNode *psn ) {
 
 static int
 fps_check_this(FST *fst, char *field, char *value) {
-   bool success = FALSE;
+   bool success = false;
    char testString[64];
 
    printf("Check %s : %s == ", field, value);
@@ -55,10 +56,10 @@ fps_check_this(FST *fst, char *field, char *value) {
       int32_t ival = strtol( value, NULL, 10 );
       if ( ival == fst_uid(fst) ) {
          printf("%d [PASS]\n", ival);
-         return TRUE;
+         return true;
       } else {
          printf("%d [FAIL]\nUniqueID mismatch!\n", ival);
-         return FALSE;
+         return false;
       }
    // NOTE: All below is for compatibility and shall be removed someday
    } else if ( strcmp(  field, "productString" ) == 0 ) {
@@ -72,7 +73,7 @@ fps_check_this(FST *fst, char *field, char *value) {
    if (success) {
       if (strcmp (testString, value) == 0) {
          printf("%s [PASS]\n", testString);
-         return TRUE;
+         return true;
       }
 
       printf("%s [FAIL]\nstring mismatch!\n", testString);
@@ -80,7 +81,7 @@ fps_check_this(FST *fst, char *field, char *value) {
       printf("empty [FAIL]\nCan't get plugin string\n");
    }
 
-   return FALSE;
+   return false;
 }
 
 static int
@@ -97,7 +98,7 @@ fps_process_node(JFST* jfst, xmlNode *a_node) {
           char *value = (char*) xmlGetProp(cur_node, BAD_CAST "value");
 
           if (! fps_check_this(fst, field, value))
-		return FALSE;
+		return false;
        // Map
        } else if (xmlStrcmp(cur_node->name, BAD_CAST "map") == 0) {
           unsigned short cc = strtol((const char*) xmlGetProp(cur_node, BAD_CAST "cc"), NULL, 10);
@@ -192,30 +193,33 @@ fps_process_node(JFST* jfst, xmlNode *a_node) {
           int chunk_size = strtoul((const char*) xmlGetProp(cur_node, BAD_CAST "size"), NULL, 0);
           if ( ! chunk_size > 0 ) {
              printf("Error: chunk size: %d", chunk_size);
-             return FALSE;
+             return false;
           }
 
           printf("Loading %dB chunk into plugin ... ", chunk_size);
-          char *chunk_base64 = trim((char *) cur_node->children->content);
-          gsize out_len;
-          void *chunk_data = g_base64_decode(chunk_base64, &out_len);
+          char *chunk_base64 = trim( cur_node->children->content );
 
-          if (chunk_size != out_len) {
-             printf("[ERROR]\n");
-             printf ("Problem while decode base64. DecodedChunkSize: %d\n", (int) out_len);
-             return FALSE;
+          int out_len;
+          unsigned char* chunk_data = unbase64 ( chunk_base64, strlen(chunk_base64), &out_len );
+
+          if (!chunk_data || chunk_size != out_len) {
+             if (chunk_data) free( chunk_data );
+             puts("[ERROR]");
+             printf ("Problem while decode base64. DecodedChunkSize: %d\n", out_len);
+             return false;
           }
-          fst_call_dispatcher( fst, effSetChunk, 0, chunk_size, chunk_data, 0 );
-          printf("[DONE]\n");
 
-          g_free(chunk_data);
+          fst_call_dispatcher( fst, effSetChunk, 0, chunk_size, chunk_data, 0 );
+	  free( chunk_data );
+
+          puts("[DONE]");
        } else {
           if (! fps_process_node(jfst, cur_node->children))
-		return FALSE;
+		return false;
        }
     }
 
-    return TRUE;
+    return true;
 }
 
 bool fps_load(JFST* jfst, const char* filename) {
@@ -224,7 +228,7 @@ bool fps_load(JFST* jfst, const char* filename) {
    xmlDoc* doc = xmlReadFile(filename, NULL, 0);
    if (doc == NULL) {
       printf("error: could not parse file %s\n", filename);
-      return FALSE;
+      return false;
    }
 
    xmlNode* plugin_state_node = xmlDocGetRootElement(doc);
@@ -254,7 +258,7 @@ bool fps_save (JFST* jfst, const char* filename) {
    FILE * f = fopen (filename, "wb");
    if (! f) {
       printf ("Could not open state file: %s\n", filename);
-      return FALSE;
+      return false;
    }
 
    FST* fst = jfst->fst;
@@ -347,13 +351,17 @@ bool fps_save (JFST* jfst, const char* filename) {
 
       if ( chunk_size <= 0 ) {
          printf( "Chunke len =< 0 !!! Not saving chunk.\n" );
-         return FALSE;
+         return false;
       }
 
-      char *encoded = g_base64_encode( chunk_data, chunk_size );
+      int len;
+      char* encoded = base64 ( chunk_data, chunk_size, &len );
+      if ( ! encoded ) return false;
+
       cur_node = xmlNewChild(plugin_state_node, NULL, BAD_CAST "chunk", BAD_CAST encoded);
+      free( encoded );
+
       xmlNewProp(cur_node, BAD_CAST "size", int2str(tString, sizeof tString, chunk_size));
-      g_free( encoded );
    // Params
    } else {
       int32_t paramIndex;
@@ -365,10 +373,10 @@ bool fps_save (JFST* jfst, const char* filename) {
       }
    }
 
-   xmlDocFormatDump(f, doc, TRUE);
+   xmlDocFormatDump(f, doc, true);
    fclose(f);
 
    xmlFreeDoc(doc);
 
-   return TRUE;
+   return true;
 }
