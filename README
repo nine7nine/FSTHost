@@ -24,7 +24,7 @@ Supports:
 - control using TCP socket ( e.g. via telnet )
 
 There are also:
-- fsthost_menu.sh - zenity script for help to start plugins
+- fsthost_menu.sh (obsolete) - zenity script for help to start plugins
 - fsthost_menu.pl (default on make install) - Perl GTK2 / GTK3 menu to startup plugins
 
 Getting Started
@@ -36,6 +36,7 @@ Getting Started
   gtk+-2.0 or gtk+-3.0
   jack
   libxml-2.0
+  perl XML::LibXML module for fsthost_menu ( libxml-perl ? )
   lash-1.0 ( optional )
 
 2) Type 'make'. If everything works correctly this should create an
