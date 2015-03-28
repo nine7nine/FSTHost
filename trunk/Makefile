@@ -12,7 +12,10 @@ LASH_EXISTS        := $(shell if pkg-config --exists lash-1.0; then echo yes; el
 PKG_CONFIG_MODULES := glib-2.0
 PKG_CONFIG_MODULES += jack
 PKG_CONFIG_MODULES += libxml-2.0
+
+ifneq ($(GTK),0)
 PKG_CONFIG_MODULES += gtk+-$(GTK).0
+endif
 
 ifeq ($(GTK),2)
 override VUMETER = 0
