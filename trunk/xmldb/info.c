@@ -188,13 +188,14 @@ FST* fst_info_load_open ( const char* dbpath, const char* plug_spec ) {
 int fst_info_update(const char *dbpath, const char *fst_path) {
 	xmlNode* xml_rn = NULL;
 
-	xmlDoc* xml_db = fst_info_read_xmldb ( dbpath );
+	char* xmlpath = (dbpath) ? (char*) dbpath : fst_info_default_path();
+
+	xmlDoc* xml_db = fst_info_read_xmldb ( xmlpath );
 	if (xml_db) {
 		xml_rn = xmlDocGetRootElement(xml_db);
 	} else {
-	//	printf("Could not open/parse file %s. Create new one.\n", xml_db->name);
+//		printf("Could not open/parse file %s. Create new one.\n", xmlpath);
 		xml_db = xmlNewDoc(BAD_CAST "1.0");
-		xml_db->name = (dbpath) ? (char*) dbpath : fst_info_default_path();
 
 		xml_rn = xmlNewDocRawNode(xml_db, NULL, BAD_CAST "fst_database", NULL);
 		xmlDocSetRootElement(xml_db, xml_rn);
@@ -215,14 +216,15 @@ int fst_info_update(const char *dbpath, const char *fst_path) {
 	}
 
 	if (need_save) {
-		FILE * f = fopen (xml_db->name, "wb");
+		FILE * f = fopen (xmlpath, "wb");
 		if (! f) {
-			printf ("Could not open xml database: %s\n", xml_db->name);
+			printf ("Could not open xml database: %s\n", xmlpath);
 			return 8;
 		}
 
 		xmlDocFormatDump(f, xml_db, true);
 		fclose(f);
+		printf ( "xml database updated: %s\n", xmlpath );
 	}
 
 	xmlFreeDoc(xml_db);
