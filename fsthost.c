@@ -57,19 +57,22 @@ extern void jfst_lash_init(JFST *jfst, int* argc, char** argv[]);
 //GMainLoop* glib_main_loop;
 volatile JFST *jfst_first = NULL;
 
+volatile bool quit = false;
+volatile bool open_editor = false;
 void jfst_quit(JFST* jfst) {
+	quit = true;
+
 #ifdef NO_GTK
 //	g_main_loop_quit(glib_main_loop);
 #else
-	if (jfst->with_editor == WITH_EDITOR_NO) {
+//	if (jfst->with_editor == WITH_EDITOR_NO) {
 //		g_main_loop_quit(glib_main_loop);
-	} else {
+//	} else {
 //		gtk_gui_quit();
-	}
+//	}
 #endif
 }
 
-volatile bool quit = false;
 static void signal_handler (int signum) {
 	JFST *jfst = (JFST*) jfst_first;
 
@@ -77,7 +80,7 @@ static void signal_handler (int signum) {
 	case SIGINT:
 		puts("Caught signal to terminate (SIGINT)");
 //		g_idle_add( (GSourceFunc) jfst_quit, jfst);
-		quit = true;
+		jfst_quit( jfst );
 		break;
 	case SIGUSR1:
 		puts("Caught signal to save state (SIGUSR1)");
@@ -86,6 +89,7 @@ static void signal_handler (int signum) {
 	case SIGUSR2:
 		puts("Caught signal to open editor (SIGUSR2)");
 //		g_idle_add( (GSourceFunc) fst_run_editor, jfst->fst);
+		open_editor = true;
 		break;
 	}
 }
@@ -93,15 +97,22 @@ static void signal_handler (int signum) {
 static bool idle ( JFST* jfst ) {
 	if ( ! jfst_idle ( jfst, APPNAME_ARCH ) ) {
 		jfst_quit(jfst);
-		return FALSE;
+		return false;
 	}
-	return TRUE;
+
+	if ( open_editor ) {
+		open_editor = false;
+		fst_run_editor( jfst->fst, false );
+	}
+
+	return true;
 }
 
 #ifdef NO_GTK
 static void edit_close_handler ( void* arg ) {
-//	JFST* jfst = (JFST*) arg;
+	JFST* jfst = (JFST*) arg;
 //	g_idle_add( (GSourceFunc) jfst_quit, jfst);
+	jfst_quit( jfst );
 }
 #endif
 
