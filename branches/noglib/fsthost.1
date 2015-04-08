@@ -1,0 +1,152 @@
+.\"                                      Hey, EMACS: -*- nroff -*-
+.\" First parameter, NAME, should be all caps
+.\" Second parameter, SECTION, should be 1-8, maybe w/ subsection
+.\" other parameters are allowed: see man(7), man(1)
+.TH FSTHOST 1 2013-04-25
+.\" Please adjust this date whenever revising the manpage.
+.\"
+.\" Some roff macros, for reference:
+.\" .nh        disable hyphenation
+.\" .hy        enable hyphenation
+.\" .ad l      left justify
+.\" .ad b      justify to both left and right margins
+.\" .nf        disable filling
+.\" .fi        enable filling
+.\" .br        insert line break
+.\" .sp <n>    insert n+1 empty lines
+.\" for manpage-specific macros, see man(7)
+.SH NAME
+fsthost \- JACK-based host to use VST plugins on GNU/Linux with GTK2 interface.
+
+.SH SYNOPSIS
+.B fsthost32
+.RI [ options ]	<plugin>
+
+.SH DESCRIPTION
+This program enables you to use a VST plugins with JACK.
+.P
+Supports:
+.br
+- 32 and 64 bit plugins
+.br
+- load/save state to LASH, JackSessions, FPS files (own XML format)
+.br
+- load/save FXB/FXP files
+.br
+- Jack Transport
+.br
+- Jack MIDI
+.br
+- Jack autoconnection
+.br
+- LADIsh - L1 or L2 (JackSession)
+.br
+- Dump settings via SysEx
+.br
+- MIDI CC automation (MIDI learn)
+.br
+- bypass/resume state (also via MIDI CC or SysEx)
+.br
+- simple midi filters
+.br
+- volume control
+.br
+- plugins which not handling MIDI Program Change messages
+.br
+- easily plugin discovering (-g option)
+.br
+- GTK2/GTK3
+.br
+- control using TCP socket ( e.g. via telnet )
+.P
+
+There are also:
+.br
+- fsthost_menu.sh - zenity script for help to start plugins
+.br
+- fsthost_menu.pl (default on make install) - Perl GTK2 / GTK3 menu to startup plugins
+
+.SH OPTIONS
+.TP
+.B \-A
+Set plugin port names as aliases. ( NOTE: some plugs set same name for all ports )
+.TP
+.B \-b
+Start in bypass mode
+.TP
+.B \-g
+Create/Update XML info DB.
+.TP
+.B \-L
+List plugins from XML info DB. Same as fsthost_list.
+.TP
+.B \-d xml_db_path
+Custom path to XML DB
+.TP
+.B \-n
+Disable Editor and GTK GUI
+.TP
+.B \-N
+Notify changes by SysEx
+.TP
+.B \-e
+Hide Editor
+.TP
+.B \-s <state_file>
+Load FPS/FXP/FXB file
+.TP
+.B \-S <port>
+Start CTRL server on port <port>
+.TP
+.B \-c <client_name>
+Jack Client name
+.TP
+.B \-k channel
+MIDI Channel (0: all, 17: none)
+.TP
+.B \-i num_in
+Jack number In ports
+.TP
+.B \-j <connect_to>
+Connect Audio Out to <connect_to>
+.TP
+.B \-l
+Save state to state_file on SIGUSR1 (require -s)
+.TP
+.B \-m mode_midi_cc
+Bypass/Resume MIDI CC (default: 122)
+.TP
+.B \-p
+Connect MIDI In port to all physical
+.TP
+.B \-P
+Self MIDI Program Change handling
+.TP
+.B \-o num_out
+Jack number Out ports
+.TP
+.B \-t tempo
+Set fixed Tempo rather than using JackTransport
+.TP
+.B \-u uuid
+JackSession UUID
+.TP
+.B \-U SysEx ID
+SysEx ID (1-127). 0 is default (do not use it)
+.TP
+.B \-V
+Disable Volume control / filtering CC7 messages
+.TP
+.B \-z
+Zeroize output buffers
+
+.SH SEE ALSO
+.BR jackd (1).
+.BR wine (1).
+
+.SH AUTHOR
+.B fsthost
+was written by Pawel Piatek <xj@wp.pl> and others.
+.PP
+This manual page was originally written by Jof Thibaut <tangostudio@tuxfamily.org>,
+for the Debian project (and may be used by others).

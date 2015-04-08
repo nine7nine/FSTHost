@@ -1,0 +1,117 @@
+
+Whats This ?
+------------
+
+This is official successor of FST, well what was fst ?
+Linux VST host with runs as a jack client and with GTK GUI.
+
+Supports:
+- 32 and 64 bit plugins
+- load/save state to LASH, JackSessions, FPS files (own XML format)
+- load/save FXB/FXP files
+- Jack Transport
+- Jack MIDI
+- Jack autoconnection
+- LADIsh - L1 or L2 (JackSession)
+- Dump settings via SysEx
+- MIDI CC automation (MIDI learn)
+- bypass/resume state (also via MIDI CC or SysEx)
+- simple midi filters
+- volume control
+- plugins which not handling MIDI Program Change messages
+- easily plugin discovering (-g option)
+- GTK2/GTK3 ( you can compile even without GTK )
+- control using TCP socket ( e.g. via telnet )
+
+There are also:
+- fsthost_menu.sh (obsolete) - zenity script for help to start plugins
+- fsthost_menu.pl (default on make install) - Perl GTK2 / GTK3 menu to startup plugins
+
+Getting Started
+---------------
+
+1) ensure you have the necessary build dependencies (devel packages):
+  wine
+  glib-2.0
+  gtk+-2.0 or gtk+-3.0
+  jack
+  libxml-2.0
+  perl XML::LibXML module for fsthost_menu ( libxml-perl ? )
+  lash-1.0 ( optional )
+
+2) Type 'make'. If everything works correctly this should create an
+   executable file called 'fsthost32' and optionaly 'fsthost64'
+
+3) Type 'make GTK=2' to force GTK+2 GUI or 'make GTK=0' for exclude GTK code
+
+4) Type 'make LASH_EXISTS=no' to build without lash.
+   This is default if lash libs are not available
+
+5) Type 'make PLAT=64' to build only 64bit version and respectively
+        'make PLAT=32' to build only 32bit version
+
+6) To run your vst plugins:
+   
+      ./fsthost32 /path/to/someplugin.dll
+   or
+      ./fsthost64 /path/to/someplugin.dll
+
+   and set up the inputs and outputs, eg. using qjackctl's
+   'Connections' window.
+
+7) To install type 'make install'
+
+XML Database and simple plugin menu
+-----
+
+You can build XML Database, and update it later by such command
+fsthost -g ~/VST
+
+Where ~/VST is path which will be scanned recursivelly for plugins.
+You can use later this database by some GUI app ( e.g. fsthost_menu ).
+Default path for database is ~/fsthost.xml.
+
+You can also export VST_PATH and scan it recursivelly like:
+   % export VST_PATH=~/VST:/usr/share/vst:/otherlocation
+   % fsthost -g
+
+You can force GTK version (2/3) for "fsthost_menu.pl" by:
+   % export FSTMENU_GTK=2 # or 3
+
+Stuff
+-----
+
+With LASH you can save and restore the state of the plugin.
+
+There is a first version of midi learn, load/save of midimap
+will come tomorrow. i had my beer now and its 5:15
+i should be in a club. but i go to bed now.
+just press midi learn, move a plugin control and your midi
+control.
+
+Known BUGs
+---------------
+
+If you experience WineBUG like RenderBadPicture, please update this ticket:
+http://bugs.winehq.org/show_bug.cgi?id=6673
+
+workaround:
+export WINEDEBUG=synchronous
+
+You can try also this one below ( but personally I see no difference ;-)
+export GDK_NATIVE_WINDOWS=1
+
+License
+-------
+
+fsthost is licenced under the GNU General Public License version 2. See
+file 'COPYING' for details.
+
+Authors / contributors
+----------------------
+Current maintainer of FSTHost: Pawel Piatek <xj@wp.pl>
+
+Autors of FST:
+Torben Hohn, Paul Davis, Kjetil S. Matheussen / Notam, Mark Williamson
+Joe Button, Nedko Arnaudov
+
