@@ -150,14 +150,21 @@ void jfst_process( JFST* jfst, jack_nframes_t nframes ) {
 	// NOTE: we process MIDI even in bypass mode for want_state handling and our SysEx
 	void *port_buffer = jack_port_get_buffer( jfst->midi_inport, nframes );
 	jack_nframes_t num_jackevents = jack_midi_get_event_count( port_buffer );
+	if ( num_jackevents == 0 ) goto no_midi_in;
 
 	/* Allocate space for VST MIDI - preallocate space for all messages even
 	   if we use only few - cause of alloca scope. Can't move this to separate
 	   function because VST plug need this space during process call
-	   NOTE: can't use VLA here because of goto above
+	   The VstEvents structure already contains an array of 2 pointers to VstEvent
+	   Can't use VLA here because of goto above
 	*/
-	size_t size = sizeof(VstEvents) + ((num_jackevents - 2) * sizeof(VstEvent*));
+	// Pointers
+	size_t size = sizeof(VstEvents);
+	if ( num_jackevents > 2 )
+		size += (num_jackevents - 2) * sizeof(VstEvent*);
 	VstEvents* events = alloca ( size );
+
+	// VstEvents
 	VstMidiEvent* event_array = alloca ( num_jackevents * sizeof(VstMidiEvent) );
 	memset ( event_array, 0, num_jackevents * sizeof(VstMidiEvent) );
 
@@ -223,7 +230,6 @@ no_midi_in: ;
 	jfst->out_level = avg_level * 100;
 	if (jfst->out_level > 100) jfst->out_level = 100;
 #endif
-
 	jfst_apply_volume ( jfst, nframes, outs );
 
 midi_out:
