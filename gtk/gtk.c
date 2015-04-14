@@ -810,7 +810,7 @@ bool gtk_gui_start (JFST* jfst) {
 		jfst, FALSE, hpacker);
 	editor_checkbox = gtk_check_button_new();
 	gtk_widget_set_tooltip_text(editor_checkbox, "Embedded Editor");
-	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(editor_checkbox), TRUE);
+	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(editor_checkbox), FALSE);
 	gtk_box_pack_start(GTK_BOX(hpacker), editor_checkbox, FALSE, FALSE, 0);
 	fst_set_window_close_callback( jfst->fst, gtk_edit_close_handler, jfst );
 	//----------------------------------------------------------------------------------
