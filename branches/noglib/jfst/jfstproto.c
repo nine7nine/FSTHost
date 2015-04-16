@@ -1,3 +1,5 @@
+#ifndef NO_GLIB
+
 #include <stdio.h>
 #include <string.h>
 #include <glib.h>
@@ -163,3 +165,5 @@ bool jfst_proto_close ( JFST* jfst ) {
 	if ( serv_fd ) serv_close_socket ( serv_fd );
 	return true;
 }
+
+#endif /* NO_GLIB */
