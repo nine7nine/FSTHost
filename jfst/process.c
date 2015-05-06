@@ -1,3 +1,10 @@
+//#define PTD
+#ifdef PTD
+#include <sys/time.h>
+#include <stdio.h>
+#endif
+
+
 #include <math.h>
 #include "jfst.h"
 
@@ -138,7 +145,10 @@ static inline void process_midi_in_msg ( JFST* jfst, jack_midi_event_t* jackeven
 void jfst_process( JFST* jfst, jack_nframes_t nframes ) {
 	int32_t i;
 	FST* fst = jfst->fst;
-
+#ifdef PTD
+	struct timeval start;
+	gettimeofday(&start, NULL);
+#endif
 	// Skip processing if we are during SetProgram, Suspend, Resume
 	if ( ! fst_process_trylock ( fst ) ) return;
 
@@ -219,7 +229,6 @@ no_midi_in: ;
 
 	// Deal with plugin
 	fst_process( fst, ins, outs, nframes );
-
 #ifdef VUMETER
 	/* Compute output level for VU Meter */
 	float avg_level = 0;
@@ -238,4 +247,12 @@ midi_out:
 	process_ctrl_output(jfst, nframes);
 
 	fst_process_unlock ( fst );
+#ifdef PTD
+	struct timeval end;
+	gettimeofday(&end, NULL);
+	long secs  = end.tv_sec  - start.tv_sec;
+	long usecs = end.tv_usec - start.tv_usec;
+	long mtime = ((secs) * 1000 + usecs/1000.0) + 0.5;
+	printf("Elapsed time: %ld millisecs\n", mtime);
+#endif
 }

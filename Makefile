@@ -27,7 +27,7 @@ endif
 
 # Shared GCC flags
 CEXTRA             := $(shell pkg-config --cflags $(PKG_CONFIG_MODULES))
-CEXTRA             += -g -O3 -Wall -Wno-deprecated-declarations -Wno-multichar -frounding-math -fsignaling-nans -mfpmath=sse -msse2
+CEXTRA             += -g -O2 -Wall -Wno-deprecated-declarations -Wno-multichar -march=native -mfpmath=sse
 
 ifeq ($(VUMETER),1)
 CEXTRA             += -DVUMETER
