@@ -1,8 +1,5 @@
-#ifndef NO_GLIB
-
 #include <stdio.h>
 #include <string.h>
-#include <glib.h>
 
 #include "../serv/serv.h"
 #include "jfst.h"
@@ -11,8 +8,6 @@
 
 /* jfst.c */
 void jfst_quit(JFST* jfst);
-
-static int serv_fd = 0;
 
 static void list_programs ( JFST* jfst, int client_sock ) {
 	FST* fst = jfst->fst;
@@ -40,7 +35,7 @@ static void get_program ( JFST* jfst, int client_sock ) {
 }
 
 static struct PROTO_MAP proto_string_map[] = {
-	{ CMD_EDITOR_OPEN, "editor open" },
+	{ CMD_EDITOR_OPEN, "editor_open" },
 	{ CMD_EDITOR_CLOSE, "editor_close" },
 	{ CMD_LIST_PROGRAMS, "list_programs" },
 	{ CMD_GET_PROGRAM, "get_program" },
@@ -60,11 +55,7 @@ static enum PROTO_CMD proto_lookup ( const char* name ) {
 	return CMD_UNKNOWN;
 }
 
-static bool jfst_proto_client_dispatch ( JFST* jfst, int client_sock ) {
-        char msg[64];
-        if ( ! serv_client_get_data ( client_sock, msg, sizeof msg ) )
-		return false;
-
+static bool jfst_proto_client_dispatch ( JFST* jfst, char* msg, int client_sock ) {
 	printf ( "GOT MSG: %s\n", msg );
 
 	int value = 0;
@@ -110,60 +101,16 @@ static bool jfst_proto_client_dispatch ( JFST* jfst, int client_sock ) {
 	return true;
 }
 
-static bool handle_client_connection (GIOChannel *source, GIOCondition condition, gpointer data ) {
+static bool handle_client_callback ( char* msg, int client_sock, void* data ) {
 	JFST* jfst = (JFST*) data;
-
-	int client_fd = g_io_channel_unix_get_fd ( source );
-	bool ok = jfst_proto_client_dispatch ( jfst, client_fd );
-
-	return ok;
-}
-
-static bool handle_server_connection (GIOChannel *source, GIOCondition condition, gpointer data ) {
-	JFST* jfst = (JFST*) data;
-
-	int serv_fd = g_io_channel_unix_get_fd ( source );
-	int client_fd = serv_get_client ( serv_fd );
-
-	/* Watch client socket */
-	GIOChannel* channel = g_io_channel_unix_new ( client_fd );
-	g_io_add_watch_full(
-		channel,
-		G_PRIORITY_DEFAULT_IDLE,
-		G_IO_IN,
-		(GIOFunc) handle_client_connection,
-		jfst, NULL
-	);
-
-	return true;
+	return jfst_proto_client_dispatch ( jfst, msg, client_sock );
 }
 
 /* Public functions */
 bool jfst_proto_init ( JFST* jfst ) {
 	puts ( "Starting JFST PROTO control server ..." );
-	serv_fd = serv_get_sock ( jfst->ctrl_port_number );
-	if ( ! serv_fd ) {
-		fst_error ( "Cannot create CTRL socket :(" );
-		return false;
-	}
+	bool ok = serv_init ( jfst->ctrl_port_number, handle_client_callback, jfst );
+	if ( ! ok ) fst_error ( "Cannot create CTRL socket :(" );
 
-	/* Watch server socket */
-	GIOChannel* channel = g_io_channel_unix_new(serv_fd);
-	g_io_add_watch_full (
-		channel,
-		G_PRIORITY_DEFAULT_IDLE,
-		G_IO_IN,
-		(GIOFunc) handle_server_connection,
-		jfst, NULL
-	);
-	g_io_channel_unref(channel);
-
-	return true;
+	return ok;
 }
-
-bool jfst_proto_close ( JFST* jfst ) {
-	if ( serv_fd ) serv_close_socket ( serv_fd );
-	return true;
-}
-
-#endif /* NO_GLIB */

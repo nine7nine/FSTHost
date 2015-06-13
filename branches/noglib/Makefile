@@ -2,8 +2,7 @@
 SRCDIR             := .
 SUBDIRS            :=
 PLAT               := 32
-GTK                := 0
-GLIB               := 1
+GTK                := 3
 VUMETER            := 0
 LBITS              := $(shell getconf LONG_BIT)
 LASH_EXISTS        := $(shell if pkg-config --exists lash-1.0; then echo yes; else echo no; fi)
@@ -12,11 +11,6 @@ LASH_EXISTS        := $(shell if pkg-config --exists lash-1.0; then echo yes; el
 # Modules
 PKG_CONFIG_MODULES := jack
 PKG_CONFIG_MODULES += libxml-2.0
-
-ifeq ($(GLIB),1)
-PKG_CONFIG_MODULES += glib-2.0
-override GTK = 0
-endif
 
 ifneq ($(GTK),0)
 PKG_CONFIG_MODULES += gtk+-$(GTK).0
@@ -32,7 +26,7 @@ endif
 
 # Shared GCC flags
 CEXTRA             := $(shell pkg-config --cflags $(PKG_CONFIG_MODULES))
-CEXTRA             += -g -O3 -Wall -Wno-deprecated-declarations -Wno-multichar -frounding-math -fsignaling-nans -mfpmath=sse -msse2
+CEXTRA             += -g -O2 -Wall -Wno-deprecated-declarations -Wno-multichar -march=native -mfpmath=sse
 
 ifeq ($(VUMETER),1)
 CEXTRA             += -DVUMETER
@@ -48,10 +42,6 @@ endif
 
 ifeq ($(GTK),0)
 CEXTRA             += -DNO_GTK
-endif
-
-ifeq ($(GLIB),0)
-CEXTRA             += -DNO_GLIB
 endif
 
 # Shared LDFlags
