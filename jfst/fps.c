@@ -190,9 +190,9 @@ fps_process_node(JFST* jfst, xmlNode *a_node) {
              continue;
           }
 
-          int chunk_size = strtoul((const char*) xmlGetProp(cur_node, BAD_CAST "size"), NULL, 0);
-          if ( ! chunk_size > 0 ) {
-             printf("Error: chunk size: %d", chunk_size);
+          unsigned int chunk_size = strtoul((const char*) xmlGetProp(cur_node, BAD_CAST "size"), NULL, 0);
+          if ( chunk_size == 0 ) {
+             puts("Error: chunk size: 0");
              return false;
           }
 
