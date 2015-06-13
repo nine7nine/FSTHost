@@ -23,11 +23,8 @@
 #include <semaphore.h>
 #include <signal.h>
 
-#ifndef NO_GLIB
-#include <glib.h>
-#endif
-
 #include "jfst/jfst.h"
+#include "serv/serv.h"
 #include "xmldb/info.h"
 
 #define VERSION "1.5.5.1"
@@ -43,7 +40,6 @@
 
 /* jfstproto.c */
 bool jfst_proto_init ( JFST* jfst );
-bool jfst_proto_close ( JFST* jfst );
 
 /* gtk.c */
 #ifndef NO_GTK
@@ -61,21 +57,11 @@ volatile JFST *jfst_first = NULL;
 volatile bool quit = false;
 volatile bool open_editor = false;
 
-#ifndef NO_GLIB
-GMainLoop* glib_main_loop;
-#endif
-
 void jfst_quit(JFST* jfst) {
 	quit = true;
 
-#ifdef NO_GTK
-	#ifndef NO_GLIB
-	g_main_loop_quit(glib_main_loop);
-	#endif
-#else
-	if (jfst->with_editor == WITH_EDITOR_NO) {
-		g_main_loop_quit(glib_main_loop);
-	} else {
+#ifndef NO_GTK
+	if (jfst->with_editor != WITH_EDITOR_NO) {
 		gtk_gui_quit();
 	}
 #endif
@@ -115,6 +101,8 @@ static bool idle ( JFST* jfst, bool sep_thread ) {
 
 	if ( ! fst_event_callback() )
 		jfst_quit(jfst);
+
+	serv_poll();
 
 	return true;
 }
@@ -167,9 +155,7 @@ static void usage(char* appname) {
 #ifndef NO_GTK
 	fprintf(stderr, format, "-e", "Hide Editor");
 #endif
-#ifndef NO_GLIB
 	fprintf(stderr, format, "-S <port>", "Start CTRL server on port <port>. Use 0 for random.");
-#endif
 	fprintf(stderr, format, "-s <state_file>", "Load <state_file>");
 	fprintf(stderr, format, "-c <client_name>", "Jack Client name");
 	fprintf(stderr, format, "-A", "Set plugin port names as aliases");
@@ -237,17 +223,11 @@ bool jfst_load_sep_th (JFST* jfst, const char* plug_spec, bool want_state_and_am
 }
 
 static inline void main_loop( JFST* jfst, bool separate_threads ) {
-#ifdef NO_GLIB
 	puts("GUI Disabled - start MainLoop");
 	while ( ! quit ) {
 		idle(jfst, separate_threads);
-		usleep ( 300000 );
+		usleep ( 100000 );
 	}
-#else
-	puts("GUI Disabled - start GlibMainLoop");
-	g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 750, (GSourceFunc) idle, jfst, NULL);
-	g_main_loop_run ( glib_main_loop );
-#endif
 }
 
 int WINAPI
@@ -262,9 +242,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	bool		separate_threads = false;
 	const char*	connect_to = NULL;
 	const char*	custom_path = NULL;
-#ifndef NO_GLIB
 	bool		serv = false;
-#endif
 
 	printf("FSTHost Version: %s (%s)\n", VERSION, ARCH "bit");
 
@@ -291,9 +269,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 			case 'g': opt_generate_dbinfo = true; break;
 			case 'L': opt_list_plugins = true; break;
 			case 's': jfst->default_state_file = optarg; break;
-#ifndef NO_GLIB
 			case 'S': serv=true; jfst->ctrl_port_number = strtol(optarg,NULL,10); break;
-#endif
 			case 'c': jfst->client_name = optarg; break;
 			case 'k': midi_filter_one_channel_set(&jfst->channel, strtol(optarg, NULL, 10)); break;
 			case 'i': opt_maxIns = strtol(optarg, NULL, 10); break;
@@ -354,15 +330,11 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	if ( ! jfst_init ( jfst, opt_maxIns, opt_maxOuts ) )
 		return 1;
 
-#ifndef NO_GLIB
-	glib_main_loop = g_main_loop_new(NULL, FALSE);
-
 	/* Socket stuff */
 	if ( serv && ! jfst_proto_init(jfst) ) {
 		jfst_close(jfst);
 		return 1;
 	}
-#endif
 
 	// Handling signals
 	struct sigaction sa;
@@ -408,10 +380,10 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 #endif
 	puts("Jack Deactivate");
 	jack_deactivate ( jfst->client );
-#ifndef NO_GLIB
+
 	/* Close CTRL socket */
-	jfst_proto_close ( jfst );
-#endif
+//	jfst_proto_close ( jfst );
+
 	jfst_close(jfst);
 
 	puts("Game Over");
