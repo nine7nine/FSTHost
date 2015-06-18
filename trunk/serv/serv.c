@@ -42,23 +42,17 @@ static bool serv_client_get_data ( int client_sock, char* msg, size_t msg_max_le
 	ssize_t read_size = read (client_sock , msg , msg_max_len );
 	if (read_size == 0) {
 		puts("Client disconnected");
-		close ( client_sock );
 		return false;
 	} else if (read_size < 0) {
 		perror("recv failed");
-		close ( client_sock );
 		return false;
 	}
+
+	// Message normalize
 	msg[read_size] = '\0'; /* make sure there is end */
 
 	strip_trailing ( msg, '\n' );
 	strip_trailing ( msg, '\r' );
-
-	if ( !strcasecmp ( msg, "quit" ) ) {
-		puts ( "GOT QUIT" );
-		close ( client_sock );
-		return false;
-	}
 
 	return true;
 }
@@ -144,11 +138,13 @@ void serv_poll () {
 					break;
 				}
 			}
-		} else { // some other socket
+		// Client socket
+		} else {
 			char msg[64];
-			if ( serv_client_get_data( fds[i].fd, msg, sizeof msg ) ) {
-				client_callback ( msg, fds[i].fd, serv_usr_data );
-			} else {
+			if ( ! serv_client_get_data( fds[i].fd, msg, sizeof msg ) ||
+			     ! client_callback ( msg, fds[i].fd, serv_usr_data )
+			) {
+				close ( fds[i].fd );
 				fds[i].fd = -1;
 			}
 		}
