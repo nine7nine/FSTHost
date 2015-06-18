@@ -133,7 +133,7 @@ sub sr_button_toggle {
 
 sub editor_button_clicked {
 	my ( $b, $self ) = @_;
-	$self->call ( 'editor open' );
+	$self->call ( 'editor_open' );
 }
 
 sub presets_combo_change {
