@@ -26,7 +26,7 @@ extern bool jfst_lash_idle(JFST *jfst);
 #define GDK_POINTER_TO_XID GDK_GPOINTER_TO_NATIVE_WINDOW
 #endif /* (GTK_MAJOR_VERSION < 3) */
 
-/* from cpuusage.c */
+/* cpuusage.c */
 extern void CPUusage_init();
 extern double CPUusage_getCurrentValue();
 

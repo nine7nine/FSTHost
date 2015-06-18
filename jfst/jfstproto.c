@@ -7,7 +7,11 @@
 #define ACK "<OK>"
 
 /* jfst.c */
-void jfst_quit(JFST* jfst);
+extern void jfst_quit(JFST* jfst);
+
+/* cpuusage.c */
+extern void CPUusage_init();
+extern double CPUusage_getCurrentValue();
 
 static void list_programs ( JFST* jfst, int client_sock ) {
 	FST* fst = jfst->fst;
@@ -34,6 +38,12 @@ static void get_program ( JFST* jfst, int client_sock ) {
 	serv_send_client_data ( client_sock, msg, strlen(msg) );
 }
 
+static void cpu_usage ( int client_sock ) {
+	char msg[8];
+	snprintf( msg, sizeof msg, "%g", CPUusage_getCurrentValue() );
+	serv_send_client_data ( client_sock, msg, strlen(msg) );
+}
+
 static struct PROTO_MAP proto_string_map[] = {
 	{ CMD_EDITOR_OPEN, "editor_open" },
 	{ CMD_EDITOR_CLOSE, "editor_close" },
@@ -42,6 +52,8 @@ static struct PROTO_MAP proto_string_map[] = {
 	{ CMD_SET_PROGRAM, "set_program" },
 	{ CMD_SUSPEND, "suspend" },
 	{ CMD_RESUME, "resume" },
+	{ CMD_CPU, "cpu" },
+	{ CMD_QUIT, "quit" },
 	{ CMD_KILL, "kill" },
 	{ CMD_UNKNOWN, NULL }
 };
@@ -58,6 +70,7 @@ static enum PROTO_CMD proto_lookup ( const char* name ) {
 static bool jfst_proto_client_dispatch ( JFST* jfst, char* msg, int client_sock ) {
 	printf ( "GOT MSG: %s\n", msg );
 
+	bool ret = true;
 	int value = 0;
 	char* sep = strchr ( msg, ':' );
 	if ( sep != NULL ) {
@@ -87,6 +100,12 @@ static bool jfst_proto_client_dispatch ( JFST* jfst, char* msg, int client_sock 
 	case CMD_RESUME:
 		jfst_bypass ( jfst, false );
 		break;
+	case CMD_CPU:
+		cpu_usage( client_sock );
+		break;
+	case CMD_QUIT:
+		ret = false;
+		break;
 	case CMD_KILL:
 		jfst_quit ( jfst );
 		break;
@@ -98,7 +117,7 @@ static bool jfst_proto_client_dispatch ( JFST* jfst, char* msg, int client_sock 
 	// Send ACK
 	serv_send_client_data ( client_sock, ACK, strlen(ACK) );
 
-	return true;
+	return ret;
 }
 
 static bool handle_client_callback ( char* msg, int client_sock, void* data ) {
@@ -108,9 +127,11 @@ static bool handle_client_callback ( char* msg, int client_sock, void* data ) {
 
 /* Public functions */
 bool jfst_proto_init ( JFST* jfst ) {
-	puts ( "Starting JFST PROTO control server ..." );
+	puts ( "Starting JFST control server ..." );
 	bool ok = serv_init ( jfst->ctrl_port_number, handle_client_callback, jfst );
 	if ( ! ok ) fst_error ( "Cannot create CTRL socket :(" );
+
+	CPUusage_init();
 
 	return ok;
 }
