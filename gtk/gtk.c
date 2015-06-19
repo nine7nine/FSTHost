@@ -14,9 +14,8 @@
 #include <sys/syscall.h>
 #include "fsthost.xpm"
 
-#ifdef HAVE_LASH
-extern bool jfst_lash_idle(JFST *jfst);
-#endif
+/* fsthost.c */
+extern void fsthost_idle();
 
 #if (GTK_MAJOR_VERSION < 3)
 /* FIXME: workaround code - will be removed */
@@ -746,12 +745,6 @@ idle_cb(JFST *jfst) {
 		gtk_widget_set_tooltip_text(bypass_button, tmpstr);
 	}
 
-#ifdef HAVE_LASH
-	if ( ! jfst_lash_idle(jfst) ) {
-		gtk_main_quit();
-		return FALSE;
-	}
-#endif
 	return TRUE;
 }
 
@@ -879,6 +872,10 @@ bool gtk_gui_start (JFST* jfst) {
 
  	gtk_widget_show_all (window);
 
+	// "global" idle
+        g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 100, (GSourceFunc) fsthost_idle, NULL, NULL);
+
+	// GTK GUI idle
         g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 500, (GSourceFunc) idle_cb, jfst, NULL);
 	
 	printf( "calling gtk_main now\n" );

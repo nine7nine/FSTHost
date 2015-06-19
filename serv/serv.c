@@ -14,6 +14,7 @@
 static struct pollfd fds[POLL_SIZE];
 static serv_client_callback client_callback;
 static void* serv_usr_data = NULL;
+static bool initialized = false;
 
 static int serv_get_client ( int serv_fd ) {
 	//Accept and incoming connection
@@ -98,7 +99,9 @@ int serv_init ( uint16_t port, serv_client_callback cb, void* data ) {
 	printf ("bind done, port: %d\n", ntohs( server.sin_port ) );
 
 	//Listen
-	listen(fds[0].fd, MAX_CLIENTS);	
+	listen(fds[0].fd, MAX_CLIENTS);
+
+	initialized = true;
 
 	return fds[0].fd;
 }
@@ -113,7 +116,7 @@ bool serv_send_client_data ( int client_sock, char* msg, int msg_len ) {
 
 
 void serv_poll () {
-	if ( fds[0].fd == -1 ) return;
+	if ( ! initialized ) return;
 
 	//wait for an activity on one of the sockets, don't block
 	int activity = poll(fds, POLL_SIZE, 0);
@@ -151,6 +154,19 @@ void serv_poll () {
 	}
 }
 
-void serv_close_socket () {
+void serv_close () {
+	if ( ! initialized ) return;
+
+	// Close clients
+	int i;
+	for ( i = 0; i < POLL_SIZE; i ++ ) {
+		if ( fds[i].fd != -1 ) {
+			close ( fds[i].fd );
+			fds[i].fd = -1; // just for beauty ;-)
+		}
+	}
+
+	// Close server
 	close ( fds[0].fd );
 }
+
