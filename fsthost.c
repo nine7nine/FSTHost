@@ -63,9 +63,8 @@ void jfst_quit(JFST* jfst) {
 	quit = true;
 
 #ifndef NO_GTK
-	if (jfst->with_editor != WITH_EDITOR_NO) {
+	if (jfst->with_editor != WITH_EDITOR_NO)
 		gtk_gui_quit();
-	}
 #endif
 }
 
@@ -207,12 +206,11 @@ sep_thread ( LPVOID arg ) {
 
 	if ( ! loaded ) return 0;
 
-	while ( ! quit ) {
-		if ( ! fst_event_callback() )
-			jfst_quit(st->jfst);
-
+	while ( fst_event_callback() ) {
 		usleep ( 30000 );
 	}
+
+	jfst_quit(st->jfst);
 
 	return 0;
 }
@@ -235,7 +233,9 @@ static inline void
 main_loop( JFST* jfst ) {
 	puts("GUI Disabled - start MainLoop");
 	while ( ! quit ) {
-		fsthost_idle();
+		if ( ! fsthost_idle() )
+			break;
+
 		usleep ( 100000 );
 	}
 }
@@ -391,7 +391,10 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	jack_deactivate ( jfst->client );
 
 	/* Close CTRL socket */
-	if ( serv ) serv_close();
+	if ( serv ) {
+		puts ( "Stopping JFST control" );
+		serv_close();
+	}
 
 	jfst_close(jfst);
 
