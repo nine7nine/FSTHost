@@ -51,11 +51,13 @@ extern void gtk_gui_quit();
 /* lash.c */
 #ifdef HAVE_LASH
 extern void jfst_lash_init(JFST *jfst, int* argc, char** argv[]);
+extern bool jfst_lash_idle(JFST *jfst);
 #endif
 
 volatile JFST *jfst_first = NULL;
 volatile bool quit = false;
 volatile bool open_editor = false;
+volatile bool separate_threads = false;
 
 void jfst_quit(JFST* jfst) {
 	quit = true;
@@ -86,23 +88,35 @@ static void signal_handler (int signum) {
 	}
 }
 
-static bool idle ( JFST* jfst, bool sep_thread ) {
+bool fsthost_idle () {
+	if ( ! jfst_first ) return true;
+	JFST* jfst = (JFST*) jfst_first;
+
 	if ( ! jfst_idle ( jfst, APPNAME_ARCH ) ) {
 		jfst_quit(jfst);
 		return false;
 	}
 
-	if ( sep_thread ) return true;
+	serv_poll();
 
 	if ( open_editor ) {
 		open_editor = false;
 		fst_run_editor( jfst->fst, false );
 	}
 
-	if ( ! fst_event_callback() )
+#ifdef HAVE_LASH
+	if ( ! jfst_lash_idle(jfst) ) {
 		jfst_quit(jfst);
+		return false;
+	}
+#endif
 
-	serv_poll();
+	if ( separate_threads ) return true;
+
+	if ( ! fst_event_callback() ) {
+		jfst_quit(jfst);
+		return false;
+	}
 
 	return true;
 }
@@ -194,11 +208,6 @@ sep_thread ( LPVOID arg ) {
 	if ( ! loaded ) return 0;
 
 	while ( ! quit ) {
-		if ( open_editor ) {
-			open_editor = false;
-			fst_run_editor( st->jfst->fst, false );
-		}
-
 		if ( ! fst_event_callback() )
 			jfst_quit(st->jfst);
 
@@ -222,10 +231,11 @@ bool jfst_load_sep_th (JFST* jfst, const char* plug_spec, bool want_state_and_am
 	return st.loaded;
 }
 
-static inline void main_loop( JFST* jfst, bool separate_threads ) {
+static inline void
+main_loop( JFST* jfst ) {
 	puts("GUI Disabled - start MainLoop");
 	while ( ! quit ) {
-		idle(jfst, separate_threads);
+		fsthost_idle();
 		usleep ( 100000 );
 	}
 }
@@ -239,7 +249,6 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	bool		opt_generate_dbinfo = false;
 	bool		opt_list_plugins = false;
 	bool		sigusr1_save_state = false;
-	bool		separate_threads = false;
 	const char*	connect_to = NULL;
 	const char*	custom_path = NULL;
 	bool		serv = false;
@@ -367,7 +376,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 		fst_set_window_close_callback( jfst->fst, edit_close_handler, jfst );
 		fst_run_editor (jfst->fst, false);
 	}
-	main_loop( jfst, separate_threads );
+	main_loop( jfst );
 #else
 	// Create GTK or GlibMain thread
 	if (jfst->with_editor != WITH_EDITOR_NO) {
@@ -375,14 +384,14 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 		gtk_gui_init(&argc, &argv);
 		gtk_gui_start(jfst);
 	} else {
-		main_loop( jfst, separate_threads );
+		main_loop( jfst );
 	}
 #endif
 	puts("Jack Deactivate");
 	jack_deactivate ( jfst->client );
 
 	/* Close CTRL socket */
-//	jfst_proto_close ( jfst );
+	if ( serv ) serv_close();
 
 	jfst_close(jfst);
 
