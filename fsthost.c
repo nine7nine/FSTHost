@@ -91,10 +91,14 @@ bool fsthost_idle () {
 	if ( ! jfst_first ) return true;
 	JFST* jfst = (JFST*) jfst_first;
 
-	if ( ! jfst_idle ( jfst, APPNAME_ARCH ) ) {
+	Changes change = jfst_idle ( jfst );
+	if ( change & CHANGE_QUIT ) {
 		jfst_quit(jfst);
 		return false;
 	}
+
+//	if ( change )
+//		printf ( "CHANGE: %d\n", change );
 
 	serv_poll();
 
@@ -255,7 +259,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 
 	printf("FSTHost Version: %s (%s)\n", VERSION, ARCH "bit");
 
-	JFST*	jfst = jfst_new();
+	JFST*	jfst = jfst_new( APPNAME_ARCH );
 	jfst_first = jfst;
 
 	// Handle FSTHOST_GUI environment

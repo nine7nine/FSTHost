@@ -57,6 +57,21 @@ struct MidiMessage {
 };
 
 typedef struct {
+	bool bypassed;
+	uint8_t channel;
+	unsigned short volume;
+	int32_t program;
+} DetectChangesLast;
+
+typedef enum {
+	CHANGE_QUIT	= 1 << 0,
+	CHANGE_BYPASS	= 1 << 1,
+	CHANGE_CHANNEL	= 1 << 2,
+	CHANGE_VOLUME	= 1 << 3,
+	CHANGE_PROGRAM	= 1 << 4
+} Changes;
+
+typedef struct {
 	int32_t		map[128];
 	bool		wait;
 	int8_t		cc;
@@ -64,6 +79,7 @@ typedef struct {
 } MidiLearn;
 
 typedef struct _JFST {
+	const char*	appname;
 	jack_client_t*	client;
 	FST*		fst;
 	EventQueue	event_queue;
@@ -90,6 +106,7 @@ typedef struct _JFST {
 	char*		uuid;		/* Jack Session support */
 
 	MidiLearn	midi_learn;
+	DetectChangesLast last;
 
 	enum MidiPC	midi_pc;
 	MIDIFILTER*	filters;
@@ -119,15 +136,15 @@ static inline void jfst_set_gui_resize_cb ( JFST* jfst, void (*f) ) {
 }
 
 /* jfst.c */
-JFST* jfst_new();
+JFST* jfst_new( const char* appname );
 bool jfst_init( JFST* jfst, int32_t max_in, int32_t max_out );
 bool jfst_load(JFST* jfst, const char* plug_spec, bool want_state_and_amc, bool state_can_fail);
 bool jfst_load_state(JFST* jfst, const char * filename);
 bool jfst_save_state(JFST* jfst, const char * filename);
 bool jfst_session_callback( JFST* jfst, const char* appname );
-bool jfst_idle(JFST* jfst, const char* appname);
 void jfst_close ( JFST* jfst );
 void jfst_bypass(JFST* jfst, bool bypass);
+Changes jfst_idle(JFST* jfst);
 
 /* jack.c */
 bool jfst_jack_init( JFST* jfst, bool want_midi_out );

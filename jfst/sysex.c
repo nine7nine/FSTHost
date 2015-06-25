@@ -253,15 +253,9 @@ void jfst_sysex_handler(JFST* jfst) {
 }
 
 void jfst_sysex_notify(JFST* jfst) {
-	// Wait until program change
-	if (jfst->fst->event_call.type == PROGRAM_CHANGE) return;
 	// Do not notify if have not SysEx ID
-	if (jfst->sysex_ident_reply.model[0] == SYSEX_AUTO_ID) return;
+	if (jfst->sysex_ident_reply.model[0] == SYSEX_AUTO_ID)
+		return;
 
-	SysExDumpV1* d = &jfst->sysex_dump;
-	if ( d->program != jfst->fst->current_program ||
-		d->channel != midi_filter_one_channel_get( &jfst->channel ) ||
-		d->state   != ( (jfst->bypassed) ? SYSEX_STATE_NOACTIVE : SYSEX_STATE_ACTIVE ) ||
-		d->volume  != jfst_get_volume(jfst)
-	) jfst_send_sysex(jfst, SYSEX_TYPE_DUMP);
+	jfst_send_sysex(jfst, SYSEX_TYPE_DUMP);
 }
