@@ -18,8 +18,10 @@ extern void jfst_sysex_handler ( JFST* jfst );
 extern void jfst_sysex_notify ( JFST* jfst );
 extern void jfst_sysex_gen_random_id ( JFST* jfst );
 
-JFST* jfst_new() {
+JFST* jfst_new( const char* appname ) {
 	JFST* jfst = calloc (1, sizeof (JFST));
+
+	jfst->appname = appname;
 
 	pthread_mutex_init (&jfst->sysex_lock, NULL);
 	pthread_cond_init (&jfst->sysex_sent, NULL);
@@ -128,7 +130,7 @@ void jfst_close ( JFST* jfst ) {
 }
 
 /* return false if want quit */
-bool jfst_session_handler( JFST* jfst, jack_session_event_t* event, const char* appname ) {
+bool jfst_session_handler( JFST* jfst, jack_session_event_t* event ) {
 	puts("session callback");
 
 	// Save state
@@ -141,7 +143,7 @@ bool jfst_session_handler( JFST* jfst, jack_session_event_t* event, const char* 
 
 	// Reply to session manager
 	char retval[256];
-	snprintf( retval, sizeof(retval), "%s -u %s -s \"${SESSION_DIR}state.fps\"", appname, event->client_uuid);
+	snprintf( retval, sizeof(retval), "%s -u %s -s \"${SESSION_DIR}state.fps\"", jfst->appname, event->client_uuid);
 	event->command_line = strndup( retval, strlen(retval) + 1  );
 
 	jack_session_reply(jfst->client, event);
@@ -192,8 +194,39 @@ void jfst_bypass(JFST* jfst, bool bypass) {
 	}
 }
 
+static Changes detect_change( JFST* jfst ) {
+        // Wait until program change
+        if (jfst->fst->event_call.type == PROGRAM_CHANGE)
+		return 0;
+
+	DetectChangesLast* L = &jfst->last;
+	Changes ret = 0;
+
+	if ( L->bypassed != jfst->bypassed ) {
+		L->bypassed = jfst->bypassed;
+		ret |= CHANGE_BYPASS;
+	}
+
+	if ( L->program != jfst->fst->current_program ) {
+		L->program = jfst->fst->current_program;
+		ret |= CHANGE_PROGRAM;
+	}
+
+	if ( L->volume != jfst_get_volume(jfst) ) {
+		L->volume = jfst_get_volume(jfst);
+		ret |= CHANGE_VOLUME;
+	}
+
+	if ( L->channel != midi_filter_one_channel_get( &jfst->channel ) ) {
+		L->channel  = midi_filter_one_channel_get( &jfst->channel );
+		ret |= CHANGE_CHANNEL;
+	}
+
+	return ret;
+}
+
 /* Return false if want quit */
-bool jfst_idle(JFST* jfst, const char* appname) {
+Changes jfst_idle(JFST* jfst ) {
 	// Handle SysEx Input
 	jfst_sysex_handler(jfst);
 
@@ -216,8 +249,8 @@ bool jfst_idle(JFST* jfst, const char* appname) {
 				jfst_connect_midi_to_physical(jfst);
 			break;
 		case EVENT_SESSION:
-			if ( ! jfst_session_handler(jfst, ev->ptr, appname) )
-				return false;
+			if ( ! jfst_session_handler(jfst, ev->ptr) )
+				return CHANGE_QUIT;
 			break;
 		}
 	}
@@ -238,10 +271,13 @@ bool jfst_idle(JFST* jfst, const char* appname) {
 		}
 	}
 
-	// Send notify if we want notify and something change
-	if (jfst->sysex_want_notify) jfst_sysex_notify(jfst);
+	Changes change = detect_change( jfst );
+	if ( change ) {
+		// Send notify if we want notify and something change
+		if (jfst->sysex_want_notify) jfst_sysex_notify(jfst);
+	}
 
-	return true;
+	return change;
 }
 
 typedef enum {
