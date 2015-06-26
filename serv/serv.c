@@ -11,7 +11,9 @@
 #define MAX_CLIENTS 3
 #define POLL_SIZE MAX_CLIENTS + 1
 
+
 static struct pollfd fds[POLL_SIZE];
+static uint8_t client_changes[POLL_SIZE];
 static serv_client_callback client_callback;
 static void* serv_usr_data = NULL;
 static bool initialized = false;
@@ -70,6 +72,7 @@ int serv_init ( uint16_t port, serv_client_callback cb, void* data ) {
 	for ( i = 0; i < POLL_SIZE; i++ ) {
 		fds[i].fd = -1;
 		fds[i].events = POLLIN;
+		client_changes[i] = 0;
 	}
 
 	//Create listener socket
@@ -115,15 +118,19 @@ bool serv_send_client_data ( int client_sock, char* msg, int msg_len ) {
 }
 
 
-void serv_poll () {
+void serv_poll ( uint8_t changes ) {
 	if ( ! initialized ) return;
+
+	// Update changes
+	int i;
+	for ( i = 0; i < POLL_SIZE; i++ )
+		client_changes[i] |= changes;
 
 	//wait for an activity on one of the sockets, don't block
 	int activity = poll(fds, POLL_SIZE, 0);
 	if (activity < 1) return;
 
-	int i;
-	for ( i = 0; i < POLL_SIZE; i ++ ) {
+	for ( i = 0; i < POLL_SIZE; i++ ) {
 		if ( fds[i].revents == 0 ) continue;
 
 		if( fds[i].revents != POLLIN) {
@@ -138,6 +145,7 @@ void serv_poll () {
 				if ( fds[g].fd == -1 ) {
 					fds[g].fd = serv_get_client ( fds[0].fd );
 					fds[g].revents = 0;
+					client_changes[g] = 0;
 					break;
 				}
 			}
@@ -145,7 +153,7 @@ void serv_poll () {
 		} else {
 			char msg[64];
 			if ( ! serv_client_get_data( fds[i].fd, msg, sizeof msg ) ||
-			     ! client_callback ( msg, fds[i].fd, serv_usr_data )
+			     ! client_callback ( msg, fds[i].fd, &client_changes[i], serv_usr_data )
 			) {
 				close ( fds[i].fd );
 				fds[i].fd = -1;

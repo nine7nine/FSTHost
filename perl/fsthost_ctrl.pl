@@ -152,7 +152,18 @@ sub close_button_clicked {
 sub idle {
 	my $self = shift;
 
-	$self->{'presets_combo'}->set_active ( $self->get_program() );
+	my %ACTION = (
+		PROGRAM	=> sub { $self->{'presets_combo'}->set_active(shift); },
+		BYPASS	=> sub { $self->{'bypass_button'}->set_active(not shift); }
+	);
+
+	my $news = $self->news();
+	foreach ( keys %$news ) {
+		print("NEWS:$_\n");
+		exists $ACTION{$_} or next;
+		$ACTION{$_}->( $news->{$_} );
+	}
+
 	return 1;
 }
 
@@ -168,8 +179,7 @@ sub show {
 	$hbox->pack_start ( $label, 0, 0, 0 ); # child, expand, fill, padding
 
 	# Suspend / Resume
-	my $sr_button = ($Gtk.'::ToggleButton')->new_with_label('State');
-	$sr_button->set_active(1);
+	my $sr_button = ($Gtk.'::ToggleButton')->new_with_label('Bypass');
 	$sr_button->set_tooltip_text ( 'Suspend / Resume' );
 	$sr_button->signal_connect ( 'clicked' => \&sr_button_toggle, $self );
 	$hbox->pack_start ( $sr_button, 0, 0, 0 ); # child, expand, fill, padding
@@ -203,6 +213,7 @@ sub show {
 
 	$self->{'idle_id'} = Glib::Timeout->add ( 1000, \&idle, $self );
 
+	$self->{'bypass_button'} = $sr_button;
 	$self->{'presets_combo'} = $presets_combo;
 	$self->{'hbox'} = $hbox;
 
@@ -251,6 +262,16 @@ sub presets {
 	my $self = shift;
 	my @presets = $self->call ( 'list_programs' );
 	return @presets;
+}
+
+sub news {
+	my $self = shift;
+	my %ret;
+	foreach ( $self->call( 'news' ) ) {
+		/(\w+):(\d+)/ or next;
+		$ret{$1} = $2;
+	}
+	return \%ret;
 }
 
 sub get_program {

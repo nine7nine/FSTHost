@@ -44,6 +44,30 @@ static void cpu_usage ( int client_sock ) {
 	serv_send_client_data ( client_sock, msg, strlen(msg) );
 }
 
+static void news ( JFST* jfst, int client_sock, uint8_t* changes ) {
+	char msg[16];
+
+	if ( *changes & CHANGE_BYPASS ) {
+		snprintf( msg, sizeof msg, "BYPASS:%d", jfst->bypassed );
+		serv_send_client_data ( client_sock, msg, strlen(msg) );
+	}
+
+	if ( *changes & CHANGE_CHANNEL ) {
+		uint8_t channel = midi_filter_one_channel_get( &jfst->channel );
+		snprintf( msg, sizeof msg, "CHANNEL:%d", channel );
+		serv_send_client_data ( client_sock, msg, strlen(msg) );
+	}
+
+	if ( *changes & CHANGE_VOLUME ) {
+		snprintf( msg, sizeof msg, "VOLUME:%d", jfst_get_volume(jfst) );
+		serv_send_client_data ( client_sock, msg, strlen(msg) );
+	}
+
+	if ( *changes & CHANGE_PROGRAM ) get_program( jfst, client_sock );
+
+	*changes = 0;
+}
+
 static struct PROTO_MAP proto_string_map[] = {
 	{ CMD_EDITOR_OPEN, "editor_open" },
 	{ CMD_EDITOR_CLOSE, "editor_close" },
@@ -52,7 +76,10 @@ static struct PROTO_MAP proto_string_map[] = {
 	{ CMD_SET_PROGRAM, "set_program" },
 	{ CMD_SUSPEND, "suspend" },
 	{ CMD_RESUME, "resume" },
+	{ CMD_NEWS, "news" },
+	{ CMD_NEWS_ALL, "news_all" },
 	{ CMD_CPU, "cpu" },
+	{ CMD_HELP, "help" },
 	{ CMD_QUIT, "quit" },
 	{ CMD_KILL, "kill" },
 	{ CMD_UNKNOWN, NULL }
@@ -67,7 +94,17 @@ static enum PROTO_CMD proto_lookup ( const char* name ) {
 	return CMD_UNKNOWN;
 }
 
-static bool jfst_proto_client_dispatch ( JFST* jfst, char* msg, int client_sock ) {
+static void help( int client_sock ) {
+	char msg[128] = "";
+	short i;
+	for ( i = 0; proto_string_map[i].key != CMD_UNKNOWN; i++ ) {
+		strcat( msg, proto_string_map[i].name );
+		strcat( msg, " " );
+	}
+	serv_send_client_data ( client_sock, msg, strlen(msg) );
+}
+
+static bool jfst_proto_client_dispatch ( JFST* jfst, char* msg, uint8_t* changes, int client_sock ) {
 	printf ( "GOT MSG: %s\n", msg );
 
 	bool ret = true;
@@ -78,6 +115,7 @@ static bool jfst_proto_client_dispatch ( JFST* jfst, char* msg, int client_sock 
 		value = strtol ( ++sep, NULL, 10 );
 	}
 
+	uint8_t all_changes = -1;
 	switch ( proto_lookup ( msg ) ) {
 	case CMD_EDITOR_OPEN:
 		fst_run_editor ( jfst->fst, false );
@@ -100,11 +138,20 @@ static bool jfst_proto_client_dispatch ( JFST* jfst, char* msg, int client_sock 
 	case CMD_RESUME:
 		jfst_bypass ( jfst, false );
 		break;
+	case CMD_NEWS:
+		news( jfst, client_sock, changes );
+		break;
+	case CMD_NEWS_ALL:
+		news( jfst, client_sock, &all_changes );
+		break;
 	case CMD_CPU:
 		cpu_usage( client_sock );
 		break;
 	case CMD_QUIT:
 		ret = false;
+		break;
+	case CMD_HELP:
+		help( client_sock );
 		break;
 	case CMD_KILL:
 		jfst_quit ( jfst );
@@ -120,9 +167,9 @@ static bool jfst_proto_client_dispatch ( JFST* jfst, char* msg, int client_sock 
 	return ret;
 }
 
-static bool handle_client_callback ( char* msg, int client_sock, void* data ) {
+static bool handle_client_callback ( char* msg, int client_sock, uint8_t* changes, void* data ) {
 	JFST* jfst = (JFST*) data;
-	return jfst_proto_client_dispatch ( jfst, msg, client_sock );
+	return jfst_proto_client_dispatch ( jfst, msg, changes, client_sock );
 }
 
 /* Public functions */

@@ -97,10 +97,7 @@ bool fsthost_idle () {
 		return false;
 	}
 
-//	if ( change )
-//		printf ( "CHANGE: %d\n", change );
-
-	serv_poll();
+	serv_poll( change );
 
 	if ( open_editor ) {
 		open_editor = false;
