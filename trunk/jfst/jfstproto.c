@@ -38,6 +38,12 @@ static void get_program ( JFST* jfst, int client_sock ) {
 	serv_send_client_data ( client_sock, msg, strlen(msg) );
 }
 
+static void get_channel ( JFST* jfst, int client_sock ) {
+	char msg[16];
+	sprintf( msg, "CHANNEL:%d", midi_filter_one_channel_get(&jfst->channel) );
+	serv_send_client_data ( client_sock, msg, strlen(msg) );
+}
+
 static void cpu_usage ( int client_sock ) {
 	char msg[8];
 	snprintf( msg, sizeof msg, "%g", CPUusage_getCurrentValue() );
@@ -74,6 +80,8 @@ static struct PROTO_MAP proto_string_map[] = {
 	{ CMD_LIST_PROGRAMS, "list_programs" },
 	{ CMD_GET_PROGRAM, "get_program" },
 	{ CMD_SET_PROGRAM, "set_program" },
+	{ CMD_GET_CHANNEL, "get_channel" },
+	{ CMD_SET_CHANNEL, "set_channel" },
 	{ CMD_SUSPEND, "suspend" },
 	{ CMD_RESUME, "resume" },
 	{ CMD_NEWS, "news" },
@@ -131,6 +139,12 @@ static bool jfst_proto_client_dispatch ( JFST* jfst, char* msg, uint8_t* changes
 		break;
 	case CMD_SET_PROGRAM:
 		fst_program_change ( jfst->fst, value );
+		break;
+	case CMD_GET_CHANNEL:
+		get_channel ( jfst, client_sock );
+		break;
+	case CMD_SET_CHANNEL:
+		midi_filter_one_channel_set( &jfst->channel, value );
 		break;
 	case CMD_SUSPEND:
 		jfst_bypass ( jfst, true );

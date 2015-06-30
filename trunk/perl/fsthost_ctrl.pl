@@ -128,7 +128,7 @@ sub new {
 
 sub sr_button_toggle {
 	my ( $b, $self ) = @_;
-	$self->call ( $b->get_active() ? 'resume' : 'suspend' );
+	$self->call ( $b->get_active() ? 'suspend' : 'resume' );
 }
 
 sub editor_button_clicked {
@@ -137,8 +137,13 @@ sub editor_button_clicked {
 }
 
 sub presets_combo_change {
-	my ( $p, $self ) = @_;
-	$self->set_program ( $p->get_active );
+	my ( $c, $self ) = @_;
+	$self->set_program ( $c->get_active );
+}
+
+sub channels_combo_change {
+	my ( $c, $self ) = @_;
+	$self->set_channel ( $c->get_active );
 }
 
 sub close_button_clicked {
@@ -149,20 +154,24 @@ sub close_button_clicked {
 	$window->resize(1,1);
 }
 
-sub idle {
-	my $self = shift;
+sub action {
+	my ( $self, $action, $value ) = @_;
 
 	my %ACTION = (
 		PROGRAM	=> sub { $self->{'presets_combo'}->set_active(shift); },
-		BYPASS	=> sub { $self->{'bypass_button'}->set_active(not shift); }
+		CHANNEL	=> sub { $self->{'channels_combo'}->set_active(shift); },
+		BYPASS	=> sub { $self->{'bypass_button'}->set_active(shift); }
 	);
 
-	my $news = $self->news();
-	foreach ( keys %$news ) {
-		print("NEWS:$_\n");
-		exists $ACTION{$_} or next;
-		$ACTION{$_}->( $news->{$_} );
-	}
+	return unless exists $ACTION{$action};
+	$ACTION{$action}->( $value );
+}
+
+sub idle {
+	my $self = shift;
+
+	my $news = $self->news(0);
+	$self->action( $_, $news->{$_} ) for ( keys %$news );
 
 	return 1;
 }
@@ -199,9 +208,19 @@ sub show {
 		my $txt = ++$t . '. ' . $_;
 		$presets_combo->insert_text ( $t, $txt );
 	}
-	$presets_combo->set_active ( $self->get_program() );
 	$presets_combo->signal_connect ( 'changed' => \&presets_combo_change, $self );
 	$hbox->pack_start ( $presets_combo, 0, 0, 0 ); # child, expand, fill, padding
+
+	# Channels:
+	my $channels_combo = main::gtk_combo();
+	$channels_combo->set_tooltip_text ( 'MIDI Channels' );
+	my @channels = ( 0 .. 17 );
+	foreach ( @channels ) {
+		my $txt = 'Ch: '.$_;
+		$channels_combo->insert_text ( $t, $txt );
+	}
+	$channels_combo->signal_connect ( 'changed' => \&channels_combo_change, $self );
+	$hbox->pack_start ( $channels_combo, 0, 0, 0 ); # child, expand, fill, padding
 
 	# Close
 	my $close_button = ($Gtk.'::Button')->new_from_stock('gtk-close');
@@ -215,7 +234,12 @@ sub show {
 
 	$self->{'bypass_button'} = $sr_button;
 	$self->{'presets_combo'} = $presets_combo;
+	$self->{'channels_combo'} = $channels_combo;
 	$self->{'hbox'} = $hbox;
+
+	# Get all initial values
+	my $news = $self->news(1);
+	$self->action( $_, $news->{$_} ) for ( keys %$news );
 
 	return 1;
 }
@@ -240,17 +264,23 @@ sub _connect {
 }
 
 sub call {
-	my ( $self, $cmd ) = @_;
+	my ( $self, $cmd, $value ) = @_;
 
 	my $socket = $self->{'socket'};
 
-	print $socket $cmd, "\n";
+	my $line = $cmd;
+	$line .= ':' . $value if $value;
+	$line .= "\n";
+
+	print $socket $line;
 	$socket->flush();
+
+	print $line;
 
 	my @ret;
 	while ( my $line = $socket->getline() ) {
 #		$line =~ s/[^[:print:]]//g;
-#		print $line;
+#		print $line, "\n";
 		last if $line =~ /\<OK\>/;
 		push ( @ret, $line );
 	}
@@ -265,23 +295,21 @@ sub presets {
 }
 
 sub news {
-	my $self = shift;
-	my %ret;
-	foreach ( $self->call( 'news' ) ) {
-		/(\w+):(\d+)/ or next;
-		$ret{$1} = $2;
-	}
-	return \%ret;
-}
+	my ( $self, $all ) = @_;
+	my $cmd = ($all) ? 'news_all' : 'news';
 
-sub get_program {
-	my $self = shift;
-	( /PROGRAM:(\d+)/ and return $1 ) for ( $self->call ( 'get_program' ) );
+	my %ret = map { /(\w+):(\d+)/ } $self->call($cmd);
+	return \%ret;
 }
 
 sub set_program {
 	my ( $self, $program ) = @_;
-	$self->call ( 'set_program:' . $program );
+	$self->call ( 'set_program', $program );
+}
+
+sub set_channel {
+	my ( $self, $channel ) = @_;
+	$self->call ( 'set_channel', $channel );
 }
 
 sub close {
