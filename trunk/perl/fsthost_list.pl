@@ -29,7 +29,6 @@ Pawel Piatek <xj@wp.pl>
 =cut
 
 use v5.14;
-#use strict;
 #use warnings;
 #use Data::Dumper;
 use XML::LibXML;
