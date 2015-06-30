@@ -1,8 +1,8 @@
 #!/usr/bin/perl
 
-use strict;
-use warnings;
-use Data::Dumper;
+use v5.14;
+#use warnings;
+#use Data::Dumper;
 use IO::Socket;
 
 our $Gtk;
@@ -270,17 +270,14 @@ sub call {
 
 	my $line = $cmd;
 	$line .= ':' . $value if $value;
-	$line .= "\n";
 
-	print $socket $line;
-	$socket->flush();
-
-	print $line;
+	say $socket $line;
+	say $line;
 
 	my @ret;
 	while ( my $line = $socket->getline() ) {
 #		$line =~ s/[^[:print:]]//g;
-#		print $line, "\n";
+#		say $line;
 		last if $line =~ /\<OK\>/;
 		push ( @ret, $line );
 	}
