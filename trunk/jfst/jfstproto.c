@@ -58,6 +58,11 @@ static void news ( JFST* jfst, int client_sock, uint8_t* changes ) {
 		serv_send_client_data ( client_sock, msg, strlen(msg) );
 	}
 
+	if ( *changes & CHANGE_EDITOR ) {
+		snprintf( msg, sizeof msg, "EDITOR:%d", (bool) jfst->fst->window );
+		serv_send_client_data ( client_sock, msg, strlen(msg) );
+	}
+
 	if ( *changes & CHANGE_CHANNEL ) {
 		uint8_t channel = midi_filter_one_channel_get( &jfst->channel );
 		snprintf( msg, sizeof msg, "CHANNEL:%d", channel );

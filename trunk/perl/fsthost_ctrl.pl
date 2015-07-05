@@ -131,9 +131,9 @@ sub sr_button_toggle {
 	$self->call ( $b->get_active() ? 'suspend' : 'resume' );
 }
 
-sub editor_button_clicked {
+sub editor_button_toggle {
 	my ( $b, $self ) = @_;
-	$self->call ( 'editor_open' );
+	$self->call ( $b->get_active() ? 'editor_open' : 'editor_close' );
 }
 
 sub presets_combo_change {
@@ -160,7 +160,8 @@ sub action {
 	my %ACTION = (
 		PROGRAM	=> sub { $self->{'presets_combo'}->set_active(shift); },
 		CHANNEL	=> sub { $self->{'channels_combo'}->set_active(shift); },
-		BYPASS	=> sub { $self->{'bypass_button'}->set_active(shift); }
+		BYPASS	=> sub { $self->{'bypass_button'}->set_active(shift); },
+		EDITOR	=> sub { $self->{'editor_button'}->set_active(shift); }
 	);
 
 	return unless exists $ACTION{$action};
@@ -194,9 +195,9 @@ sub show {
 	$hbox->pack_start ( $sr_button, 0, 0, 0 ); # child, expand, fill, padding
 
 	# Editor Open/Close
-	my $editor_button = ($Gtk.'::Button')->new_with_label('Editor');
+	my $editor_button = ($Gtk.'::ToggleButton')->new_with_label('Editor');
 	$editor_button->set_tooltip_text ( 'Editor Open' );
-	$editor_button->signal_connect ( 'clicked' => \&editor_button_clicked, $self );
+	$editor_button->signal_connect ( 'clicked' => \&editor_button_toggle, $self );
 	$hbox->pack_start ( $editor_button, 0, 0, 0 ); # child, expand, fill, padding
 
 	# Presets:
@@ -233,6 +234,7 @@ sub show {
 	$self->{'idle_id'} = Glib::Timeout->add ( 1000, \&idle, $self );
 
 	$self->{'bypass_button'} = $sr_button;
+	$self->{'editor_button'} = $editor_button;
 	$self->{'presets_combo'} = $presets_combo;
 	$self->{'channels_combo'} = $channels_combo;
 	$self->{'hbox'} = $hbox;
