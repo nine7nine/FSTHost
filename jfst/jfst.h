@@ -63,6 +63,7 @@ struct MidiMessage {
 
 typedef struct {
 	bool bypassed;
+	bool editor; /* is open */
 	uint8_t channel;
 	unsigned short volume;
 	int32_t program;
@@ -71,9 +72,10 @@ typedef struct {
 typedef enum {
 	CHANGE_QUIT	= 1 << 0,
 	CHANGE_BYPASS	= 1 << 1,
-	CHANGE_CHANNEL	= 1 << 2,
-	CHANGE_VOLUME	= 1 << 3,
-	CHANGE_PROGRAM	= 1 << 4
+	CHANGE_EDITOR	= 1 << 2,
+	CHANGE_CHANNEL	= 1 << 3,
+	CHANGE_VOLUME	= 1 << 4,
+	CHANGE_PROGRAM	= 1 << 5
 } Changes;
 
 typedef struct {
