@@ -274,16 +274,16 @@ sub call {
 	$line .= ':' . $value if $value;
 
 	say $socket $line;
-	say $line;
+#	say $line;
 
 	my @ret;
 	while ( my $line = $socket->getline() ) {
+		chomp($line);
 #		$line =~ s/[^[:print:]]//g;
 #		say $line;
-		last if $line =~ /\<OK\>/;
+		last if $line eq '<OK>';
 		push ( @ret, $line );
 	}
-	chomp ( @ret );
 	return @ret;
 }
 
