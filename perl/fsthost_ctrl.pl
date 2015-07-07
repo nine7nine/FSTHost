@@ -189,42 +189,35 @@ sub show {
 	$hbox->pack_start ( $label, 0, 0, 0 ); # child, expand, fill, padding
 
 	# Suspend / Resume
-	my $sr_button = ($Gtk.'::ToggleButton')->new_with_label('Bypass');
+	my $sr_button = ($Gtk.'::ToggleToolButton')->new_from_stock('gtk-stop');
 	$sr_button->set_tooltip_text ( 'Suspend / Resume' );
 	$sr_button->signal_connect ( 'clicked' => \&sr_button_toggle, $self );
 	$hbox->pack_start ( $sr_button, 0, 0, 0 ); # child, expand, fill, padding
 
 	# Editor Open/Close
-	my $editor_button = ($Gtk.'::ToggleButton')->new_with_label('Editor');
-	$editor_button->set_tooltip_text ( 'Editor Open' );
+	my $editor_button = ($Gtk.'::ToggleToolButton')->new_from_stock('gtk-properties');
+	$editor_button->set_tooltip_text ( 'Editor' );
 	$editor_button->signal_connect ( 'clicked' => \&editor_button_toggle, $self );
 	$hbox->pack_start ( $editor_button, 0, 0, 0 ); # child, expand, fill, padding
 
 	# Presets:
 	my $presets_combo = main::gtk_combo();
 	$presets_combo->set_tooltip_text ( 'Presets' );
-	my @presets = $self->presets();
 	my $t = 0;
-	foreach ( @presets ) {
-		my $txt = ++$t . '. ' . $_;
-		$presets_combo->insert_text ( $t, $txt );
-	}
+	$presets_combo->insert_text ( $t++, $t . '. ' . $_  ) for $self->presets();
 	$presets_combo->signal_connect ( 'changed' => \&presets_combo_change, $self );
 	$hbox->pack_start ( $presets_combo, 0, 0, 0 ); # child, expand, fill, padding
 
 	# Channels:
 	my $channels_combo = main::gtk_combo();
 	$channels_combo->set_tooltip_text ( 'MIDI Channels' );
-	my @channels = ( 0 .. 17 );
-	foreach ( @channels ) {
-		my $txt = 'Ch: '.$_;
-		$channels_combo->insert_text ( $t, $txt );
-	}
+	$t = 0;
+	$channels_combo->insert_text($t++, $_) for map { 'Ch ' . $_ } ( 0 .. 17 );
 	$channels_combo->signal_connect ( 'changed' => \&channels_combo_change, $self );
 	$hbox->pack_start ( $channels_combo, 0, 0, 0 ); # child, expand, fill, padding
 
 	# Close
-	my $close_button = ($Gtk.'::Button')->new_from_stock('gtk-close');
+	my $close_button = ($Gtk.'::ToolButton')->new_from_stock('gtk-close');
 	$close_button->set_tooltip_text ( 'Close' );
 	$close_button->signal_connect ( 'clicked' => \&close_button_clicked, $self );
 	$hbox->pack_start ( $close_button, 0, 0, 0 ); # child, expand, fill, padding
