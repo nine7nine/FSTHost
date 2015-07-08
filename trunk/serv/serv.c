@@ -109,7 +109,7 @@ int serv_init ( uint16_t port, serv_client_callback cb, void* data ) {
 	return fds[0].fd;
 }
 
-bool serv_send_client_data ( int client_sock, char* msg, int msg_len ) {
+bool serv_send_client_data ( int client_sock, const char* msg, int msg_len ) {
 	char data[msg_len + 2];
 	snprintf ( data, sizeof data, "%s\n", msg );
 	size_t len = sizeof(data) - 1;

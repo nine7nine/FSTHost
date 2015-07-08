@@ -5,6 +5,7 @@
 #include "jfst.h"
 
 #define ACK "<OK>"
+#define NAK "<FAIL>"
 
 /* jfst.c */
 extern void jfst_quit(JFST* jfst);
@@ -89,8 +90,9 @@ static struct PROTO_MAP proto_string_map[] = {
 	{ CMD_SET_CHANNEL, "set_channel" },
 	{ CMD_SUSPEND, "suspend" },
 	{ CMD_RESUME, "resume" },
+	{ CMD_LOAD, "load" },
+	{ CMD_SAVE, "save" },
 	{ CMD_NEWS, "news" },
-	{ CMD_NEWS_ALL, "news_all" },
 	{ CMD_CPU, "cpu" },
 	{ CMD_HELP, "help" },
 	{ CMD_QUIT, "quit" },
@@ -108,7 +110,7 @@ static enum PROTO_CMD proto_lookup ( const char* name ) {
 }
 
 static void help( int client_sock ) {
-	char msg[128] = "";
+	char msg[256] = "";
 	short i;
 	for ( i = 0; proto_string_map[i].key != CMD_UNKNOWN; i++ ) {
 		strcat( msg, proto_string_map[i].name );
@@ -121,11 +123,12 @@ static bool jfst_proto_client_dispatch ( JFST* jfst, char* msg, uint8_t* changes
 	printf ( "GOT MSG: %s\n", msg );
 
 	bool ret = true;
-	int value = 0;
+	bool ack = true;
+	char* value = "";
 	char* sep = strchr ( msg, ':' );
 	if ( sep != NULL ) {
 		*sep = '\0';
-		value = strtol ( ++sep, NULL, 10 );
+		value = sep + 1;
 	}
 
 	uint8_t all_changes = -1;
@@ -143,13 +146,13 @@ static bool jfst_proto_client_dispatch ( JFST* jfst, char* msg, uint8_t* changes
 		get_program ( jfst, client_sock );
 		break;
 	case CMD_SET_PROGRAM:
-		fst_program_change ( jfst->fst, value );
+		fst_program_change ( jfst->fst, strtol(value, NULL, 10) );
 		break;
 	case CMD_GET_CHANNEL:
 		get_channel ( jfst, client_sock );
 		break;
 	case CMD_SET_CHANNEL:
-		midi_filter_one_channel_set( &jfst->channel, value );
+		midi_filter_one_channel_set( &jfst->channel, strtol(value, NULL, 10) );
 		break;
 	case CMD_SUSPEND:
 		jfst_bypass ( jfst, true );
@@ -157,11 +160,18 @@ static bool jfst_proto_client_dispatch ( JFST* jfst, char* msg, uint8_t* changes
 	case CMD_RESUME:
 		jfst_bypass ( jfst, false );
 		break;
-	case CMD_NEWS:
-		news( jfst, client_sock, changes );
+	case CMD_LOAD:
+		ack = jfst_load_state ( jfst, value );
 		break;
-	case CMD_NEWS_ALL:
-		news( jfst, client_sock, &all_changes );
+	case CMD_SAVE:
+		ack = jfst_save_state ( jfst, value );
+		break;
+	case CMD_NEWS:
+		if ( !strcasecmp(value,"all") ) {
+			news( jfst, client_sock, &all_changes );
+		} else {
+			news( jfst, client_sock, changes );
+		}
 		break;
 	case CMD_CPU:
 		cpu_usage( client_sock );
@@ -178,10 +188,12 @@ static bool jfst_proto_client_dispatch ( JFST* jfst, char* msg, uint8_t* changes
 	case CMD_UNKNOWN:
 	default:
 		printf ( "Unknown command: %s\n", msg );
+		ack = false;
 	}
 
-	// Send ACK
-	serv_send_client_data ( client_sock, ACK, strlen(ACK) );
+	// Send ACK / NAK
+	const char* RESP = (ack) ? ACK : NAK;
+	serv_send_client_data ( client_sock, RESP, strlen(RESP) );
 
 	return ret;
 }

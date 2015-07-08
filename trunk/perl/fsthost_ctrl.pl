@@ -211,8 +211,7 @@ sub show {
 	# Channels:
 	my $channels_combo = main::gtk_combo();
 	$channels_combo->set_tooltip_text ( 'MIDI Channels' );
-	$t = 0;
-	$channels_combo->insert_text($t++, $_) for map { 'Ch ' . $_ } ( 0 .. 17 );
+	$channels_combo->insert_text( $_ , 'Ch ' . $_ ) for ( 0 .. 17 );
 	$channels_combo->signal_connect ( 'changed' => \&channels_combo_change, $self );
 	$hbox->pack_start ( $channels_combo, 0, 0, 0 ); # child, expand, fill, padding
 
@@ -274,7 +273,7 @@ sub call {
 		chomp($line);
 #		$line =~ s/[^[:print:]]//g;
 #		say $line;
-		last if $line eq '<OK>';
+		last if ( $line eq '<OK>' || $line eq '<FAIL>' );
 		push ( @ret, $line );
 	}
 	return @ret;
@@ -288,7 +287,8 @@ sub presets {
 
 sub news {
 	my ( $self, $all ) = @_;
-	my $cmd = ($all) ? 'news_all' : 'news';
+	my $cmd = 'news';
+	$cmd .= ':all' if $all;
 
 	my %ret = map { /(\w+):(\d+)/ } $self->call($cmd);
 	return \%ret;
