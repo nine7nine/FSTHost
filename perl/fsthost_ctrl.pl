@@ -43,26 +43,43 @@ sub new {
 
 	my $object = bless ( $self, $class );
 	$object->_init();
+	$object->_autodetect();
 	return $object;
 }
 
+sub _autodetect {
+	my $self = shift;
+
+	opendir ( my $D, '/tmp/fsthost' )
+		or return;
+
+	while ( my $F = readdir($D) ) {
+		next unless $F =~ /\d+\.(\d+)\.port/;
+		say $F;
+		$self->add_fst( undef, $1 ); 
+	}
+	closedir($D);
+}
+
 sub add_fst {
+	my ( $self, $host, $port ) = @_;
+
+	$host //= 'localhost';
+	my $fst = FST_BOX->new ( $host, $port )
+		or return;
+
+	$self->{'vbox'}->pack_start ( $fst->{'hbox'}, 0, 0, 0 ); # child, expand, fill, padding
+}
+
+sub add_fst_entry {
 	my ( $be, $self ) = @_;
 
-	my $host = 'localhost';
-	my $port;
 	$self->{'entry'}->get_text() =~ /(\w+):(\d+)|(\d+)/;
-	if ( $3 ) {
-		$port = $3;
-	} else {
-		$host = $1;
-		$port = $2;
-	}
-	return unless ( $port );
+	my $host = ($3) ? undef : $1;
+	my $port = ($3) ? $3 : $2;
+	return unless $port;
 
-	my $fst = FST_BOX->new ( $host, $port );
-	return unless ( $fst );
-	$self->{'vbox'}->pack_start ( $fst->{'hbox'}, 0, 0, 0 ); # child, expand, fill, padding
+	$self->add_fst( $host, $port );
 }
 
 sub _init {
@@ -87,13 +104,13 @@ sub _init {
 
 	# Entry
 	my $entry = ($Gtk.'::Entry')->new();
-	$entry->signal_connect ( 'activate' => \&add_fst, $self );
+	$entry->signal_connect ( 'activate' => \&add_fst_entry, $self );
 	$hbox->pack_start ( $entry, 0, 0, 0 ); # child, expand, fill, padding
 
 	# Add Button
 	my $add_button = ($Gtk.'::Button')->new_from_stock('gtk-add');
         $add_button->set_tooltip_text ( 'Add new FSTHOST' );
-	$add_button->signal_connect ( clicked => \&add_fst, $self );
+	$add_button->signal_connect ( clicked => \&add_fst_entry, $self );
 	$hbox->pack_start ( $add_button, 0, 0, 0 ); # child, expand, fill, padding
 
 	$window->show_all();
@@ -204,7 +221,7 @@ sub show {
 	my $presets_combo = main::gtk_combo();
 	$presets_combo->set_tooltip_text ( 'Presets' );
 	my $t = 0;
-	$presets_combo->insert_text ( $t++, $t . '. ' . $_  ) for $self->presets();
+	$presets_combo->insert_text ( $t, $t++ . '. ' . $_  ) for $self->presets();
 	$presets_combo->signal_connect ( 'changed' => \&presets_combo_change, $self );
 	$hbox->pack_start ( $presets_combo, 0, 0, 0 ); # child, expand, fill, padding
 
