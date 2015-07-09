@@ -1,15 +1,17 @@
-#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
 #include <string.h>
 #include <stdio.h>
-#include <unistd.h>
 #include <sys/socket.h>
 #include <arpa/inet.h> //inet_addr
 #include <poll.h>
+#include <sys/stat.h>
 
 #include "serv.h"
 
 #define MAX_CLIENTS 3
 #define POLL_SIZE MAX_CLIENTS + 1
+#define PORT_DIR "/tmp/fsthost"
 
 
 static struct pollfd fds[POLL_SIZE];
@@ -17,6 +19,7 @@ static uint8_t client_changes[POLL_SIZE];
 static serv_client_callback client_callback;
 static void* serv_usr_data = NULL;
 static bool initialized = false;
+static char* port_file = NULL;
 
 static int serv_get_client ( int serv_fd ) {
 	//Accept and incoming connection
@@ -38,6 +41,28 @@ static int serv_get_client ( int serv_fd ) {
 static void strip_trailing ( char* string, char chr ) {
 	char* c = strrchr ( string, chr );
 	if ( c ) *c = '\0';
+}
+
+static bool serv_save_port_number ( uint16_t port ) {
+	char path[64];
+
+	mkdir ( PORT_DIR, 0777 );
+
+	pid_t pid = getpid();
+	snprintf( path, sizeof path, "%s/%d.%d.port", PORT_DIR, pid, port );
+
+	FILE* f = fopen(path, "w");
+	if ( ! f ) {
+		printf ( "Can't open file: %s\n", path );
+		return false;
+	}
+
+	fprintf( f, "%d", port );
+	fclose(f);
+
+	port_file = strdup( path );
+
+	return true;
 }
 
 static bool serv_client_get_data ( int client_sock, char* msg, size_t msg_max_len ) {
@@ -99,7 +124,9 @@ int serv_init ( uint16_t port, serv_client_callback cb, void* data ) {
 		return 0;
 	}
 	getsockname ( fds[0].fd, (struct sockaddr *) &server , &addrlen );
-	printf ("bind done, port: %d\n", ntohs( server.sin_port ) );
+	port = ntohs( server.sin_port ) ;
+	printf ("bind done, port: %d\n", port);
+	serv_save_port_number ( port );
 
 	//Listen
 	listen(fds[0].fd, MAX_CLIENTS);
@@ -176,5 +203,10 @@ void serv_close () {
 
 	// Close server
 	close ( fds[0].fd );
+
+	if ( port_file ) {
+		unlink ( port_file );
+		free ( port_file );
+	}
 }
 
