@@ -125,11 +125,15 @@ static bool jfst_proto_client_dispatch ( JFST* jfst, char* msg, uint8_t* changes
 	bool ret = true;
 	bool ack = true;
 	char* value = "";
-	char* sep = strchr ( msg, ':' );
-	if ( sep != NULL ) {
-		*sep = '\0';
-		value = sep + 1;
-	}
+	char* separators = ": ";
+
+	do {	char* sep = strchr( msg, *separators );
+		if ( sep != NULL ) {
+			*sep = '\0';
+			value = sep + 1;
+			break;
+		}
+	} while ( ++separators != '\0' );
 
 	uint8_t all_changes = -1;
 	switch ( proto_lookup ( msg ) ) {

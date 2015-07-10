@@ -282,7 +282,6 @@ Changes jfst_idle(JFST* jfst ) {
 	if ( change & change_sysex_mask ) {
 		// Send notify if we want notify and something change
 		if (jfst->sysex_want_notify) jfst_sysex_notify(jfst);
-		puts ( "SYSEX CHANGE" );
 	}
 
 	return change;
