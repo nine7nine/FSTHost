@@ -54,9 +54,17 @@ sub _autodetect {
 		or return;
 
 	while ( my $F = readdir($D) ) {
-		next unless $F =~ /\d+\.(\d+)\.port/;
-		say $F;
-		$self->add_fst( undef, $1 ); 
+		my ( $pid, $port ) = $F =~ /(\d+)\.(\d+)\.port/
+			or next;
+
+#		say $F;
+		my $proc_exists = kill(0, $pid); 
+		if ( $proc_exists ) {
+			$self->add_fst(undef, $port);
+		} else {
+			say "Process $pid daesn't exists";
+			unlink $F;
+		}
 	}
 	closedir($D);
 }
