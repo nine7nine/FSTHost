@@ -154,6 +154,7 @@ ifeq ($(LBITS), 64)
 endif
 	install -Dm 0755 fsthost_list $(DESTDIR)$(BIN_INST_PATH)/fsthost_list
 	install -Dm 0755 perl/fsthost_menu.pl $(DESTDIR)$(BIN_INST_PATH)/fsthost_menu
+	install -Dm 0755 perl/fsthost_ctrl.pl $(DESTDIR)$(BIN_INST_PATH)/fsthost_ctrl
 	ln -fs fsthost32 $(DESTDIR)$(BIN_INST_PATH)/fsthost
 
 $(SUBDIRS:%=%/__clean__): dummy
