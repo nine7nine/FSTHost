@@ -80,9 +80,32 @@ static void news ( JFST* jfst, int client_sock, uint8_t* changes ) {
 	*changes = 0;
 }
 
+enum PROTO_CMD {
+	CMD_UNKNOWN,
+	CMD_EDITOR,
+	CMD_LIST_PROGRAMS,
+	CMD_GET_PROGRAM,
+	CMD_SET_PROGRAM,
+	CMD_GET_CHANNEL,
+	CMD_SET_CHANNEL,
+	CMD_SUSPEND,
+	CMD_RESUME,
+	CMD_LOAD,
+	CMD_SAVE,
+	CMD_NEWS,
+	CMD_CPU,
+	CMD_HELP,
+	CMD_QUIT,
+	CMD_KILL
+};
+
+struct PROTO_MAP {
+	enum PROTO_CMD key;
+	const char* name;
+};
+
 static struct PROTO_MAP proto_string_map[] = {
-	{ CMD_EDITOR_OPEN, "editor_open" },
-	{ CMD_EDITOR_CLOSE, "editor_close" },
+	{ CMD_EDITOR, "editor" },
 	{ CMD_LIST_PROGRAMS, "list_programs" },
 	{ CMD_GET_PROGRAM, "get_program" },
 	{ CMD_SET_PROGRAM, "set_program" },
@@ -136,11 +159,15 @@ static bool jfst_proto_client_dispatch ( JFST* jfst, char* msg, uint8_t* changes
 
 	uint8_t all_changes = -1;
 	switch ( proto_lookup ( msg ) ) {
-	case CMD_EDITOR_OPEN:
-		fst_run_editor ( jfst->fst, false );
-		break;
-	case CMD_EDITOR_CLOSE:
-		fst_call ( jfst->fst, EDITOR_CLOSE );
+	case CMD_EDITOR:
+		if ( !strcasecmp(value, "open") ) {
+			fst_run_editor ( jfst->fst, false );
+		} else if ( !strcasecmp(value,"close") ) {
+			fst_call ( jfst->fst, EDITOR_CLOSE );
+		} else {
+			puts ( "Need value: open|close" );
+			ack = false;
+		}
 		break;
 	case CMD_LIST_PROGRAMS:
 		list_programs ( jfst, client_sock );
