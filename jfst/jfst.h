@@ -30,31 +30,6 @@ enum WithEditor {
 	WITH_EDITOR_SHOW = 2
 };
 
-enum PROTO_CMD {
-	CMD_UNKNOWN,
-	CMD_EDITOR_OPEN,
-	CMD_EDITOR_CLOSE,
-	CMD_LIST_PROGRAMS,
-	CMD_GET_PROGRAM,
-	CMD_SET_PROGRAM,
-	CMD_GET_CHANNEL,
-	CMD_SET_CHANNEL,
-	CMD_SUSPEND,
-	CMD_RESUME,
-	CMD_LOAD,
-	CMD_SAVE,
-	CMD_NEWS,
-	CMD_CPU,
-	CMD_HELP,
-	CMD_QUIT,
-	CMD_KILL
-};
-
-struct PROTO_MAP {
-	enum PROTO_CMD key;
-	const char* name;
-};
-
 /* Structures & Prototypes for midi output and associated queue */
 struct MidiMessage {
 	jack_nframes_t		time;

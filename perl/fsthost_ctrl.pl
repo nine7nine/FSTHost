@@ -158,7 +158,7 @@ sub sr_button_toggle {
 
 sub editor_button_toggle {
 	my ( $b, $self ) = @_;
-	$self->call ( $b->get_active() ? 'editor_open' : 'editor_close' );
+	$self->call ( $b->get_active() ? 'editor:open' : 'editor:close' );
 }
 
 sub presets_combo_change {
