@@ -36,6 +36,37 @@ static void cmdline2arg(int *argc, char ***pargv, LPSTR cmdline) {
 	*pargv = argv;
 }
 
+void process( FST** fst, int num, int32_t nframes ) {
+	int i;
+	for ( i=0; i < num; i++ ) {
+		/* Process AUDIO */
+		int num_ins = fst_num_ins(fst[i]);
+		int num_outs = fst_num_outs(fst[i]);
+
+		float ins[nframes];
+		float outs[nframes];
+		float* pi[num_ins];
+		float* po[num_outs];
+
+		memset ( ins, 0, nframes * sizeof(float) );
+		memset ( outs, 0, nframes * sizeof(float) );
+
+		int g;
+		for( g=0; g < num_ins; g++ ) {
+			pi[g] = ins;
+		}
+
+		for( g=0; g < num_outs; g++ ) {
+			po[g] = outs;
+		}
+
+		printf( "INS: %d | OUTS: %d\n", num_ins, num_outs );
+
+		// Deal with plugin
+		fst_process( fst[i], pi, po, nframes );
+	}
+}
+
 int WINAPI
 WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	int i;
@@ -44,11 +75,12 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	cmdline2arg(&argc, &argv, cmdline);
 
 	if ( argc < 2 ) {
-		puts ( "Kibel" );
+		printf ( "Usage: %s plugin ... ...", argv[0] );
 		return 1;
 	}
 
 	int fst_count = argc - 1;
+	int loaded = 0;
 
 	// Handling signals
 	struct sigaction sa;
@@ -62,38 +94,39 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	puts ( "...... LOADING ....." );
 	for ( i=0; i < fst_count; i++ ) {
 		fst[i] = fst_info_load_open ( NULL, argv[i+1] );
-		if (! fst[i]) return 1;
+		if (! fst[i]) goto exit;
 //		fst_run_editor(fst[i], false);
+		loaded++;
 	}
 
-	puts ( "Sleep 5s" );
-	sleep ( 5 );
+
+        // Set block size / sample rate
+	puts ( "...... CONFIGURE ....." );
+	float sample_rate = 48000;
+	intptr_t buffer_size = 1024;
+	for ( i=0; i < loaded; i++ ) {
+		fst_call_dispatcher (fst[i], effSetSampleRate, 0, 0, NULL, sample_rate);
+		fst_call_dispatcher (fst[i], effSetBlockSize, 0, buffer_size, NULL, 0.0f);
+		printf("Sample Rate: %g | Block Size: %d\n", sample_rate, buffer_size);
+	}
 
 	puts ( "...... RESUMING ....." );
-	for ( i=0; i < fst_count; i++ ) {
+	for ( i=0; i < loaded; i++ )
 		fst_call ( fst[i], RESUME );
-	}
 
 	puts ("CTRL+C to cancel");
 	while ( ! quit ) {
 		fst_event_callback();
+
+		puts ( "...... PROCESSING ....." );
+		process( fst, loaded, buffer_size );
+		
 		usleep ( 300000 );
 	}
 
-	puts ( "Sleep 5s" );
-	sleep ( 5 );
-
-	puts ( "...... SUSPENDING ....." );
-	for ( i=0; i < fst_count; i++ ) {
-		fst_call ( fst[i], SUSPEND );
-	}
-
-	puts ( "Sleep 5s" );
-	sleep ( 5 );
-
-	for ( i=0; i < fst_count; i++ ) {
+exit:
+	for ( i=0; i < loaded; i++ )
 		fst_close(fst[i]);
-	}
 
 	puts ( "DONE" );
 

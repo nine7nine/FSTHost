@@ -2,7 +2,7 @@
 SRCDIR                = .
 SUBDIRS               =
 DLLS                  =
-EXES                  = multi
+EXES                  = fsthost_multi
 
 CEXTRA                =
 CEXTRA                += -m32 -fPIC -g -Wall -Wno-multichar -O2 -mfpmath=sse -msse2
@@ -20,7 +20,7 @@ LIB_INST_PATH         =
 BIN_INST_PATH         = 
 
 ### multi.exe sources and settings
-multi_MODULE        = multi
+multi_MODULE        = fsthost_multi
 multi_C_SRCS        = $(wildcard fst/*.c) $(wildcard xmldb/*.c) unused/multi.c
 multi_LDFLAGS       = -m32 -mwindows $(shell pkg-config --libs libxml-2.0)
 multi_DLL_PATH      =
