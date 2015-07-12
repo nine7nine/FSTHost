@@ -13,9 +13,9 @@ static void jfstamc_automate ( AMC* amc, int32_t param ) {
 	if ( ml->wait ) ml->param = param;
 }
 
-static VstTimeInfo* jfstamc_get_time ( AMC* amc, int32_t mask ) {
+static void jfstamc_get_time ( AMC* amc, int32_t mask ) {
 	JFST* jfst = (JFST*) amc->user_ptr;
-	if ( ! jfst ) return NULL;
+	if ( ! jfst ) return;
 
 	struct VstTimeInfo* timeInfo = &amc->timeInfo;
 
@@ -96,8 +96,6 @@ static VstTimeInfo* jfstamc_get_time ( AMC* amc, int32_t mask ) {
 	// FIXME: not supported yet (acctually do we need this ?) 
 	// samplesToNextClock - valid when kVstClockValid is set
 	// FIXME: not supported yet (acctually do we need this ?)
-
-	return timeInfo;
 }
 
 static void
