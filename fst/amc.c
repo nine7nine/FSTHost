@@ -56,14 +56,20 @@ static void show_time_flags(intptr_t value) {
 
 // most simple one :) could be sufficient.... 
 intptr_t VSTCALLBACK
-amc_simple_callback( AEffect *fx, int32_t opcode, int32_t index, intptr_t value, void *ptr, float opt )
+amc_simple_callback ( AEffect *effect, int32_t opcode, int32_t index, intptr_t value, void *ptr, float opt )
 {
+	AMC* amc = effect ? ((AMC*) effect->resvd1) : NULL;
+
 	if ( opcode == audioMasterVersion ) return 2;
+
+	if ( opcode == audioMasterGetTime && amc )
+		return (intptr_t) &amc->timeInfo;
+
 	return 0;
 }
 
 intptr_t VSTCALLBACK
-amc_callback (struct AEffect* effect, int32_t opcode, int32_t index, intptr_t value, void* ptr, float opt)
+amc_callback ( AEffect* effect, int32_t opcode, int32_t index, intptr_t value, void* ptr, float opt )
 {
 	AMC* amc = effect ? ((AMC*) effect->resvd1) : NULL;
 
