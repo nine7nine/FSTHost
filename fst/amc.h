@@ -9,7 +9,7 @@ typedef struct _AMC {
 	struct VstTimeInfo	timeInfo;
 
 	void		(*Automate)	( struct _AMC*, int32_t param );
-	VstTimeInfo*	(*GetTime)	( struct _AMC*, int32_t mask );
+	void		(*GetTime)	( struct _AMC*, int32_t mask );
 	bool		(*ProcessEvents)( struct _AMC*, VstEvents* events );
 	intptr_t	(*TempoAt)	( struct _AMC*, int32_t location );
 	void		(*NeedIdle)	( struct _AMC* );

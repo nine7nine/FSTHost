@@ -109,8 +109,10 @@ amc_callback (struct AEffect* effect, int32_t opcode, int32_t index, intptr_t va
 		// <value> should contain a mask indicating which fields are required
 		// (see valid masks above), as some items may require extensive
 		// conversions
-		if ( amc && amc->GetTime ) return (intptr_t) amc->GetTime ( amc, value );
-		break;
+		if ( ! amc ) break;
+		
+		if (amc->GetTime) amc->GetTime(amc,value);
+		return (intptr_t) &amc->timeInfo;
 	case audioMasterProcessEvents:
 		SHOW_CALLBACK ("amc: audioMasterProcessEvents\n");
 		// VstEvents* in <ptr>
