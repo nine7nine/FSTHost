@@ -184,16 +184,6 @@ static void jfstamc_window_resize ( struct _AMC* amc, int32_t width, int32_t hei
 		jfst->gui_resize( jfst );
 }
 
-static intptr_t jfstamc_get_sample_rate ( struct _AMC* amc ) {
-	JFST* jfst = (JFST*) amc->user_ptr;
-	return ( jfst ) ? jack_get_sample_rate( jfst->client ) : 44100;
-}
-
-static intptr_t jfstamc_get_buffer_size ( struct _AMC* amc ) {
-	JFST* jfst = (JFST*) amc->user_ptr;
-	return ( jfst) ? jack_get_buffer_size( jfst->client ) : 1024;
-}
-
 /* return true if editor is opened */
 static bool jfstamc_update_display ( struct _AMC* amc ) {
 	JFST* jfst = (JFST*) amc->user_ptr;
@@ -209,7 +199,5 @@ void jfstamc_init ( JFST* jfst, AMC* amc ) {
 	amc->TempoAt		= &jfstamc_tempo;
 	amc->NeedIdle		= &jfstamc_need_idle;
 	amc->SizeWindow		= &jfstamc_window_resize;
-	amc->GetSampleRate	= &jfstamc_get_sample_rate;
-	amc->GetBlockSize	= &jfstamc_get_buffer_size;
 	amc->UpdateDisplay	= &jfstamc_update_display;
 }

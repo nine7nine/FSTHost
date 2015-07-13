@@ -211,6 +211,20 @@ void fst_program_change (FST *fst, int32_t program) {
 	pthread_mutex_unlock (&ec->lock);
 }
 
+void fst_configure (FST *fst, float sample_rate, intptr_t block_size) {
+	FSTEventCall* ec = &( fst->event_call );
+
+	/* Usa dispatcher as a store for data */
+	FSTDispatcher dp;
+	dp.val = block_size;
+	dp.opt = sample_rate;
+
+	pthread_mutex_lock ( &ec->lock );
+	ec->dispatcher = &dp;
+	fst_event_call ( fst, CONFIGURE );
+	pthread_mutex_unlock ( &ec->lock );
+}
+
 intptr_t
 fst_call_dispatcher (FST *fst, int32_t opcode, int32_t index, 
 			intptr_t val, void *ptr, float opt )
@@ -570,6 +584,7 @@ static inline void fst_event_handler (FST* fst) {
 	if ( ec->type == RESET ) return;
 
 	AEffect* plugin = fst->plugin;
+	AMC* amc = &fst->amc;
 	FSTDispatcher* dp = ec->dispatcher;
 
 	pthread_mutex_lock (&fst->lock);
@@ -591,6 +606,13 @@ static inline void fst_event_handler (FST* fst) {
 		plugin->dispatcher (plugin, effMainsChanged, 0, 1, NULL, 0.0f);
 		plugin->dispatcher (plugin, effStartProcess, 0, 0, NULL, 0.0f);
 		fst_process_unlock ( fst );
+		break;
+	case CONFIGURE:
+		amc->block_size = dp->val;
+		amc->sample_rate = dp->opt;
+		fst_error("Sample Rate: %g | Block Size: %d\n", amc->sample_rate, amc->block_size);
+		plugin->dispatcher( plugin, effSetSampleRate, 0, 0, NULL, amc->sample_rate );
+		plugin->dispatcher( plugin, effSetBlockSize, 0, amc->block_size, NULL, 0.0f );
 		break;
 	case EDITOR_OPEN:
 		fst_create_editor(fst);

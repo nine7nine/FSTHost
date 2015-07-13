@@ -71,6 +71,7 @@ typedef enum {
 	CLOSE,
 	SUSPEND,
 	RESUME,
+	CONFIGURE,
 	DISPATCHER,
 	EDITOR_OPEN,
 	EDITOR_CLOSE,
@@ -91,11 +92,12 @@ typedef struct {
 typedef void (*FSTWindowCloseCallback)(void* arg);
 
 typedef struct _FST {
+	struct _FST*		next;
+
 	AEffect*		plugin;
 	FSTHandle*		handle;
 	AMC			amc;
 	FSTEventCall		event_call;
-	struct _FST*		next;
 
 	char*			name;
 	pthread_mutex_t		lock;
@@ -211,6 +213,7 @@ bool fst_event_callback();
 void fst_call (FST *fst, FSTEventTypes type);
 intptr_t fst_call_dispatcher (FST *fst, int32_t opcode, int32_t index, intptr_t val, void *ptr, float opt );
 void fst_program_change (FST *fst, int32_t program);
+void fst_configure (FST *fst, float sample_rate, intptr_t block_size);
 bool fst_get_program_name (FST *fst, short program, char* name, size_t size);
 bool fst_set_program_name (FST *fst, const char* name);
 char* fst_get_port_name ( FST* fst, int32_t port_number, FSTPortType type );

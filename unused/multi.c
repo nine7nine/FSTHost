@@ -104,11 +104,8 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	puts ( "...... CONFIGURE ....." );
 	float sample_rate = 48000;
 	intptr_t buffer_size = 1024;
-	for ( i=0; i < loaded; i++ ) {
-		fst_call_dispatcher (fst[i], effSetSampleRate, 0, 0, NULL, sample_rate);
-		fst_call_dispatcher (fst[i], effSetBlockSize, 0, buffer_size, NULL, 0.0f);
-		printf("Sample Rate: %g | Block Size: %d\n", sample_rate, buffer_size);
-	}
+	for ( i=0; i < loaded; i++ )
+		fst_configure( fst[i], sample_rate, buffer_size );
 
 	puts ( "...... RESUMING ....." );
 	for ( i=0; i < loaded; i++ )

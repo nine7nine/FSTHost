@@ -109,9 +109,7 @@ bool jfst_init( JFST* jfst, int32_t max_in, int32_t max_out ) {
 	mlock ( fst, sizeof(FST) );
 
 	// Set block size / sample rate
-	fst_call_dispatcher (fst, effSetSampleRate, 0, 0, NULL, (float) jfst->sample_rate);
-	fst_call_dispatcher (fst, effSetBlockSize, 0, (intptr_t) jfst->buffer_size, NULL, 0.0f);
-	printf("Sample Rate: %d | Block Size: %d\n", jfst->sample_rate, jfst->buffer_size);
+	fst_configure( fst, jfst->sample_rate, jfst->buffer_size );
 
 	jfst_sysex_gen_random_id ( jfst );
 
