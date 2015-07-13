@@ -168,7 +168,7 @@ fsthost_list: xmldb/list_$(LBITS).o
 
 ### Target specific build rules
 define compile
-	$(LINK) -m$1 -o $@ $(C_SRCS:.c=_$(1).o) $(LDFLAGS$(1)) $(LIBRARIES)
+	$(LINK) -o $@ $(C_SRCS:.c=_$(1).o) $(LDFLAGS$(1)) $(LIBRARIES)
 	mv $@.exe $@		# Fix script name
 	mv $@.exe.so $@.so	# Fix library name
 
