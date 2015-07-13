@@ -5,15 +5,15 @@ DLLS                  =
 EXES                  = fsthost_multi
 
 CEXTRA                =
-CEXTRA                += -m32 -fPIC -g -Wall -Wno-multichar -O2 -mfpmath=sse -msse2
-CEXTRA                += $(shell pkg-config --cflags libxml-2.0)
+CEXTRA                += -m32 -fPIC -g -Wall -Wno-multichar -O2 -mfpmath=sse -msse
+CEXTRA                += $(shell pkg-config --cflags libxml-2.0 jack)
 CXXEXTRA              = -mno-cygwin
 RCEXTRA               =
 INCLUDE_PATH          = -I. -I/usr/include -I/usr/include -I/usr/include/wine -I/usr/include/wine/windows
 INCLUDE_PATH          += -I/usr/local/include/wine -I/usr/local/include/wine/windows
 DLL_PATH              =
 LIBRARY_PATH          = 
-LIBRARIES             := -m32
+LIBRARIES             =
 DESTDIR               =
 PREFIX                = /usr
 LIB_INST_PATH         = 
@@ -22,10 +22,10 @@ BIN_INST_PATH         =
 ### multi.exe sources and settings
 multi_MODULE        = fsthost_multi
 multi_C_SRCS        = $(wildcard fst/*.c) $(wildcard xmldb/*.c) unused/multi.c
-multi_LDFLAGS       = -m32 -mwindows $(shell pkg-config --libs libxml-2.0)
+multi_LDFLAGS       = -m32 -mwindows $(shell pkg-config --libs libxml-2.0 jack)
 multi_DLL_PATH      =
 multi_DLLS          = 
-multi_LIBRARY_PATH  = -lpthread
+multi_LIBRARY_PATH  =
 multi_LIBRARIES     =
 multi_OBJS          = $(multi_C_SRCS:.c=.o)
 
@@ -87,4 +87,4 @@ $(EXTRASUBDIRS:%=%/__clean__): dummy
 DEFLIB = $(LIBRARY_PATH) $(LIBRARIES) $(DLL_PATH)
 
 $(multi_MODULE): $(multi_OBJS)
-	$(LINK) $(multi_LDFLAGS) -o $@ $(multi_OBJS) $(multi_LIBRARY_PATH) $(DEFLIB) $(multi_DLLS:%=-l%) $(multi_LIBRARIES:%=-l%)
+	$(LINK) -o $@ $(multi_OBJS) $(multi_LIBRARY_PATH) $(DEFLIB) $(multi_DLLS:%=-l%) $(multi_LIBRARIES:%=-l%) $(multi_LDFLAGS)
