@@ -263,17 +263,19 @@ bool fst_run_editor (FST* fst, bool popup) {
 }
 
 char* fst_get_port_name ( FST* fst, int32_t port_number, FSTPortType type ) {
-	VstPinProperties vpp;
-
-	intptr_t success = 0;
+	int32_t opcode;
 	switch ( type ) {
 	case FST_PORT_IN:
-		success = fst_call_dispatcher(fst, effGetInputProperties, port_number, 0, &vpp, 0);
+		opcode = effGetInputProperties;
 		break;
 	case FST_PORT_OUT:
-		success = fst_call_dispatcher(fst, effGetOutputProperties, port_number, 0, &vpp, 0);
+		opcode = effGetOutputProperties;
 		break;
+	default: return NULL;
 	}
+
+	VstPinProperties vpp;
+	intptr_t success = fst_call_dispatcher(fst, opcode, port_number, 0, &vpp, 0);
 	if ( success != 1 ) return NULL;
 
 	/* Some plugs return empty label */
