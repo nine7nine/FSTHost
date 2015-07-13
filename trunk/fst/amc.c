@@ -162,13 +162,13 @@ amc_callback ( AEffect* effect, int32_t opcode, int32_t index, intptr_t value, v
 		break;
 	case audioMasterGetSampleRate:
 		SHOW_CALLBACK ("amc: audioMasterGetSampleRate\n");
-		if ( amc && amc->GetSampleRate )
-			return amc->GetSampleRate ( amc );
+		if ( amc && amc->sample_rate )
+			return amc->sample_rate;
 		return 44100;
 	case audioMasterGetBlockSize:
 		SHOW_CALLBACK ("amc: audioMasterGetBlockSize\n");
-		if ( amc && amc->GetBlockSize )
-			return amc->GetBlockSize ( amc );
+		if ( amc && amc->block_size )
+			return amc->block_size;
 		return 1024;
 	case audioMasterGetInputLatency:
 		SHOW_CALLBACK ("amc: audioMasterGetInputLatency\n");

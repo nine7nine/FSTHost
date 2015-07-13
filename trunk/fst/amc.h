@@ -7,6 +7,8 @@
 typedef struct _AMC {
 	/* This is needed only audioMasterGetTime - but we don't know how long plugin want to use it */
 	struct VstTimeInfo	timeInfo;
+	float sample_rate;
+	intptr_t block_size;
 
 	void		(*Automate)	( struct _AMC*, int32_t param );
 	void		(*GetTime)	( struct _AMC*, int32_t mask );
@@ -14,8 +16,6 @@ typedef struct _AMC {
 	intptr_t	(*TempoAt)	( struct _AMC*, int32_t location );
 	void		(*NeedIdle)	( struct _AMC* );
 	void		(*SizeWindow)	( struct _AMC*, int32_t width, int32_t height );
-	intptr_t	(*GetSampleRate)( struct _AMC* );
-	intptr_t	(*GetBlockSize)	( struct _AMC* );
 	bool		(*UpdateDisplay)( struct _AMC* );
 	void*		user_ptr;
 } AMC;
