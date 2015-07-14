@@ -10,6 +10,12 @@
 
 #define CHANNELS 2
 
+typedef struct {
+	FST** fst;
+	int32_t num;
+	jack_port_t* out[CHANNELS];
+} FSTHOST;
+
 volatile bool quit = false;
 static void signal_handler (int signum) {
 	switch(signum) {
@@ -117,23 +123,17 @@ void process( FST** fst, int num, jack_nframes_t nframes, float** out ) {
 				out[c][f] += outs[i][c][f];
 }
 
-struct FSTS {
-	FST** fst;
-	int32_t num;
-	jack_port_t* out[CHANNELS];
-};
-
 int process_cb_handler (jack_nframes_t frames, void* arg) {
-	struct FSTS* fsts = (struct FSTS*) arg;
+	FSTHOST* fsthost = (FSTHOST*) arg;
 
 	int c;
 	float* outbuf[CHANNELS];
 	for (c=0; c < CHANNELS; c++) {
-		outbuf[c] = jack_port_get_buffer(fsts->out[c], frames);
+		outbuf[c] = jack_port_get_buffer(fsthost->out[c], frames);
 		memset( outbuf[c], 0, frames * sizeof(float) );
 	}
 
-	process ( fsts->fst, fsts->num, frames, outbuf );
+	process ( fsthost->fst, fsthost->num, frames, outbuf );
 
 	printf( "\r[0J" );
 	for ( c=0; c < CHANNELS; c++ ) {
@@ -156,7 +156,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	cmdline2arg(&argc, &argv, cmdline);
 
 	if ( argc < 2 ) {
-		printf ( "Usage: %s plugin ... ...", argv[0] );
+		printf ( "Usage: %s plugin ... ...\n", argv[0] );
 		return 1;
 	}
 
@@ -166,13 +166,9 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 		return 1;
 	}
 
-	int fst_count = argc - 1;
-	FST* fst[argc];
-	int loaded = 0;
-
-	struct FSTS fsts;
-	fsts.out[0] = jack_port_register ( client, "out_L", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0 );
-	fsts.out[1] = jack_port_register ( client, "out_R", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0 );
+	FSTHOST fsthost;
+	fsthost.out[0] = jack_port_register ( client, "out_L", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0 );
+	fsthost.out[1] = jack_port_register ( client, "out_R", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0 );
 
 	// Handling signals
 	struct sigaction sa;
@@ -182,17 +178,21 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	sigaction(SIGINT, &sa, NULL); // SIGINT for clean quit
 
 	puts ( "...... LOADING ....." );
+	FST* fst[argc];
+	int loaded = 0;
+	int fst_count = argc - 1;
 	for ( i=0; i < fst_count; i++ ) {
 		fst[i] = fst_info_load_open ( NULL, argv[i+1] );
 		if (! fst[i]) goto exit;
+
 		fst_run_editor(fst[i], false);
 		loaded++;
 	}
 
-	fsts.fst = fst;
-	fsts.num = loaded;
+	fsthost.fst = fst;
+	fsthost.num = loaded;
 	jack_set_thread_creator (wine_thread_create);
-	jack_set_process_callback(client, process_cb_handler, &fsts); /* for jack1 */
+	jack_set_process_callback(client, process_cb_handler, &fsthost); /* for jack1 */
 
         // Set block size / sample rate
 	puts ( "...... CONFIGURE ....." );
@@ -211,10 +211,6 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	puts ( "" );
 	while ( ! quit ) {
 		fst_event_callback();
-
-//		puts ( "...... PROCESSING ....." );
-//		process( fst, loaded, buffer_size );
-		
 		usleep ( 10000 );
 	}
 
