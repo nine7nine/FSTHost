@@ -108,23 +108,18 @@ queue_midi_message(JFST* jfst, uint8_t status, uint8_t d1, uint8_t d2, jack_nfra
 
 	struct  MidiMessage ev;
 	ev.data[0] = status;
+	ev.data[1] = d1;
+	ev.data[2] = d2;
+
 	if (statusHi == 0xC || statusHi == 0xD) {
 		ev.len = 2;
-		ev.data[1] = d1;
 	} else if (statusHi == 0xF) {
-		if (statusLo == 0 || statusLo == 2) {
+		if (statusLo == 0 || statusLo == 2)
 			ev.len = 3;
-			ev.data[1] = d1;
-			ev.data[2] = d2;
-		} else if (statusLo == 1 || statusLo == 3) {
+		else if (statusLo == 1 || statusLo == 3)
 			ev.len = 2;
-			ev.data[1] = d1;
-		} else ev.len = 1;
-	} else {
-		ev.len = 3;
-		ev.data[1] = d1;
-		ev.data[2] = d2;
-	}
+		else ev.len = 1;
+	} else ev.len = 3;
 
 	ev.time = jack_frame_time(jfst->client) + delta;
 
