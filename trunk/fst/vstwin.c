@@ -612,7 +612,7 @@ static inline void fst_event_handler (FST* fst) {
 	case CONFIGURE:
 		amc->block_size = dp->val;
 		amc->sample_rate = dp->opt;
-		fst_error("Sample Rate: %g | Block Size: %d\n", amc->sample_rate, amc->block_size);
+		fst_error("Sample Rate: %g | Block Size: %d", amc->sample_rate, amc->block_size);
 		plugin->dispatcher( plugin, effSetSampleRate, 0, 0, NULL, amc->sample_rate );
 		plugin->dispatcher( plugin, effSetBlockSize, 0, amc->block_size, NULL, 0.0f );
 		break;
