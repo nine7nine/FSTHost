@@ -26,7 +26,7 @@ xmlDoc* fst_info_read_xmldb ( const char* dbpath ) {
 	return xml_db;
 }
 
-int fst_info_list(const char* dbpath) {
+int fst_info_list(const char* dbpath, const char* arch) {
 	xmlDoc* xml_db = fst_info_read_xmldb ( dbpath );
 	if (!xml_db) return 1;
 
@@ -38,6 +38,10 @@ int fst_info_list(const char* dbpath) {
 		xmlChar* p = xmlGetProp(n, BAD_CAST "path");
 		xmlChar* a = xmlGetProp(n, BAD_CAST "arch");
 		xmlChar* f = NULL;
+
+		if ( arch != NULL && xmlStrcmp(a, BAD_CAST arch) != 0 )
+			continue;
+
 		xmlNode* nn;
 		for (nn = n->children; nn; nn = nn->next) {
 			if (xmlStrcmp(nn->name, BAD_CAST "name") == 0) {
@@ -45,7 +49,12 @@ int fst_info_list(const char* dbpath) {
 				break;
 			}
 		}
-		if (f) printf("%s|%s|%s\n", f, a, p);
+		if ( f == NULL ) continue;
+
+		if ( arch == NULL )
+			printf("%s|%s|%s\n", f, a, p);
+		else
+			printf("%s|%s\n", f, p);
 	}
 
 	xmlFreeDoc(xml_db);
