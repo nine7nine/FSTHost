@@ -306,7 +306,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	}
 
 	/* If use want to list plugins then abandon other tasks */
-	if (opt_list_plugins) return fst_info_list ( jfst->dbinfo_file );
+	if (opt_list_plugins) return fst_info_list ( jfst->dbinfo_file, ARCH );
 
 	/* We have more arguments than getops options */
 	if (optind < argc) custom_path = argv[optind];
