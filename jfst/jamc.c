@@ -7,7 +7,6 @@
 
 static void jfstamc_automate ( AMC* amc, int32_t param ) {
 	JFST* jfst = (JFST*) amc->user_ptr;
-	if ( ! jfst ) return;
 
 	MidiLearn* ml = &(jfst->midi_learn);
 	if ( ml->wait ) ml->param = param;
@@ -15,7 +14,6 @@ static void jfstamc_automate ( AMC* amc, int32_t param ) {
 
 static void jfstamc_get_time ( AMC* amc, int32_t mask ) {
 	JFST* jfst = (JFST*) amc->user_ptr;
-	if ( ! jfst ) return;
 
 	struct VstTimeInfo* timeInfo = &amc->timeInfo;
 
@@ -135,7 +133,6 @@ queue_midi_message(JFST* jfst, uint8_t status, uint8_t d1, uint8_t d2, jack_nfra
 
 static bool jfstamc_process_events ( AMC* amc, VstEvents* events ) {
 	JFST* jfst = (JFST*) amc->user_ptr;
-	if ( ! jfst ) return false;
 
 	int32_t numEvents = events->numEvents;
 	int32_t i;
@@ -150,27 +147,22 @@ static bool jfstamc_process_events ( AMC* amc, VstEvents* events ) {
 
 static intptr_t jfstamc_tempo ( struct _AMC* amc, int32_t location ) {
 	JFST* jfst = (JFST*) amc->user_ptr;
-	if ( jfst ) {
-		jack_position_t jack_pos;
-		jack_transport_query (jfst->client, &jack_pos);
-		if (jack_pos.beats_per_minute)
-			return (intptr_t) jack_pos.beats_per_minute;
-	}
-
-	return 120;
+	
+	jack_position_t jack_pos;
+	jack_transport_query (jfst->client, &jack_pos);
+	
+	return (jack_pos.beats_per_minute) ? jack_pos.beats_per_minute : 120;
 }
 
 static void jfstamc_need_idle ( struct _AMC* amc ) {
 	JFST* jfst = (JFST*) amc->user_ptr;
-	if ( ! jfst ) return;
 	FST* fst = jfst->fst;
-	if ( fst ) fst->wantIdle = TRUE;
+	fst->wantIdle = TRUE;
 }
 
 static void jfstamc_window_resize ( struct _AMC* amc, int32_t width, int32_t height ) {
 	JFST* jfst = (JFST*) amc->user_ptr;
 	FST* fst = jfst->fst;
-	if ( ! jfst || ! fst ) return;
 	fst->width = width;
 	fst->height = height;
 	fst_call ( fst, EDITOR_RESIZE );
@@ -183,7 +175,7 @@ static void jfstamc_window_resize ( struct _AMC* amc, int32_t width, int32_t hei
 static bool jfstamc_update_display ( struct _AMC* amc ) {
 	JFST* jfst = (JFST*) amc->user_ptr;
 	FST* fst = jfst->fst;
-	return ( jfst && fst && fst->window ) ? true : false;
+	return ( fst->window ) ? true : false;
 }
 
 void jfstamc_init ( JFST* jfst, AMC* amc ) {
