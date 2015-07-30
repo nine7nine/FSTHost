@@ -15,20 +15,12 @@ extern void CPUusage_init();
 extern double CPUusage_getCurrentValue();
 
 static void list_programs ( JFST* jfst, int client_sock ) {
+	char progName[FST_MAX_PROG_NAME];
+
 	FST* fst = jfst->fst;
 	int32_t i;
 	for ( i = 0; i < fst_num_presets(fst); i++ ) {
-		/* VST standard says that progName is 24 bytes but some plugs use more characters */
-		char progName[32];
-		if ( fst->vst_version >= 2 ) {
-			fst_get_program_name(fst, i, progName, sizeof(progName));
-		} else {
-			/* FIXME:
-			So what ? nasty plugin want that we iterate around all presets ?
-			no way ! We don't have time for this
-			*/
-			sprintf ( progName, "preset %d", i );
-		}
+		fst_get_program_name(fst, i, progName, sizeof(progName));
 		serv_send_client_data ( client_sock, progName, strlen(progName) );
         }
 }

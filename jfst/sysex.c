@@ -94,8 +94,9 @@ void jfst_send_sysex(JFST* jfst, SysExType type) {
 	uint8_t id = 0;
 	switch ( type ) {
 	case SYSEX_TYPE_DUMP:;
-		char progName[32];
 		SysExDumpV1* sxd = &jfst->sysex_dump;
+
+		char progName[FST_MAX_PROG_NAME];
 		fst_get_program_name(jfst->fst, jfst->fst->current_program, progName, sizeof(progName));
 
 //		sxd->uuid = ; /* Set once on start */

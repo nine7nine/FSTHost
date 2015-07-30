@@ -210,21 +210,13 @@ save_handler (GtkToggleButton *but, gpointer ptr) {
 
 static int
 create_preset_store( GtkListStore* store, FST *fst ) {
-	short i;
+	char progName[FST_MAX_PROG_NAME];
+	int32_t i;
+
 	for( i = 0; i < fst_num_presets(fst); i++ ) {
 		GtkTreeIter new_row_iter;
 
-		/* VST standard says that progName is 24 bytes but some plugs use more characters */
-		char progName[32];
-		if ( fst->vst_version >= 2 ) {
-			fst_get_program_name(fst, i, progName, sizeof(progName));
-		} else {
-			/* FIXME:
-			So what ? nasty plugin want that we iterate around all presets ?
-			no way ! We don't have time for this
-			*/
-			sprintf ( progName, "preset %d", i );
-		}
+		fst_get_program_name(fst, i, progName, sizeof(progName));
 
 		gtk_list_store_insert( store, &new_row_iter, i );
 		gtk_list_store_set( store, &new_row_iter, 0, progName, 1, i, -1 );

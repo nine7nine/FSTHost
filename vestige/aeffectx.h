@@ -33,6 +33,12 @@
 
 #define CCONST(a, b, c, d)( ( ( (int) a ) << 24 ) | ( ( (int) b ) << 16 ) | ( ( (int) c ) << 8 ) | ( ( (int) d ) << 0 ) )
 
+#define kVstMaxProgNameLen 24
+#define kVstMaxParamStrLen 8
+#define kVstMaxVendorStrLen 64
+#define kVstMaxProductStrLen 64
+#define kVstMaxEffectNameLen 32 
+
 #define audioMasterAutomate 0
 #define audioMasterVersion 1
 #define audioMasterCurrentId 2

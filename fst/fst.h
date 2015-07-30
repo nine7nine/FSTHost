@@ -7,6 +7,9 @@
 #include "vestige/aeffectx.h"
 #include "amc.h"
 
+/* VST standard says that progName is 24 bytes but some plugs use more characters */
+#define FST_MAX_PROG_NAME 32
+
 /**
  * Display FST error message.
  *
@@ -214,7 +217,7 @@ void fst_call (FST *fst, FSTEventTypes type);
 intptr_t fst_call_dispatcher (FST *fst, int32_t opcode, int32_t index, intptr_t val, void *ptr, float opt );
 void fst_program_change (FST *fst, int32_t program);
 void fst_configure (FST *fst, float sample_rate, intptr_t block_size);
-bool fst_get_program_name (FST *fst, short program, char* name, size_t size);
+bool fst_get_program_name (FST *fst, int32_t program, char* name, size_t size);
 bool fst_set_program_name (FST *fst, const char* name);
 char* fst_get_port_name ( FST* fst, int32_t port_number, FSTPortType type );
 
