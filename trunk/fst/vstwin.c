@@ -7,9 +7,6 @@
 
 #include "fst.h"
 
-/* VST standard says that progName is 24 bytes but some plugs use more characters */
-#define MAX_PROG_NAME 32
-
 static FST* fst_first = NULL;
 static bool WindowClassRegistered = FALSE;
 
@@ -284,13 +281,22 @@ char* fst_get_port_name ( FST* fst, int32_t port_number, FSTPortType type ) {
 	return strdup( vpp.label );
 }
 
-bool fst_get_program_name (FST *fst, short program, char* name, size_t size) {
-	/* VST standard says that progName is 24 bytes but some plugs use more characters */
-	char progName[MAX_PROG_NAME];
+bool fst_get_program_name (FST *fst, int32_t program, char* name, size_t size) {
+	char progName[FST_MAX_PROG_NAME];
 	if (program == fst->current_program) {
 		fst_call_dispatcher(fst, effGetProgramName, 0, 0, progName, 0);
 	} else {
-		fst_call_dispatcher(fst, effGetProgramNameIndexed, program, 0, progName, 0);
+		bool success = false;
+		if ( fst->vst_version >= 2 )
+			success = fst_call_dispatcher(fst, effGetProgramNameIndexed, program, 0, progName, 0);
+
+		if ( ! success ) {
+			/* FIXME:
+			So what ? nasty plugin want that we iterate around all presets ?
+			no way ! We don't have time for this
+			*/
+			sprintf ( progName, "preset %d", program );
+		}
 	}
 	strncpy ( name, progName, size - 1 );
 	valid_program_name ( name, size );
@@ -299,7 +305,7 @@ bool fst_get_program_name (FST *fst, short program, char* name, size_t size) {
 }
 
 bool fst_set_program_name (FST *fst, const char* name) {
-	char nname[24];
+	char nname[kVstMaxProgNameLen];
 	strncpy ( nname, name, sizeof ( nname ) );
 	valid_program_name ( nname, sizeof nname );
 
@@ -441,7 +447,7 @@ FST* fst_open (FSTHandle* fhandle) {
 		fst_error("%-31s : %s", "Support processReplacing", pr ? "Yes" : "No");
 
 		/* Get plugin name */
-		char tmpstr[32];
+		char tmpstr[kVstMaxEffectNameLen];
 		if ( plugin->dispatcher (plugin, effGetEffectName, 0, 0, tmpstr, 0 ) )
 			fst->name = strdup ( tmpstr );
 	}
@@ -565,7 +571,7 @@ fst_update_current_program(FST* fst) {
 	int32_t newProg = plugin->dispatcher ( plugin, effGetProgram, 0, 0, NULL, 0 );
 	if ( newProg != fst->current_program ) {
 		fst->current_program = newProg;
-		char progName[MAX_PROG_NAME];
+		char progName[FST_MAX_PROG_NAME];
 		plugin->dispatcher ( plugin, effGetProgramName, 0, 0, progName, 0 );
 		fst_error ("Program: %d : %s", newProg, progName);
 	}
