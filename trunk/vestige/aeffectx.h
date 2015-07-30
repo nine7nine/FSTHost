@@ -38,6 +38,7 @@
 #define kVstMaxVendorStrLen 64
 #define kVstMaxProductStrLen 64
 #define kVstMaxEffectNameLen 32 
+#define kVstMaxLabelLen 64
 
 #define audioMasterAutomate 0
 #define audioMasterVersion 1
@@ -260,7 +261,7 @@ typedef struct AEffect { // Never use c++!!!
 } AEffect;
 
 typedef struct VstPinProperties {
-	char label[64];
+	char label[kVstMaxLabelLen];
 	int32_t flags;
 	int32_t arrangementType;
 	char shortLabel[8]; // This is broken in most plugins
