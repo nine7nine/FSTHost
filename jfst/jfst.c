@@ -38,7 +38,7 @@ JFST* jfst_new( const char* appname ) {
 	/* MidiLearn */
 	short i;
 	MidiLearn* ml = &jfst->midi_learn;
-	ml->wait = FALSE;
+	ml->wait = false;
 	ml->cc = -1;
 	ml->param = -1;
 	for(i=0; i<128;++i) ml->map[i] = -1;
@@ -192,6 +192,14 @@ void jfst_bypass(JFST* jfst, bool bypass) {
 	}
 }
 
+void jfst_midi_learn( JFST* jfst, bool learn ) {
+	MidiLearn* ml = &jfst->midi_learn;
+	if ( learn )
+		ml->cc = ml->param = -1;
+
+	ml->wait = learn;
+}
+
 static Changes detect_change( JFST* jfst ) {
         // Wait until program change
         if (jfst->fst->event_call.type == PROGRAM_CHANGE)
@@ -258,11 +266,14 @@ Changes jfst_idle(JFST* jfst ) {
 		}
 	}
 
+	Changes change = detect_change( jfst );
+
 	// MIDI learn support
 	MidiLearn* ml = &jfst->midi_learn;
 	if ( ml->wait && ml->cc >= 0 && ml->param >= 0 ) {
 		ml->map[ml->cc] = ml->param;
 		ml->wait = false;
+		change |= CHANGE_MIDILE;
 
 		printf("MIDIMAP CC: %d => ", ml->cc);
 		char name[32];
@@ -274,9 +285,7 @@ Changes jfst_idle(JFST* jfst ) {
 		}
 	}
 
-	Changes change = detect_change( jfst );
 	Changes change_sysex_mask = CHANGE_BYPASS|CHANGE_CHANNEL|CHANGE_VOLUME|CHANGE_PROGRAM;
-
 	if ( change & change_sysex_mask ) {
 		// Send notify if we want notify and something change
 		if (jfst->sysex_want_notify) jfst_sysex_notify(jfst);

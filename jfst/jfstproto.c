@@ -75,6 +75,9 @@ static void news ( JFST* jfst, int client_sock, uint8_t* changes ) {
 		serv_send_client_data ( client_sock, msg, strlen(msg) );
 	}
 
+	// TODO
+	//if ( *changes & CHANGE_MIDILE ) {
+
 	if ( *changes & CHANGE_PROGRAM ) get_program( jfst, client_sock );
 
 	*changes = 0;

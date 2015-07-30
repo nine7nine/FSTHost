@@ -51,7 +51,8 @@ typedef enum {
 	CHANGE_EDITOR	= 1 << 2,
 	CHANGE_CHANNEL	= 1 << 3,
 	CHANGE_VOLUME	= 1 << 4,
-	CHANGE_PROGRAM	= 1 << 5
+	CHANGE_PROGRAM	= 1 << 5,
+	CHANGE_MIDILE	= 1 << 6
 } Changes;
 
 typedef struct {
@@ -127,6 +128,7 @@ bool jfst_save_state(JFST* jfst, const char * filename);
 bool jfst_session_callback( JFST* jfst, const char* appname );
 void jfst_close ( JFST* jfst );
 void jfst_bypass(JFST* jfst, bool bypass);
+void jfst_midi_learn( JFST* jfst, bool learn );
 Changes jfst_idle(JFST* jfst);
 
 /* jack.c */
