@@ -96,13 +96,11 @@ gtk_edit_close_handler ( void* arg ) {
 static void
 learn_handler (GtkToggleButton *but, gpointer ptr) {
 	JFST* jfst = (JFST*) ptr;
-	MidiLearn* ml = &jfst->midi_learn;
 	
 	if ( gtk_toggle_button_get_active (but) ) {
-		ml->cc = ml->param = -1;
-		ml->wait = true;
+		jfst_midi_learn(jfst, true);
 	} else {
-		ml->wait = false;
+		jfst_midi_learn(jfst, false);
 	}
 }
 
