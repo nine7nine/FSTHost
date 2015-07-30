@@ -230,6 +230,12 @@ static Changes detect_change( JFST* jfst ) {
 		ret |= CHANGE_EDITOR;
 	}
 
+	MidiLearn* ml = &jfst->midi_learn;
+	if ( L->midi_learn != ml->wait ) {
+		L->midi_learn = ml->wait;
+		ret |= CHANGE_MIDILE;
+	}
+
 	return ret;
 }
 
@@ -263,20 +269,18 @@ Changes jfst_idle(JFST* jfst ) {
 		}
 	}
 
-	Changes change = detect_change( jfst );
-
 	// MIDI learn support
 	MidiLearn* ml = &jfst->midi_learn;
 	if ( ml->wait && ml->cc >= 0 && ml->param >= 0 ) {
 		ml->map[ml->cc] = ml->param;
 		ml->wait = false;
-		change |= CHANGE_MIDILE;
 
 		char name[FST_MAX_PARAM_NAME];
 		fst_call_dispatcher ( jfst->fst, effGetParamName, ml->param, 0, name, 0 );
 		printf("MIDIMAP CC: %d => %s\n", ml->cc, name);
 	}
 
+	Changes change = detect_change( jfst );
 	Changes change_sysex_mask = CHANGE_BYPASS|CHANGE_CHANNEL|CHANGE_VOLUME|CHANGE_PROGRAM;
 	if ( change & change_sysex_mask ) {
 		// Send notify if we want notify and something change

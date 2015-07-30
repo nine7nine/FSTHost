@@ -681,6 +681,7 @@ idle_cb(JFST *jfst) {
 		tooltip[0] = '\0';
 		uint8_t cc;
 		char ParamName[FST_MAX_PARAM_NAME];
+		char tString[96];
 	   	for (cc = 0; cc < 128; cc++) {
 			int32_t paramIndex = ml->map[cc];
 			if ( paramIndex < 0 || paramIndex >= fst_num_params(fst) )
@@ -688,7 +689,6 @@ idle_cb(JFST *jfst) {
 
 			fst_call_dispatcher ( fst, effGetParamName, paramIndex, 0, ParamName, 0 );
 
-			char tString[96];
 			snprintf(tString, sizeof tString, "CC %03d => %s",cc, ParamName);
 
 			if (show_tooltip) strcat(tooltip, "\n");

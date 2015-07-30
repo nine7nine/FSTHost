@@ -36,6 +36,24 @@ static void list_params ( JFST* jfst, int client_sock ) {
         }
 }
 
+static void list_midi_map ( JFST* jfst, int client_sock ) {
+	char name[FST_MAX_PARAM_NAME];
+	char msg[16 + sizeof name];
+
+	MidiLearn* ml = &jfst->midi_learn;
+	FST* fst = jfst->fst;
+	uint8_t cc;
+	for (cc = 0; cc < 128; cc++) {
+		int32_t paramIndex = ml->map[cc];
+		if ( paramIndex < 0 || paramIndex >= fst_num_params(fst) )
+			continue;
+
+		fst_call_dispatcher( fst, effGetParamName, paramIndex, 0, name, 0 );
+		sprintf(msg, "CC:%d PARAM:%s", cc, name);
+		serv_send_client_data ( client_sock, msg, strlen(msg) );
+	}
+}
+
 static void get_program ( JFST* jfst, int client_sock ) {
 	char msg[16];
 	sprintf( msg, "PROGRAM:%d", jfst->fst->current_program );
@@ -78,8 +96,11 @@ static void news ( JFST* jfst, int client_sock, uint8_t* changes ) {
 		serv_send_client_data ( client_sock, msg, strlen(msg) );
 	}
 
-	// TODO
-	//if ( *changes & CHANGE_MIDILE ) {
+	if ( *changes & CHANGE_MIDILE ) {
+		MidiLearn* ml = &jfst->midi_learn;
+		snprintf( msg, sizeof msg, "MIDI_LEARN:%d", ml->wait );
+		serv_send_client_data ( client_sock, msg, strlen(msg) );
+	}
 
 	if ( *changes & CHANGE_PROGRAM ) get_program( jfst, client_sock );
 
@@ -91,10 +112,12 @@ enum PROTO_CMD {
 	CMD_EDITOR,
 	CMD_LIST_PROGRAMS,
 	CMD_LIST_PARAMS,
+	CMD_LIST_MIDI_MAP,
 	CMD_GET_PROGRAM,
 	CMD_SET_PROGRAM,
 	CMD_GET_CHANNEL,
 	CMD_SET_CHANNEL,
+	CMD_MIDI_LEARN,
 	CMD_SUSPEND,
 	CMD_RESUME,
 	CMD_LOAD,
@@ -115,10 +138,12 @@ static struct PROTO_MAP proto_string_map[] = {
 	{ CMD_EDITOR, "editor" },
 	{ CMD_LIST_PROGRAMS, "list_programs" },
 	{ CMD_LIST_PARAMS, "list_params" },
+	{ CMD_LIST_MIDI_MAP, "list_midi_map" },
 	{ CMD_GET_PROGRAM, "get_program" },
 	{ CMD_SET_PROGRAM, "set_program" },
 	{ CMD_GET_CHANNEL, "get_channel" },
 	{ CMD_SET_CHANNEL, "set_channel" },
+	{ CMD_MIDI_LEARN, "midi_learn" },
 	{ CMD_SUSPEND, "suspend" },
 	{ CMD_RESUME, "resume" },
 	{ CMD_LOAD, "load" },
@@ -183,6 +208,9 @@ static bool jfst_proto_client_dispatch ( JFST* jfst, char* msg, uint8_t* changes
 	case CMD_LIST_PARAMS:
 		list_params ( jfst, client_sock );
 		break;
+	case CMD_LIST_MIDI_MAP:
+		list_midi_map( jfst, client_sock );
+		break;
 	case CMD_GET_PROGRAM:
 		get_program ( jfst, client_sock );
 		break;
@@ -194,6 +222,16 @@ static bool jfst_proto_client_dispatch ( JFST* jfst, char* msg, uint8_t* changes
 		break;
 	case CMD_SET_CHANNEL:
 		midi_filter_one_channel_set( &jfst->channel, strtol(value, NULL, 10) );
+		break;
+	case CMD_MIDI_LEARN:
+		if ( !strcasecmp(value, "start") ) {
+			jfst_midi_learn(jfst, true );
+		} else if ( !strcasecmp(value,"stop") ) {
+			jfst_midi_learn(jfst, false);
+		} else {
+			puts ( "Need value: start|stop" );
+			ack = false;
+		}
 		break;
 	case CMD_SUSPEND:
 		jfst_bypass ( jfst, true );
