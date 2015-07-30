@@ -259,7 +259,7 @@ bool fst_run_editor (FST* fst, bool popup) {
 	}
 }
 
-char* fst_get_port_name ( FST* fst, int32_t port_number, FSTPortType type ) {
+bool fst_get_port_name ( FST* fst, int32_t port_number, FSTPortType type, char* name ) {
 	int32_t opcode;
 	switch ( type ) {
 	case FST_PORT_IN:
@@ -268,17 +268,18 @@ char* fst_get_port_name ( FST* fst, int32_t port_number, FSTPortType type ) {
 	case FST_PORT_OUT:
 		opcode = effGetOutputProperties;
 		break;
-	default: return NULL;
+	default: return false;
 	}
 
 	VstPinProperties vpp;
 	intptr_t success = fst_call_dispatcher(fst, opcode, port_number, 0, &vpp, 0);
-	if ( success != 1 ) return NULL;
+	if ( success != 1 ) return false;
 
 	/* Some plugs return empty label */
-	if ( strlen(vpp.label) == 0 ) return NULL;
+	if ( strlen(vpp.label) == 0 ) return false;
 
-	return strdup( vpp.label );
+	return strcpy( name, vpp.label );
+	return true;
 }
 
 bool fst_get_program_name (FST *fst, int32_t program, char* name, size_t size) {

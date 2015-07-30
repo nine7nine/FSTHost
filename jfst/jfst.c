@@ -72,14 +72,11 @@ static void jfst_set_aliases ( JFST* jfst, FSTPortType type ) {
 	}
 
 	// Set port alias
+	char name[kVstMaxLabelLen];
 	int32_t i;
-	for ( i=0; i < count; i++ ) {
-		char* name = fst_get_port_name ( jfst->fst, i, type );
-		if ( ! name ) continue;
-
-		jack_port_set_alias ( ports[i], name );
-		free ( name );
-	}
+	for ( i=0; i < count; i++ )
+		if ( fst_get_port_name ( jfst->fst, i, type, name ) )
+			jack_port_set_alias ( ports[i], name );
 }
 
 bool jfst_init( JFST* jfst, int32_t max_in, int32_t max_out ) {

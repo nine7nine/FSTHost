@@ -219,7 +219,7 @@ void fst_program_change (FST *fst, int32_t program);
 void fst_configure (FST *fst, float sample_rate, intptr_t block_size);
 bool fst_get_program_name (FST *fst, int32_t program, char* name, size_t size);
 bool fst_set_program_name (FST *fst, const char* name);
-char* fst_get_port_name ( FST* fst, int32_t port_number, FSTPortType type );
+bool fst_get_port_name ( FST* fst, int32_t port_number, FSTPortType type, char* name );
 
 bool fst_run_editor (FST*, bool popup);
 bool fst_show_editor (FST *fst);
