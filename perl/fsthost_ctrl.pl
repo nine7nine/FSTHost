@@ -161,6 +161,11 @@ sub editor_button_toggle {
 	$self->call ( $b->get_active() ? 'editor:open' : 'editor:close' );
 }
 
+sub mle_button_toggle {
+	my ( $b, $self ) = @_;
+	$self->call ( $b->get_active() ? 'midi_learn:start' : 'midi_learn:stop' );
+}
+
 sub presets_combo_change {
 	my ( $c, $self ) = @_;
 	$self->set_program ( $c->get_active );
@@ -179,25 +184,27 @@ sub close_button_clicked {
 	$window->resize(1,1);
 }
 
-sub action {
-	my ( $self, $action, $value ) = @_;
+sub dispatch_news {
+	my ( $self, $all ) = @_;
 
 	my %ACTION = (
 		PROGRAM	=> sub { $self->{'presets_combo'}->set_active(shift); },
 		CHANNEL	=> sub { $self->{'channels_combo'}->set_active(shift); },
 		BYPASS	=> sub { $self->{'bypass_button'}->set_active(shift); },
-		EDITOR	=> sub { $self->{'editor_button'}->set_active(shift); }
+		EDITOR	=> sub { $self->{'editor_button'}->set_active(shift); },
+		MIDI_LEARN => sub { $self->{'midi_learn_button'}->set_active(shift); }
 	);
 
-	return unless exists $ACTION{$action};
-	$ACTION{$action}->( $value );
+	my $news = $self->news($all);
+	foreach ( keys %$news ) {
+		next unless exists $ACTION{$_};
+		$ACTION{$_}->( $news->{$_} );
+	}
 }
 
 sub idle {
 	my $self = shift;
-
-	my $news = $self->news(0);
-	$self->action( $_, $news->{$_} ) for ( keys %$news );
+	$self->dispatch_news(0);
 
 	return 1;
 }
@@ -224,6 +231,12 @@ sub show {
 	$editor_button->set_tooltip_text ( 'Editor' );
 	$editor_button->signal_connect ( 'clicked' => \&editor_button_toggle, $self );
 	$hbox->pack_start ( $editor_button, 0, 0, 0 ); # child, expand, fill, padding
+
+	# Midi Learn button
+	my $mle_button = ($Gtk.'::ToggleToolButton')->new_from_stock('gtk-dnd');
+	$mle_button->set_tooltip_text ( 'MIDI Learn' );
+	$mle_button->signal_connect ( 'clicked' => \&mle_button_toggle, $self );
+	$hbox->pack_start ( $mle_button, 0, 0, 0 ); # child, expand, fill, padding
 
 	# Presets:
 	my $presets_combo = main::gtk_combo();
@@ -252,13 +265,13 @@ sub show {
 
 	$self->{'bypass_button'} = $sr_button;
 	$self->{'editor_button'} = $editor_button;
+	$self->{'midi_learn_button'} = $mle_button;
 	$self->{'presets_combo'} = $presets_combo;
 	$self->{'channels_combo'} = $channels_combo;
 	$self->{'hbox'} = $hbox;
 
 	# Get all initial values
-	my $news = $self->news(1);
-	$self->action( $_, $news->{$_} ) for ( keys %$news );
+	$self->dispatch_news(1);
 
 	return 1;
 }

@@ -43,6 +43,7 @@ typedef struct {
 	uint8_t channel;
 	unsigned short volume;
 	int32_t program;
+	bool midi_learn;
 } DetectChangesLast;
 
 typedef enum {
