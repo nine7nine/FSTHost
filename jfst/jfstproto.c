@@ -25,6 +25,17 @@ static void list_programs ( JFST* jfst, int client_sock ) {
         }
 }
 
+static void list_params ( JFST* jfst, int client_sock ) {
+	char paramName[FST_MAX_PARAM_NAME];
+
+	FST* fst = jfst->fst;
+	int32_t i;
+	for ( i = 0; i < fst_num_params(fst); i++ ) {
+		fst_call_dispatcher ( fst, effGetParamName, i, 0, paramName, 0 );
+		serv_send_client_data ( client_sock, paramName, strlen(paramName) );
+        }
+}
+
 static void get_program ( JFST* jfst, int client_sock ) {
 	char msg[16];
 	sprintf( msg, "PROGRAM:%d", jfst->fst->current_program );
@@ -79,6 +90,7 @@ enum PROTO_CMD {
 	CMD_UNKNOWN,
 	CMD_EDITOR,
 	CMD_LIST_PROGRAMS,
+	CMD_LIST_PARAMS,
 	CMD_GET_PROGRAM,
 	CMD_SET_PROGRAM,
 	CMD_GET_CHANNEL,
@@ -102,6 +114,7 @@ struct PROTO_MAP {
 static struct PROTO_MAP proto_string_map[] = {
 	{ CMD_EDITOR, "editor" },
 	{ CMD_LIST_PROGRAMS, "list_programs" },
+	{ CMD_LIST_PARAMS, "list_params" },
 	{ CMD_GET_PROGRAM, "get_program" },
 	{ CMD_SET_PROGRAM, "set_program" },
 	{ CMD_GET_CHANNEL, "get_channel" },
@@ -166,6 +179,9 @@ static bool jfst_proto_client_dispatch ( JFST* jfst, char* msg, uint8_t* changes
 		break;
 	case CMD_LIST_PROGRAMS:
 		list_programs ( jfst, client_sock );
+		break;
+	case CMD_LIST_PARAMS:
+		list_params ( jfst, client_sock );
 		break;
 	case CMD_GET_PROGRAM:
 		get_program ( jfst, client_sock );

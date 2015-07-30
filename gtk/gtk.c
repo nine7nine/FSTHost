@@ -676,26 +676,24 @@ idle_cb(JFST *jfst) {
 	if ( gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(midi_learn_toggle) )
 		&& ! ml->wait
 	) {
-		bool show_tooltip = FALSE;
+		bool show_tooltip = false;
 		char tooltip[96 * 128];
 		tooltip[0] = '\0';
 		uint8_t cc;
+		char ParamName[FST_MAX_PARAM_NAME];
 	   	for (cc = 0; cc < 128; cc++) {
 			int32_t paramIndex = ml->map[cc];
 			if ( paramIndex < 0 || paramIndex >= fst_num_params(fst) )
 				continue;
 
-			char name[32];
-			bool success = fst_call_dispatcher ( fst, effGetParamName, paramIndex, 0, name, 0 );
-			if ( ! success ) snprintf ( name, sizeof name, "Param%d", paramIndex );
+			fst_call_dispatcher ( fst, effGetParamName, paramIndex, 0, ParamName, 0 );
 
 			char tString[96];
-			if (show_tooltip) {
-				snprintf(tString, sizeof tString, "\nCC %03d => %s",cc, name);
-			} else {
-				snprintf(tString, sizeof tString, "CC %03d => %s",cc, name);
-				show_tooltip = TRUE;
-			}
+			snprintf(tString, sizeof tString, "CC %03d => %s",cc, ParamName);
+
+			if (show_tooltip) strcat(tooltip, "\n");
+			else show_tooltip = true;
+		
 			strcat(tooltip, tString);
 		}
 
