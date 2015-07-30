@@ -282,7 +282,7 @@ bool fst_get_port_name ( FST* fst, int32_t port_number, FSTPortType type, char* 
 	return true;
 }
 
-bool fst_get_program_name (FST *fst, int32_t program, char* name, size_t size) {
+void fst_get_program_name (FST *fst, int32_t program, char* name, size_t size) {
 	char progName[FST_MAX_PROG_NAME];
 	if (program == fst->current_program) {
 		fst_call_dispatcher(fst, effGetProgramName, 0, 0, progName, 0);
@@ -301,8 +301,6 @@ bool fst_get_program_name (FST *fst, int32_t program, char* name, size_t size) {
 	}
 	strncpy ( name, progName, size - 1 );
 	valid_program_name ( name, size );
-
-	return TRUE; 
 }
 
 bool fst_set_program_name (FST *fst, const char* name) {

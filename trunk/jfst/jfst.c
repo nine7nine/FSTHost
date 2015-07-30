@@ -272,14 +272,9 @@ Changes jfst_idle(JFST* jfst ) {
 		ml->wait = false;
 		change |= CHANGE_MIDILE;
 
-		printf("MIDIMAP CC: %d => ", ml->cc);
-		char name[32];
-		bool success = fst_call_dispatcher( jfst->fst, effGetParamName, ml->param, 0, name, 0 );
-		if (success) {
-			printf("%s\n", name);
-		} else {
-			printf("%d\n", ml->param);
-		}
+		char name[FST_MAX_PARAM_NAME];
+		fst_call_dispatcher ( jfst->fst, effGetParamName, ml->param, 0, name, 0 );
+		printf("MIDIMAP CC: %d => %s\n", ml->cc, name);
 	}
 
 	Changes change_sysex_mask = CHANGE_BYPASS|CHANGE_CHANNEL|CHANGE_VOLUME|CHANGE_PROGRAM;
