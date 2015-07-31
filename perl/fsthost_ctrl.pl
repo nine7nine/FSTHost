@@ -156,6 +156,78 @@ sub sr_button_toggle {
 	$self->call ( $b->get_active() ? 'suspend' : 'resume' );
 }
 
+sub show_error {
+	my ( $self, $msg ) = @_;
+
+	my $errdialog = ($Gtk.'::MessageDialog')->new(
+		undef, 'destroy-with-parent', 'error',
+		'close', $msg
+	);
+	$errdialog->run();
+	$errdialog->destroy();
+}
+
+sub save_button_clicked {
+	my ( $b, $self ) = @_;
+	my $dialog = ($Gtk.'::FileChooserDialog')->new (
+		'Save Plugin State', undef, 'save',
+		'gtk-cancel' => 'cancel',
+		'gtk-ok'     => 'ok'
+	);
+	$dialog->set_do_overwrite_confirmation(1);
+
+	my @filters = (
+		{ name => 'FST Plugin State', pattern => '*.fps' },
+		{ name => 'FXB Bank', pattern => '*.fxb' },
+		{ name => 'FXP Preset', pattern => '*.fxp' }
+	);
+
+	foreach (@filters) {
+		my $filter = ($Gtk.'::FileFilter')->new();
+		$filter->set_name( $_->{'name'} );
+		$filter->add_pattern( $_->{'pattern'} );
+		$dialog->add_filter($filter);
+	}
+
+	if ( $dialog->run() eq 'ok' ) {
+		my $file = $dialog->get_filename();
+		$self->call( 'save', $file );
+		# TODO: need handle <FAIL>
+#		$self->show_error( 'Error saving file: ' . $file );
+	}
+	$dialog->destroy();
+}
+
+sub load_button_clicked {
+	my ( $b, $self ) = @_;
+	my $dialog = ($Gtk.'::FileChooserDialog')->new (
+		'Load Plugin State', undef, 'open',
+		'gtk-cancel' => 'cancel',
+		'gtk-ok'     => 'ok'
+	);
+
+	my @filters = (
+		{ name => 'FST Plugin State', pattern => '*.fps' },
+		{ name => 'FXB Bank', pattern => '*.fxb' },
+		{ name => 'FXP Preset', pattern => '*.fxp' }
+	);
+
+	my $filter = ($Gtk.'::FileFilter')->new();
+	$filter->set_name( 'Supported files (*.fps, *.fxp, *.fxb)' );
+	$filter->add_pattern( '*.fps' );
+	$filter->add_pattern( '*.fxp' );
+	$filter->add_pattern( '*.fxb' );
+	$dialog->add_filter($filter);
+
+	if ( $dialog->run() eq 'ok' ) {
+		$self->call( 'load', $dialog->get_filename() );
+		# TODO: need handle <FAIL>
+#		$self->show_error( 'Error loading file: ' . $file );
+	}
+
+	$dialog->destroy();
+}
+
 sub editor_button_toggle {
 	my ( $b, $self ) = @_;
 	$self->call ( $b->get_active() ? 'editor:open' : 'editor:close' );
@@ -232,6 +304,18 @@ sub show {
 	$sr_button->set_tooltip_text ( 'Suspend / Resume' );
 	$sr_button->signal_connect ( 'clicked' => \&sr_button_toggle, $self );
 	$hbox->pack_start ( $sr_button, 0, 0, 0 ); # child, expand, fill, padding
+
+	# Load Button
+	my $load_button = ($Gtk.'::ToolButton')->new_from_stock('gtk-open');
+        $load_button->set_tooltip_text ( 'Load' );
+	$load_button->signal_connect ( clicked => \&load_button_clicked, $self );
+	$hbox->pack_start ( $load_button, 0, 0, 0 ); # child, expand, fill, padding
+
+	# Save Button
+	my $save_button = ($Gtk.'::ToolButton')->new_from_stock('gtk-save-as');
+        $save_button->set_tooltip_text ( 'Save' );
+	$save_button->signal_connect ( clicked => \&save_button_clicked, $self );
+	$hbox->pack_start ( $save_button, 0, 0, 0 ); # child, expand, fill, padding
 
 	# Editor Open/Close
 	my $editor_button = ($Gtk.'::ToggleToolButton')->new_from_stock('gtk-properties');
