@@ -192,7 +192,14 @@ sub dispatch_news {
 		CHANNEL	=> sub { $self->{'channels_combo'}->set_active(shift); },
 		BYPASS	=> sub { $self->{'bypass_button'}->set_active(shift); },
 		EDITOR	=> sub { $self->{'editor_button'}->set_active(shift); },
-		MIDI_LEARN => sub { $self->{'midi_learn_button'}->set_active(shift); }
+		MIDI_LEARN => sub {
+			my $mle = $self->{'midi_learn_button'};
+			$mle->set_active(shift);
+			$mle->set_tooltip_text(
+				"MIDI Learn\n" .
+				join "\n", map { s/^(\d+):/CC $1 => / and $_ } $self->call('list_midi_map')
+			);
+		}
 	);
 
 	my $news = $self->news($all);
@@ -234,7 +241,6 @@ sub show {
 
 	# Midi Learn button
 	my $mle_button = ($Gtk.'::ToggleToolButton')->new_from_stock('gtk-dnd');
-	$mle_button->set_tooltip_text ( 'MIDI Learn' );
 	$mle_button->signal_connect ( 'clicked' => \&mle_button_toggle, $self );
 	$hbox->pack_start ( $mle_button, 0, 0, 0 ); # child, expand, fill, padding
 
