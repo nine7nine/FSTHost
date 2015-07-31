@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 
 use v5.14;
-#use warnings;
+use warnings;
 #use Data::Dumper;
 use IO::Socket;
 
@@ -228,6 +228,12 @@ sub load_button_clicked {
 	$dialog->destroy();
 }
 
+sub volume_change {
+	my ( $b, $value, $self ) = @_;
+	my $V = int ( 127 * $value );
+	$self->call( 'set_volume', $V );
+}
+
 sub editor_button_toggle {
 	my ( $b, $self ) = @_;
 	$self->call ( $b->get_active() ? 'editor:open' : 'editor:close' );
@@ -264,6 +270,12 @@ sub dispatch_news {
 		CHANNEL	=> sub { $self->{'channels_combo'}->set_active(shift); },
 		BYPASS	=> sub { $self->{'bypass_button'}->set_active(shift); },
 		EDITOR	=> sub { $self->{'editor_button'}->set_active(shift); },
+		VOLUME  => sub {
+			my $vb = $self->{'volume_button'};
+			$vb->signal_handlers_block_by_func(\&volume_change, $self);
+			$vb->set_value((shift) / 127);
+			$vb->signal_handlers_unblock_by_func(\&volume_change, $self);
+		},
 		MIDI_LEARN => sub {
 			my $mle = $self->{'midi_learn_button'};
 			$mle->set_active(shift);
@@ -343,6 +355,11 @@ sub show {
 	$channels_combo->signal_connect ( 'changed' => \&channels_combo_change, $self );
 	$hbox->pack_start ( $channels_combo, 0, 0, 0 ); # child, expand, fill, padding
 
+	# Volume
+	my $volume_button = ($Gtk.'::VolumeButton')->new();
+	$volume_button->signal_connect ( 'value-changed' => \&volume_change, $self );
+	$hbox->pack_start ( $volume_button, 0, 0, 0 ); # child, expand, fill, padding
+
 	# Close
 	my $close_button = ($Gtk.'::ToolButton')->new_from_stock('gtk-close');
 	$close_button->set_tooltip_text ( 'Close' );
@@ -355,6 +372,7 @@ sub show {
 
 	$self->{'bypass_button'} = $sr_button;
 	$self->{'editor_button'} = $editor_button;
+	$self->{'volume_button'} = $volume_button;
 	$self->{'midi_learn_button'} = $mle_button;
 	$self->{'presets_combo'} = $presets_combo;
 	$self->{'channels_combo'} = $channels_combo;
