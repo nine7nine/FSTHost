@@ -9,6 +9,6 @@ typedef bool (*serv_client_callback) ( char* msg, int client_sock, uint8_t* chan
 int serv_init ( uint16_t port, serv_client_callback cb, void* data );
 void serv_close ();
 void serv_poll ( uint8_t changes );
-bool serv_send_client_data ( int client_sock, const char* msg, int msg_len );
+bool serv_send_client_data ( int client_sock, const char* msg );
 
 #endif /* __serv_h__ */
