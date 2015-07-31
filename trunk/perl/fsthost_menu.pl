@@ -271,7 +271,7 @@ sub tray_icon_activate {
 	my ( $tray_icon, $fst ) = @_;
 
 	if ( $window ) {
-		close_main_window ();
+		close_main_window ($window);
 	} else {
 		$window = show_it ( $fst );
 	}
