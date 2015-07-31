@@ -111,6 +111,7 @@ enum PROTO_CMD {
 	CMD_GET_CHANNEL,
 	CMD_SET_CHANNEL,
 	CMD_MIDI_LEARN,
+	CMD_SET_VOLUME,
 	CMD_SUSPEND,
 	CMD_RESUME,
 	CMD_LOAD,
@@ -137,6 +138,7 @@ static struct PROTO_MAP proto_string_map[] = {
 	{ CMD_GET_CHANNEL, "get_channel" },
 	{ CMD_SET_CHANNEL, "set_channel" },
 	{ CMD_MIDI_LEARN, "midi_learn" },
+	{ CMD_SET_VOLUME, "set_volume" },
 	{ CMD_SUSPEND, "suspend" },
 	{ CMD_RESUME, "resume" },
 	{ CMD_LOAD, "load" },
@@ -225,6 +227,9 @@ static bool jfst_proto_client_dispatch ( JFST* jfst, char* msg, uint8_t* changes
 			puts ( "Need value: start|stop" );
 			ack = false;
 		}
+		break;
+	case CMD_SET_VOLUME:
+		jfst_set_volume(jfst, strtol(value, NULL, 10));
 		break;
 	case CMD_SUSPEND:
 		jfst_bypass ( jfst, true );
