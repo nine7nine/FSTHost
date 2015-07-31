@@ -71,6 +71,10 @@ static void get_channel ( JFST* jfst, int sock ) {
 	send_fmt( sock, "CHANNEL:%d", midi_filter_one_channel_get(&jfst->channel) );
 }
 
+static void get_volume ( JFST* jfst, int sock ) {
+	send_fmt( sock, "VOLUME:%d", jfst_get_volume(jfst) );
+}
+
 static void cpu_usage ( int sock ) {
 	send_fmt( sock, "%g", CPUusage_getCurrentValue() );
 }
@@ -84,10 +88,10 @@ static void news ( JFST* jfst, int sock, uint8_t* changes ) {
 		send_fmt( sock, "EDITOR:%d", (bool) jfst->fst->window );
 
 	if ( *changes & CHANGE_CHANNEL )
-		send_fmt( sock, "CHANNEL:%d", midi_filter_one_channel_get(&jfst->channel) );
+		get_channel(jfst, sock);
 
 	if ( *changes & CHANGE_VOLUME )
-		send_fmt( sock, "VOLUME:%d", jfst_get_volume(jfst) );
+		get_volume(jfst, sock);
 
 	if ( *changes & CHANGE_MIDILE ) {
 		MidiLearn* ml = &jfst->midi_learn;
@@ -112,6 +116,7 @@ enum PROTO_CMD {
 	CMD_SET_CHANNEL,
 	CMD_MIDI_LEARN,
 	CMD_SET_VOLUME,
+	CMD_GET_VOLUME,
 	CMD_SUSPEND,
 	CMD_RESUME,
 	CMD_LOAD,
@@ -139,6 +144,7 @@ static struct PROTO_MAP proto_string_map[] = {
 	{ CMD_SET_CHANNEL, "set_channel" },
 	{ CMD_MIDI_LEARN, "midi_learn" },
 	{ CMD_SET_VOLUME, "set_volume" },
+	{ CMD_GET_VOLUME, "get_volume" },
 	{ CMD_SUSPEND, "suspend" },
 	{ CMD_RESUME, "resume" },
 	{ CMD_LOAD, "load" },
@@ -230,6 +236,9 @@ static bool jfst_proto_client_dispatch ( JFST* jfst, char* msg, uint8_t* changes
 		break;
 	case CMD_SET_VOLUME:
 		jfst_set_volume(jfst, strtol(value, NULL, 10));
+		break;
+	case CMD_GET_VOLUME:
+		get_volume(jfst, client_sock);
 		break;
 	case CMD_SUSPEND:
 		jfst_bypass ( jfst, true );
