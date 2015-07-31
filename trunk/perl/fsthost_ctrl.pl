@@ -319,7 +319,7 @@ sub call {
 
 sub presets {
 	my $self = shift;
-	my @presets = $self->call ( 'list_programs' );
+	my @presets = map { s/^\d+:// and $_ } $self->call ( 'list_programs' );
 	return @presets;
 }
 
