@@ -1,7 +1,6 @@
 #include <math.h>
 
 #include "jfst.h"
-#include "../fst/amc.h"
 
 //#define DEBUG_TIME
 

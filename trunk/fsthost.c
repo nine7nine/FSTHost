@@ -23,6 +23,7 @@
 #include <semaphore.h>
 #include <signal.h>
 
+#include "log/log.h"
 #include "jfst/jfst.h"
 #include "serv/serv.h"
 #include "xmldb/info.h"
@@ -73,15 +74,15 @@ static void signal_handler (int signum) {
 
 	switch(signum) {
 	case SIGINT:
-		puts("Caught signal to terminate (SIGINT)");
+		log_info("Caught signal to terminate (SIGINT)");
 		jfst_quit(jfst);
 		break;
 	case SIGUSR1:
-		puts("Caught signal to save state (SIGUSR1)");
+		log_info("Caught signal to save state (SIGUSR1)");
 		jfst_save_state(jfst, jfst->default_state_file);
 		break;
 	case SIGUSR2:
-		puts("Caught signal to open editor (SIGUSR2)");
+		log_info("Caught signal to open editor (SIGUSR2)");
 		open_editor = true;
 		break;
 	}
@@ -131,7 +132,7 @@ static void edit_close_handler ( void* arg ) {
 static void cmdline2arg(int *argc, char ***pargv, LPSTR cmdline) {
 	LPWSTR* szArgList = CommandLineToArgvW(GetCommandLineW(), argc);
 	if (!szArgList) {
-		fputs("Unable to parse command line", stderr);
+		log_error("Unable to parse command line");
 		*argc = -1;
 		return;
 	}
@@ -232,7 +233,7 @@ bool jfst_load_sep_th (JFST* jfst, const char* plug_spec, bool want_state_and_am
 
 static inline void
 main_loop( JFST* jfst ) {
-	puts("GUI Disabled - start MainLoop");
+	log_info("GUI Disabled - start MainLoop");
 	while ( ! quit ) {
 		if ( ! fsthost_idle() )
 			break;
@@ -254,7 +255,9 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	const char*	custom_path = NULL;
 	bool		serv = false;
 
-	printf("FSTHost Version: %s (%s)\n", VERSION, ARCH "bit");
+	log_init ( LOG_DEBUG, NULL, NULL );
+
+	log_info( "FSTHost Version: %s (%s)\n", VERSION, ARCH "bit" );
 
 	JFST*	jfst = jfst_new( APPNAME_ARCH );
 	jfst_first = jfst;
@@ -364,7 +367,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	// Activate plugin
 	if (! jfst->bypassed) fst_call ( jfst->fst, RESUME );
 
-	puts("Jack Activate");
+	log_info( "Jack Activate" );
 	jack_activate(jfst->client);
 
 	// Autoconnect AUDIO on start
@@ -373,7 +376,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 #ifdef NO_GTK
 	// Create GTK or GlibMain thread
 	if (jfst->with_editor != WITH_EDITOR_NO) {
-		puts("Run Editor");
+		log_info( "Run Editor" );
 		fst_set_window_close_callback( jfst->fst, edit_close_handler, jfst );
 		fst_run_editor (jfst->fst, false);
 	}
@@ -381,25 +384,25 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 #else
 	// Create GTK or GlibMain thread
 	if (jfst->with_editor != WITH_EDITOR_NO) {
-		puts( "Start GUI" );
+		log_info( "Start GUI" );
 		gtk_gui_init(&argc, &argv);
 		gtk_gui_start(jfst);
 	} else {
 		main_loop( jfst );
 	}
 #endif
-	puts("Jack Deactivate");
+	log_info( "Jack Deactivate" );
 	jack_deactivate ( jfst->client );
 
 	/* Close CTRL socket */
 	if ( serv ) {
-		puts ( "Stopping JFST control" );
+		log_info( "Stopping JFST control" );
 		serv_close();
 	}
 
 	jfst_close(jfst);
 
-	puts("Game Over");
+	log_info( "Game Over" );
 
 	return 0;
 }
