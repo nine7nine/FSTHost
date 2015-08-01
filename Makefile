@@ -85,6 +85,9 @@ C_SRCS             += $(wildcard serv/*.c)
 # XML DB
 C_SRCS             += $(wildcard xmldb/*.c)
 
+# LOG
+C_SRCS             += $(wildcard log/*.c)
+
 # LASH
 ifeq ($(LASH_EXISTS),yes)
 C_SRCS             += $(wildcard lash/*.c)
