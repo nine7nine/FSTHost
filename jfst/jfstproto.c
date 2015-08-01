@@ -2,7 +2,8 @@
 #include <stdarg.h>
 #include <string.h>
 
-#include "../serv/serv.h"
+#include "serv/serv.h"
+#include "log/log.h"
 #include "jfst.h"
 
 #define ACK "<OK>"
@@ -177,7 +178,7 @@ static void help( int sock ) {
 }
 
 static bool jfst_proto_client_dispatch ( JFST* jfst, char* msg, uint8_t* changes, int client_sock ) {
-	printf ( "GOT MSG: %s\n", msg );
+	log_debug ( "GOT MSG: %s", msg );
 
 	bool ret = true;
 	bool ack = true;
@@ -273,7 +274,7 @@ static bool jfst_proto_client_dispatch ( JFST* jfst, char* msg, uint8_t* changes
 		break;
 	case CMD_UNKNOWN:
 	default:
-		printf ( "Unknown command: %s\n", msg );
+		log_error ( "Unknown command: %s", msg );
 		ack = false;
 	}
 
@@ -291,9 +292,9 @@ static bool handle_client_callback ( char* msg, int client_sock, uint8_t* change
 
 /* Public functions */
 bool jfst_proto_init ( JFST* jfst ) {
-	puts ( "Starting JFST control server ..." );
+	log_info ( "Starting JFST control server ..." );
 	bool ok = serv_init ( jfst->ctrl_port_number, handle_client_callback, jfst );
-	if ( ! ok ) fst_error ( "Cannot create CTRL socket :(" );
+	if ( ! ok ) log_error ( "Cannot create CTRL socket :(" );
 
 	CPUusage_init();
 

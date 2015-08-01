@@ -1,8 +1,7 @@
 #include <math.h>
 
 #include "jfst.h"
-
-//#define DEBUG_TIME
+#include "log/log.h"
 
 static void jfstamc_automate ( AMC* amc, int32_t param ) {
 	JFST* jfst = (JFST*) amc->user_ptr;
@@ -74,19 +73,18 @@ static void jfstamc_get_time ( AMC* amc, int32_t mask ) {
 		timeInfo->barStartPos = VST_barStartPos;
 	}
 
-#ifdef DEBUG_TIME
-	fst_error("amc JACK: Bar %d, Beat %d, Tick %d, Offset %d, BeatsPerBar %f",
+	log_debug("amc JACK: Bar %d, Beat %d, Tick %d, Offset %d, BeatsPerBar %f",
 		jack_pos.bar, jack_pos.beat, jack_pos.tick, jack_pos.bbt_offset, jack_pos.beats_per_bar);
 
-	fst_error("amc ppq: %f", ppq);
-	fst_error("amc TIMEINFO BBT: ppqPos %f, barStartPos %6.4f, remain %4.2f, Offset %f",
+	log_debug("amc ppq: %f", ppq);
+	log_debug("amc TIMEINFO BBT: ppqPos %f, barStartPos %6.4f, remain %4.2f, Offset %f",
 		BBT_ppqPos, BBT_barStartPos, BBT_ppqPos - BBT_barStartPos, ppqOffset);
 
-	fst_error("amc TIMEINFO VST: ppqPos %f, barStartPos %6.4f, remain %4.2f",
+	log_debug("amc TIMEINFO VST: ppqPos %f, barStartPos %6.4f, remain %4.2f",
 		VST_ppqPos, VST_barStartPos, VST_ppqPos - VST_barStartPos);
 
-	fst_error("amc answer flags: %d", timeInfo->flags);
-#endif
+	log_debug("amc answer flags: %d", timeInfo->flags);
+
 	// cycleStartPos & cycleEndPos - valid when kVstCyclePosValid is set
 	// FIXME: not supported yet (acctually do we need this ?) 
 	// smpteOffset && smpteFrameRate - valid when kVstSmpteValid is set
@@ -100,8 +98,7 @@ queue_midi_message(JFST* jfst, uint8_t status, uint8_t d1, uint8_t d2, jack_nfra
 	uint8_t statusHi = (status >> 4) & 0xF;
 	uint8_t statusLo = status & 0xF;
 
-	/* fst_error("queue_new_message = 0x%hhX, %d, %d", status, d1, d2);*/
-	/* fst_error("statusHi = %d, statusLo = %d", statusHi, statusLo);*/
+	log_debug("queue_new_message: sHi %d sLo %d, d1 %d, d2 %d", statusHi, statusLo, d1, d2);
 
 	struct  MidiMessage ev;
 	ev.data[0] = status;
@@ -122,12 +119,12 @@ queue_midi_message(JFST* jfst, uint8_t status, uint8_t d1, uint8_t d2, jack_nfra
 
 	jack_ringbuffer_t* ringbuffer = jfst->ringbuffer;
 	if (jack_ringbuffer_write_space(ringbuffer) < sizeof(ev)) {
-		fst_error("Not enough space in the ringbuffer, NOTE LOST.");
+		log_error("Not enough space in the ringbuffer, NOTE LOST.");
 		return;
 	}
 
 	size_t written = jack_ringbuffer_write(ringbuffer, (char*)&ev, sizeof(ev));
-	if (written != sizeof(ev)) fst_error("jack_ringbuffer_write failed, NOTE LOST.");
+	if (written != sizeof(ev)) log_error("jack_ringbuffer_write failed, NOTE LOST.");
 }
 
 static bool jfstamc_process_events ( AMC* amc, VstEvents* events ) {
@@ -137,7 +134,7 @@ static bool jfstamc_process_events ( AMC* amc, VstEvents* events ) {
 	int32_t i;
 	for (i = 0; i < numEvents; i++) {
 		VstMidiEvent* event = (VstMidiEvent*) events->events[i];
-		//printf( "delta = %d\n", event->deltaFrames );
+		//log_debug( "delta = %d\n", event->deltaFrames );
 		char* midiData = event->midiData;
 		queue_midi_message(jfst, midiData[0], midiData[1], midiData[2], event->deltaFrames);
 	}

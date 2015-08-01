@@ -1,15 +1,10 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include "log/log.h"
 #include "midifilter.h"
 
-//#define MF_DEBUG_ENABLED
-
-#ifdef MF_DEBUG_ENABLED
-#define MF_DEBUG printf
-#else
-#define MF_DEBUG(...)
-#endif
+#define MF_DEBUG log_debug
 
 struct MIDI_MAP {
 	short key;

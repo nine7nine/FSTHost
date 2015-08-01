@@ -1,3 +1,4 @@
+#include "log/log.h"
 #include "jfst.h"
 
 void event_queue_init ( EventQueue* eq ) {
@@ -14,12 +15,12 @@ static inline void event_queue_send ( EventQueue* eq, Event* ev ) {
 	eq_index_next( &eq->front );
 
 	if ( eq->front == eq->rear ) {
-		fst_error ( "Event Queue overflow !" );
+		log_error ( "Event Queue overflow !" );
 		eq_index_next( &eq->rear );
 	}
 
 	eq->events[eq->front] = *ev;
-//	printf( "Send Event: %d Value: %d\n", type, value );
+	log_debug( "Send Event: %d Value: %d\n", ev->type, ev->value );
 }
 
 void event_queue_send_val ( EventQueue* eq, EventType type, uint32_t value ) {

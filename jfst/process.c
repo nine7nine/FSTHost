@@ -1,12 +1,12 @@
+#include <math.h>
+#include "log/log.h"
+#include "jfst.h"
+
 //#define PTD
 #ifdef PTD
 #include <sys/time.h>
 #include <stdio.h>
 #endif
-
-
-#include <math.h>
-#include "jfst.h"
 
 /* sysex.c */
 extern void jfst_sysex_handler ( JFST* jfst );
@@ -34,7 +34,7 @@ static inline void process_midi_output(JFST* jfst, jack_nframes_t nframes) {
 		struct MidiMessage ev;
 		int read = jack_ringbuffer_peek(ringbuffer, (char*)&ev, sizeof(ev));
 		if (read != sizeof(ev)) {
-			fst_error("Short read from the ringbuffer, possible note loss.");
+			log_error("Short read from the ringbuffer, possible note loss.");
 			jack_ringbuffer_read_advance(ringbuffer, read);
 			continue;
 		}
@@ -50,7 +50,7 @@ static inline void process_midi_output(JFST* jfst, jack_nframes_t nframes) {
 		jack_ringbuffer_read_advance(ringbuffer, sizeof(ev));
 
 		if ( jack_midi_event_write(port_buffer, t, ev.data, ev.len) )
-			fst_error("queue: jack_midi_event_write failed, NOTE LOST.");
+			log_error("queue: jack_midi_event_write failed, NOTE LOST.");
 	}
 }
 
@@ -247,12 +247,13 @@ midi_out:
 	process_ctrl_output(jfst, nframes);
 
 	fst_process_unlock ( fst );
+
 #ifdef PTD
 	struct timeval end;
 	gettimeofday(&end, NULL);
 	long secs  = end.tv_sec  - start.tv_sec;
 	long usecs = end.tv_usec - start.tv_usec;
 	long mtime = ((secs) * 1000 + usecs/1000.0) + 0.5;
-	printf("Elapsed time: %ld millisecs\n", mtime);
+	log_debug("Process elapsed time: %ld millisecs\n", mtime);
 #endif
 }

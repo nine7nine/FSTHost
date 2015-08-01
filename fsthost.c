@@ -255,10 +255,6 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	const char*	custom_path = NULL;
 	bool		serv = false;
 
-	log_init ( LOG_DEBUG, NULL, NULL );
-
-	log_info( "FSTHost Version: %s (%s)\n", VERSION, ARCH "bit" );
-
 	JFST*	jfst = jfst_new( APPNAME_ARCH );
 	jfst_first = jfst;
 
@@ -301,6 +297,9 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 			default: usage (argv[0]); return 1;
 		}
 	}
+
+	log_init ( LOG_INFO, NULL, NULL );
+	log_info( "FSTHost Version: %s (%s)\n", VERSION, ARCH "bit" );
 
 	/* Under Jack Session Manager Control "-p -j !" is forced */
 	if ( getenv("SESSION_DIR") ) {
