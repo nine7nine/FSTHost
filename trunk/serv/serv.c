@@ -7,12 +7,16 @@
 #include <poll.h>
 #include <sys/stat.h>
 
+#include "log/log.h"
 #include "serv.h"
+
+#define INFO log_info
+#define DEBUG log_debug
+#define ERROR log_error
 
 #define MAX_CLIENTS 3
 #define POLL_SIZE MAX_CLIENTS + 1
 #define PORT_DIR "/tmp/fsthost"
-
 
 static struct pollfd fds[POLL_SIZE];
 static uint8_t client_changes[POLL_SIZE];
@@ -23,17 +27,17 @@ static char* port_file = NULL;
 
 static int serv_get_client ( int serv_fd ) {
 	//Accept and incoming connection
-	printf("Waiting for incoming connections...");
+	INFO("Waiting for incoming connections...");
 	int c = sizeof(struct sockaddr_in);
      
 	//accept connection from an incoming client
 	struct sockaddr_in client;
 	int client_sock = accept(serv_fd, (struct sockaddr *)&client, (socklen_t*)&c);
 	if (client_sock < 0) {
-		perror("accept failed");
+		ERROR("accept failed");
 		return 0;
 	}
-	puts("Connection accepted");
+	INFO("Connection accepted");
 
 	return client_sock;
 }
@@ -53,7 +57,7 @@ static bool serv_save_port_number ( uint16_t port ) {
 
 	FILE* f = fopen(path, "w");
 	if ( ! f ) {
-		printf ( "Can't open file: %s\n", path );
+		ERROR ( "Can't open file: %s", path );
 		return false;
 	}
 
@@ -69,10 +73,10 @@ static bool serv_client_get_data ( int client_sock, char* msg, size_t msg_max_le
 	//Receive a message from client
 	ssize_t read_size = read (client_sock , msg , msg_max_len );
 	if (read_size == 0) {
-		puts("Client disconnected");
+		INFO("Client disconnected");
 		return false;
 	} else if (read_size < 0) {
-		perror("recv failed");
+		ERROR("recv failed");
 		return false;
 	}
 
@@ -103,10 +107,10 @@ int serv_init ( uint16_t port, serv_client_callback cb, void* data ) {
 	//Create listener socket
 	fds[0].fd = socket(AF_INET , SOCK_STREAM , 0);
 	if (fds[0].fd == -1) {
-		printf("Could not create socket");
+		ERROR("Could not create socket");
 		return 2;
 	}
-	puts("Socket created");
+	INFO("Socket created");
 
 	//Prepare the sockaddr_in structure
 	server.sin_family = AF_INET;
@@ -120,12 +124,12 @@ int serv_init ( uint16_t port, serv_client_callback cb, void* data ) {
 	//Bind
 	int ret = bind (fds[0].fd,(struct sockaddr *) &server , addrlen);
 	if ( ret < 0 ) {
-		perror("bind failed. Error");
+		ERROR("bind failed. Error");
 		return 0;
 	}
 	getsockname ( fds[0].fd, (struct sockaddr *) &server , &addrlen );
 	port = ntohs( server.sin_port ) ;
-	printf ("bind done, port: %d\n", port);
+	INFO("bind done, port: %d", port);
 	serv_save_port_number ( port );
 
 	//Listen
@@ -161,7 +165,7 @@ void serv_poll ( uint8_t changes ) {
 		if ( fds[i].revents == 0 ) continue;
 
 		if( fds[i].revents != POLLIN) {
-			printf("Err revents = %d\n", fds[i].revents);
+			ERROR("Err revents = %d", fds[i].revents);
 			return;
 		}
 

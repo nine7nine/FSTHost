@@ -5,6 +5,7 @@
 #include <math.h>
 #include <string.h>
 
+#include "log/log.h"
 #include "jfst.h"
 
 #include <jack/thread.h>
@@ -79,7 +80,10 @@ wine_thread_create (pthread_t* thread_id, const pthread_attr_t* attr, void *(*fu
 static bool jack_connect_wrap ( jack_client_t* client , const char* source_port, const char* destination_port ) {
 	int ret = jack_connect( client, source_port, destination_port );
 	if ( ret == EEXIST ) return FALSE;
-	printf( "Connect: %s -> %s [ %s ]\n", source_port, destination_port, (ret==0)?"DONE":"FAIL" );
+	log_info( "Connect: %s -> %s [ %s ]",
+		source_port, destination_port,
+		(ret==0) ? "DONE" : "FAIL"
+	);
 	return (ret==0) ? TRUE : FALSE;
 }
 
@@ -96,7 +100,7 @@ void jfst_connect_audio(JFST *jfst, const char *audio_to) {
 	// Connect audio port
 	const char **jports = jack_get_ports(jfst->client, audio_to, JACK_DEFAULT_AUDIO_TYPE, flags);
 	if (!jports) {
-		printf("Can't find any ports for %s\n", audio_to);
+		log_error("Can't find any ports for %s", audio_to);
 		return;
 	}
 
@@ -184,26 +188,25 @@ static int process_callback ( jack_nframes_t nframes, void* data) {
 	return 0;
 }
 
-static void jfst_log(const char *msg) { fprintf(stderr, "JACK: %s\n", msg); }
+static void jfst_log(const char *msg) { log_error( "JACK: %s", msg); }
 
 bool jfst_jack_init( JFST* jfst, bool want_midi_out ) {
 
 	jack_set_info_function(jfst_log);
 	jack_set_error_function(jfst_log);
 
-	printf("Starting Jack thread ... ");
+	log_info("Starting Jack thread");
 	jack_status_t status;
 	jfst->client = jack_client_open(jfst->client_name,JackSessionID,&status,jfst->uuid);
 	if (! jfst->client) {
-		jfst_log ("can't connect to JACK");
+		log_error ("can't connect to JACK");
 		return false;
 	}
-	puts("Done");
 
 	/* Change client name if jack assign new */
 	if (status & JackNameNotUnique) {
 		jfst->client_name = jack_get_client_name(jfst->client);
-		printf("Jack change our name to %s\n", jfst->client_name);
+		log_info("Jack change our name to %s", jfst->client_name);
 	}
 
 	// Set client callbacks
@@ -229,7 +232,7 @@ bool jfst_jack_init( JFST* jfst, bool want_midi_out ) {
 		jfst->midi_outport = jack_port_register(jfst->client, "midi-out", JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
 		jfst->ringbuffer = jack_ringbuffer_create(RINGBUFFER_SIZE);
 		if (! jfst->ringbuffer) {
-			jfst_log("Cannot create JACK ringbuffer.");
+			log_error("Cannot create JACK ringbuffer.");
 			return false;
 		}
 		jack_ringbuffer_mlock(jfst->ringbuffer);

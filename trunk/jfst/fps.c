@@ -5,6 +5,7 @@
 
 #include "base64.h"
 
+#include "log/log.h"
 #include "jfst.h"
 
 // Concept from: http://stackoverflow.com/questions/122616/how-do-i-trim-leading-trailing-whitespace-in-a-standard-way
@@ -51,14 +52,15 @@ fps_check_this(FST *fst, char *field, char *value) {
    bool success = false;
    char testString[64];
 
-   printf("Check %s : %s == ", field, value);
+   char tmpstr[64];
+   sprintf(tmpstr, "Check %s : %s == ", field, value);
    if ( strcmp( field, "uniqueID" ) == 0 ) {
       int32_t ival = strtol( value, NULL, 10 );
       if ( ival == fst_uid(fst) ) {
-         printf("%d [PASS]\n", ival);
+         log_info("%s%d [PASS]", tmpstr, ival);
          return true;
       } else {
-         printf("%d [FAIL]\nUniqueID mismatch!\n", ival);
+         log_error("%s%d [FAIL] - UniqueID mismatch!", tmpstr, ival);
          return false;
       }
    // NOTE: All below is for compatibility and shall be removed someday
@@ -72,13 +74,13 @@ fps_check_this(FST *fst, char *field, char *value) {
 
    if (success) {
       if (strcmp (testString, value) == 0) {
-         printf("%s [PASS]\n", testString);
+         log_info("%s%s [PASS]", tmpstr, testString);
          return true;
       }
 
-      printf("%s [FAIL]\nstring mismatch!\n", testString);
+      log_error("%s%s [FAIL] - string mismatch!", tmpstr, testString);
    } else {
-      printf("empty [FAIL]\nCan't get plugin string\n");
+      log_error("%sempty [FAIL] - Can't get plugin string", tmpstr);
    }
 
    return false;
@@ -105,7 +107,7 @@ fps_process_node(JFST* jfst, xmlNode *a_node) {
           int  index = strtol((const char*) xmlGetProp(cur_node, BAD_CAST "index"), NULL, 10);
           char *name = (char *) xmlGetProp(cur_node, BAD_CAST "name");
 
-          printf( "Got map %d = %d (%s)\n", cc, index, name );
+          log_info( "Got map %d = %d (%s)", cc, index, name );
           if ( cc < 0 || cc >= 128 || index < 0 || index >= fst_num_params(fst) )
              continue;
 
@@ -113,7 +115,7 @@ fps_process_node(JFST* jfst, xmlNode *a_node) {
        // Param
        } else if (xmlStrcmp(cur_node->name, BAD_CAST "param") == 0) {
           if ( fst_has_chunks(fst) ) {
-             printf("FPS: skip param - plugin do expect chunk\n");
+             log_info("FPS: skip param - plugin do expect chunk");
              continue;
           }
 
@@ -140,7 +142,7 @@ fps_process_node(JFST* jfst, xmlNode *a_node) {
          mf.enabled = ( xmlStrcmp(xmlGetProp(cur_node, BAD_CAST "enabled"), BAD_CAST "yes") == 0 ) ? true : false;
 	 const xmlChar* type = xmlGetProp(cur_node, BAD_CAST "rule");
          mf.type =  midi_filter_name2key ( (const char*) type );
-         if ( mf.type == -1 ) { printf("Wrong filter type\n"); continue; }
+         if ( mf.type == -1 ) { log_error("Wrong filter type"); continue; }
 
          prop = (const char*) xmlGetProp(cur_node, BAD_CAST "channel");
 	 mf.channel = (prop) ? strtol(prop, NULL, 10) : 0;
@@ -152,7 +154,7 @@ fps_process_node(JFST* jfst, xmlNode *a_node) {
 	 mf.value2 = (prop) ? strtol(prop, NULL, 10) : 0;
 	 const xmlChar* rule = xmlGetProp(cur_node, BAD_CAST "rule");
          mf.rule =  midi_filter_name2key ( (const char*) rule );
-         if ( mf.rule == -1 ) { printf("Wrong filter rule\n"); continue; }
+         if ( mf.rule == -1 ) { log_error("Wrong filter rule"); continue; }
 
          prop = (const char*) xmlGetProp(cur_node, BAD_CAST "rvalue");
 	 mf.rvalue = (prop) ? strtol(prop, NULL, 10) : 0;
@@ -165,7 +167,7 @@ fps_process_node(JFST* jfst, xmlNode *a_node) {
           } else if ( xmlStrcmp(xmlGetProp(cur_node, BAD_CAST "type"), BAD_CAST "self") == 0 ) {
               jfst->midi_pc = MIDI_PC_SELF;
           } else {
-              printf("FPS: midi_pc : wrong value - allowed: \"plugin\" or \"self\"\n");
+              log_error("FPS: midi_pc : wrong value - allowed: 'plugin' or 'self'");
           }
        // Volume
        } else if (xmlStrcmp(cur_node->name, BAD_CAST "volume") == 0) {
@@ -186,17 +188,17 @@ fps_process_node(JFST* jfst, xmlNode *a_node) {
        // Chunk
        } else if (xmlStrcmp(cur_node->name, BAD_CAST "chunk") == 0) {
           if ( ! fst_has_chunks(fst) ) {
-             printf("FPS: skip chunk - plugin expect params\n");
+             log_error("FPS: skip chunk - plugin expect params !?!");
              continue;
           }
 
           unsigned int chunk_size = strtoul((const char*) xmlGetProp(cur_node, BAD_CAST "size"), NULL, 0);
           if ( chunk_size == 0 ) {
-             puts("Error: chunk size: 0");
+             log_error("Error: chunk size: 0");
              return false;
           }
 
-          printf("Loading %dB chunk into plugin ... ", chunk_size);
+          log_info("Loading %dB chunk into plugin", chunk_size);
           char *chunk_base64 = trim( cur_node->children->content );
 
           int out_len;
@@ -204,15 +206,14 @@ fps_process_node(JFST* jfst, xmlNode *a_node) {
 
           if (!chunk_data || chunk_size != out_len) {
              if (chunk_data) free( chunk_data );
-             puts("[ERROR]");
-             printf ("Problem while decode base64. DecodedChunkSize: %d\n", out_len);
+             log_error ("Problem while decode base64. DecodedChunkSize: %d", out_len);
              return false;
           }
 
           fst_call_dispatcher( fst, effSetChunk, 0, chunk_size, chunk_data, 0 );
 	  free( chunk_data );
 
-          puts("[DONE]");
+          log_info("Chunk loaded");
        } else {
           if (! fps_process_node(jfst, cur_node->children))
 		return false;
@@ -223,11 +224,11 @@ fps_process_node(JFST* jfst, xmlNode *a_node) {
 }
 
 bool fps_load(JFST* jfst, const char* filename) {
-   printf("Try load plugin state file: %s\n", filename);
+   log_info("Try load plugin state file: %s", filename);
 
    xmlDoc* doc = xmlReadFile(filename, NULL, 0);
    if (doc == NULL) {
-      printf("error: could not parse file %s\n", filename);
+      log_error("could not parse file %s", filename);
       return false;
    }
 
@@ -257,7 +258,7 @@ bool fps_save (JFST* jfst, const char* filename) {
 
    FILE * f = fopen (filename, "wb");
    if (! f) {
-      printf ("Could not open state file: %s\n", filename);
+      log_error ("Could not open state file: %s", filename);
       return false;
    }
 
@@ -344,15 +345,16 @@ bool fps_save (JFST* jfst, const char* filename) {
 
    // Chunk
    if ( fst_has_chunks(fst) ) {
-      printf( "getting chunk ... " );
+      log_info( "getting chunk ... " );
       void * chunk_data;
       intptr_t chunk_size = fst_call_dispatcher( fst, effGetChunk, 0, 0, &chunk_data, 0 );
-      printf( "%d B [DONE]\n", (int) chunk_size );
 
       if ( chunk_size <= 0 ) {
-         printf( "Chunke len =< 0 !!! Not saving chunk.\n" );
+         log_error( "Chunke len =< 0 !!! Not saving chunk." );
          return false;
       }
+
+      log_info( "Got chunk %d B", chunk_size );
 
       int len;
       char* encoded = base64 ( chunk_data, chunk_size, &len );

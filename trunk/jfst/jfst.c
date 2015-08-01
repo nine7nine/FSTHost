@@ -2,8 +2,8 @@
 #include <sys/mman.h>
 
 #include "jfst.h"
-#include "../fst/amc.h"
-#include "../xmldb/info.h"
+#include "xmldb/info.h"
+#include "log/log.h"
 
 /* fps.c */
 extern bool fps_save(JFST* jfst, const char* filename);
@@ -88,7 +88,7 @@ bool jfst_init( JFST* jfst, int32_t max_in, int32_t max_out ) {
 	// Jack Audio
 	jfst->numIns = (max_in >= 0 && max_in < fst_num_ins(fst)) ? max_in : fst_num_ins(fst);
 	jfst->numOuts = (max_out >= 0 && max_out < fst_num_outs(fst)) ? max_out : fst_num_outs(fst);
-	printf("Port Layout (FSTHost/plugin) IN: %d/%d OUT: %d/%d\n", 
+	log_info("Port Layout (FSTHost/plugin) IN: %d/%d OUT: %d/%d", 
 		jfst->numIns, fst_num_ins(fst), jfst->numOuts, fst_num_outs(fst));
 
 	bool want_midi_out = fst_want_midi_out ( jfst->fst );
@@ -126,13 +126,13 @@ void jfst_close ( JFST* jfst ) {
 
 /* return false if want quit */
 bool jfst_session_handler( JFST* jfst, jack_session_event_t* event ) {
-	puts("session callback");
+	log_info("session callback");
 
 	// Save state
 	char filename[MAX_PATH];
 	snprintf( filename, sizeof(filename), "%sstate.fps", event->session_dir );
 	if ( ! jfst_save_state( jfst, filename ) ) {
-		puts("SAVE ERROR");
+		log_error("SAVE ERROR");
 		event->flags |= JackSessionSaveError;
 	}
 
@@ -148,7 +148,7 @@ bool jfst_session_handler( JFST* jfst, jack_session_event_t* event ) {
 	jack_session_event_free(event);
 
         if ( quit ) {
-		puts("JackSession manager ask for quit");
+		log_error("JackSession manager ask for quit");
 		return false;
 	}
 	return true;
@@ -156,7 +156,7 @@ bool jfst_session_handler( JFST* jfst, jack_session_event_t* event ) {
 
 /* plug_spec could be path, dll name or eff/plug name */
 bool jfst_load (JFST* jfst, const char* plug_spec, bool want_state_and_amc, bool state_can_fail) {
-	printf( "yo... lets see...\n" );
+	log_info( "yo... lets see..." );
 
 	/* Try load directly */
 	bool loaded = false;
@@ -277,7 +277,7 @@ Changes jfst_idle(JFST* jfst ) {
 
 		char name[FST_MAX_PARAM_NAME];
 		fst_call_dispatcher ( jfst->fst, effGetParamName, ml->param, 0, name, 0 );
-		printf("MIDIMAP CC: %d => %s\n", ml->cc, name);
+		log_info("MIDIMAP CC: %d => %s", ml->cc, name);
 	}
 
 	Changes change = detect_change( jfst );
@@ -305,7 +305,7 @@ static JFST_FileType get_file_type ( const char * filename ) {
 	if ( !strcasecmp(file_ext, ".fxp") ) return JFST_FILE_TYPE_FXP;
 	if ( !strcasecmp(file_ext, ".fxb") ) return JFST_FILE_TYPE_FXB;
 
-	puts("Unkown file type");
+	log_error("Unkown file type");
 	return JFST_FILE_TYPE_UNKNOWN;
 }
 
@@ -332,9 +332,9 @@ bool jfst_load_state (JFST* jfst, const char* filename) {
 	}
 
 	if (success) {
-		printf("File %s loaded\n", filename);
+		log_info("File %s loaded", filename);
 	} else {
-		printf("Unable to load file %s\n", filename);
+		log_error("Unable to load file %s", filename);
 	}
 
 	return success;
