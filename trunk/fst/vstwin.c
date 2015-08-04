@@ -6,7 +6,12 @@
 #include <sys/syscall.h>
 #include <windows.h>
 
+#include "log/log.h"
 #include "fst.h"
+
+#define INF log_info
+#define DEBUG log_debug
+#define ERR log_error
 
 static FST* fst_first = NULL;
 static bool WindowClassRegistered = FALSE;
@@ -33,7 +38,7 @@ static bool
 fst_canDo(FST* fst, char* feature) {
 	bool can;
 	can = (fst->plugin->dispatcher(fst->plugin, effCanDo, 0, 0, (void*)feature, 0.0f) > 0);
-	fst_error("Plugin can %-20s : %s", feature, ((can) ? "Yes" : "No"));
+	INF("Plugin can %-20s : %s", feature, ((can) ? "Yes" : "No"));
 	return can;
 }
 
@@ -102,14 +107,14 @@ my_window_proc (HWND w, UINT msg, WPARAM wp, LPARAM lp) {
 			AEffect* plugin = fst->plugin;
 			plugin->dispatcher(plugin, effEditClose, 0, 0, NULL, 0.0f);
 
-			if (fst->editor_popup) fst_error("Receive WM_CLOSE - WTF ?");
+			if (fst->editor_popup) ERR("Receive WM_CLOSE - WTF ?");
 
 			if ( fst->window_close ) fst->window_close ( fst->window_close_user_ptr );
 		}
 		break;
 	case WM_NCDESTROY:
 	case WM_DESTROY:
-//		fst_error("Get destroy %d", w);
+//		DEBUG("Get destroy %d", w);
 		break;
 	default:
 		break;
@@ -122,7 +127,7 @@ static bool
 register_window_class() {
 	HMODULE hInst;
 	if ((hInst = GetModuleHandleA (NULL)) == NULL) {
-		fst_error ("can't get module handle");
+		ERR ("can't get module handle");
 		return FALSE;
 	}
 
@@ -143,7 +148,7 @@ register_window_class() {
 	wclass.hIconSm = 0;
 
 	if (!RegisterClassExA(&wclass)){
-		fst_error( "Class register failed :(" );
+		ERR( "Class register failed :(" );
 		return FALSE;
 	}
 	WindowClassRegistered = TRUE;
@@ -167,7 +172,7 @@ static void fst_resize_editor (FST *fst) {
 
 bool fst_show_editor (FST *fst) {
 	if (!fst->window) {
-		fst_error("no window to show");
+		ERR("no window to show");
 		return FALSE;
 	}
 	
@@ -253,7 +258,7 @@ bool fst_run_editor (FST* fst, bool popup) {
 
 	// Check is we really created some window ;-)
 	if (!fst->window) {
-		fst_error ("no window created for VST plugin editor");
+		ERR ("no window created for VST plugin editor");
 		return FALSE;
 	} else {
 		return TRUE;
@@ -324,7 +329,7 @@ fst_get_main_entry(HMODULE dll) {
 	main_entry = (main_entry_t) GetProcAddress (dll, "main");
 	if (main_entry) return main_entry;
 
-	fst_error("Can't found either main and VSTPluginMain entry");
+	ERR("Can't found either main and VSTPluginMain entry");
 	return NULL;
 }
 
@@ -332,7 +337,7 @@ FSTHandle* fst_load (const char *path) {
 	char mypath[PATH_MAX];
 	size_t mypath_maxchars = sizeof(mypath) - 1;
 
-	fst_error("Load library %s", path);
+	INF("Load library %s", path);
 
 	/* Copy path for later juggling */
 	strncpy(mypath, path, mypath_maxchars);
@@ -356,7 +361,7 @@ FSTHandle* fst_load (const char *path) {
 				snprintf(mypath, sizeof(mypath), "%s/%s", vpath, base);
 			}
 
-			fst_error("Load library %s", mypath);
+			INF("Load library %s", mypath);
 			dll = LoadLibraryA(mypath);
 			if (dll) goto have_dll;
 
@@ -364,14 +369,14 @@ FSTHandle* fst_load (const char *path) {
 		}
 	}
 
-	fst_error("Can't load library: %s", base);
+	ERR("Can't load library: %s", base);
 	return NULL;
 
 have_dll: ;
 /* Wine path to library
 	char buf[PATH_MAX];
 	GetModuleFileName(dll, (LPSTR) &buf, sizeof(buf));
-	fst_error("GetModuleFileName: %s", buf);
+	INF("GetModuleFileName: %s", buf);
 */
 
 	main_entry_t main_entry = fst_get_main_entry(dll);
@@ -398,7 +403,7 @@ have_dll: ;
 }
 
 bool fst_unload (FSTHandle* fhandle) {
-	fst_error("Unload library: %s", fhandle->path);
+	INF("Unload library: %s", fhandle->path);
 	FreeLibrary (fhandle->dll);
 	free (fhandle->path);
 	free (fhandle->name);
@@ -409,19 +414,19 @@ bool fst_unload (FSTHandle* fhandle) {
 
 FST* fst_open (FSTHandle* fhandle) {
 	if (fhandle == NULL) {
-	    fst_error( "the handle was NULL" );
-	    return NULL;
+		ERR( "the handle was NULL" );
+		return NULL;
 	}
-	fst_error("Revive plugin: %s", fhandle->name);
+	INF("Revive plugin: %s", fhandle->name);
 
 	AEffect* plugin = fhandle->main_entry ( amc_callback );
 	if (plugin == NULL)  {
-		fst_error ("%s could not be instantiated", fhandle->name);
+		ERR ("%s could not be instantiated", fhandle->name);
 		return NULL;
 	}
 
 	if (plugin->magic != kEffectMagic) {
-		fst_error ("%s is not a VST plugin", fhandle->name);
+		ERR ("%s is not a VST plugin", fhandle->name);
 		return NULL;
 	}
 
@@ -441,10 +446,10 @@ FST* fst_open (FSTHandle* fhandle) {
 		fst->canSendVstMidiEvent = fst_canDo(fst, "sendVstMidiEvent");
 
 		fst->isSynth = (plugin->flags & effFlagsIsSynth);
-		fst_error("%-31s : %s", "Plugin isSynth", fst->isSynth ? "Yes" : "No");
+		INF("%-31s : %s", "Plugin isSynth", fst->isSynth ? "Yes" : "No");
 
 		bool pr = (plugin->flags & effFlagsCanReplacing);
-		fst_error("%-31s : %s", "Support processReplacing", pr ? "Yes" : "No");
+		INF("%-31s : %s", "Support processReplacing", pr ? "Yes" : "No");
 
 		/* Get plugin name */
 		char tmpstr[kVstMaxEffectNameLen];
@@ -465,7 +470,7 @@ FST* fst_open (FSTHandle* fhandle) {
 
 FST* fst_load_open ( const char* path ) {
 	if ( ! path ) {
-		fst_error ( "empty plugin path ?" );
+		ERR ( "empty plugin path ?" );
 		return NULL;
 	}
 
@@ -494,13 +499,13 @@ static bool fst_create_editor (FST* fst) {
 
 	/* "guard point" to trap errors that occur during plugin loading */
 	if (!(plugin->flags & effFlagsHasEditor)) {
-		fst_error ("Plugin \"%s\" has no editor", fst->handle->name);
+		ERR ("Plugin \"%s\" has no editor", fst->handle->name);
 		return FALSE;
 	}
 
 	HMODULE hInst;
 	if ((hInst = GetModuleHandleA (NULL)) == NULL) {
-		fst_error ("can't get module handle");
+		ERR ("can't get module handle");
 		return FALSE;
 	}
 
@@ -515,7 +520,7 @@ static bool fst_create_editor (FST* fst) {
 		CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
 		NULL, NULL, hInst, NULL)) == NULL)
 	{
-		fst_error ("cannot create editor window");
+		ERR ("cannot create editor window");
 		return FALSE;
 	}
 	fst->window = window;
@@ -531,7 +536,7 @@ static bool fst_create_editor (FST* fst) {
 
 	// Bind FST to window
 	if (! SetPropA(window, "FST", fst))
-		fst_error ("cannot set GUI window property");
+		ERR ("cannot set GUI window property");
 
 	if (fst->editor_popup) {
 		SetWindowPos (window, 0, 0, 0, 0, 0, SWP_SHOWWINDOW|SWP_NOMOVE|SWP_NOOWNERZORDER|
@@ -542,7 +547,7 @@ static bool fst_create_editor (FST* fst) {
 	}
 
 	fst->xid = GetPropA (window, "__wine_x11_whole_window");
-//	fst_error("And xid = %p", fst->xid );
+//	ERR("And xid = %p", fst->xid );
 
 	return TRUE;
 }
@@ -558,7 +563,7 @@ static inline void fst_destroy_editor ( FST* fst ) {
 
 static inline void fst_suspend ( FST* fst ) {
 	AEffect* plugin = fst->plugin;
-	fst_error("Suspend plugin");
+	INF("Suspend plugin");
 	fst_process_lock ( fst );
 	plugin->dispatcher (plugin, effStopProcess, 0, 0, NULL, 0.0f);
 	plugin->dispatcher (plugin, effMainsChanged, 0, 0, NULL, 0.0f);
@@ -573,7 +578,7 @@ fst_update_current_program(FST* fst) {
 		fst->current_program = newProg;
 		char progName[FST_MAX_PROG_NAME];
 		plugin->dispatcher ( plugin, effGetProgramName, 0, 0, progName, 0 );
-		fst_error ("Program: %d : %s", newProg, progName);
+		INF("Program: %d : %s", newProg, progName);
 	}
 }
 
@@ -598,18 +603,18 @@ static inline void fst_event_handler (FST* fst) {
 	pthread_mutex_lock (&fst->lock);
 	switch ( ec->type ) {
 	case CLOSE:
-		fst_error("Closing plugin: %s", fst->name);
+		INF("Closing plugin: %s", fst->name);
 		fst_suspend(fst);
 		fst_destroy_editor (fst);
 		plugin->dispatcher(plugin, effClose, 0, 0, NULL, 0.0f);
 		fst_event_loop_remove_plugin(fst);
-		fst_error("Plugin closed");
+		INF("Plugin closed");
 		break;
 	case SUSPEND:
 		fst_suspend (fst);
 		break;
 	case RESUME:
-		fst_error("Resume plugin");
+		INF("Resume plugin");
 		fst_process_lock ( fst );
 		plugin->dispatcher (plugin, effMainsChanged, 0, 1, NULL, 0.0f);
 		plugin->dispatcher (plugin, effStartProcess, 0, 0, NULL, 0.0f);
@@ -618,7 +623,7 @@ static inline void fst_event_handler (FST* fst) {
 	case CONFIGURE:
 		amc->block_size = dp->val;
 		amc->sample_rate = dp->opt;
-		fst_error("Sample Rate: %g | Block Size: %d", amc->sample_rate, amc->block_size);
+		INF("Sample Rate: %g | Block Size: %d", amc->sample_rate, amc->block_size);
 		plugin->dispatcher( plugin, effSetSampleRate, 0, 0, NULL, amc->sample_rate );
 		plugin->dispatcher( plugin, effSetBlockSize, 0, amc->block_size, NULL, 0.0f );
 		break;
@@ -683,7 +688,7 @@ bool fst_event_callback() {
 
 void fst_show_thread_info ( const char* th_name ) {
 	HANDLE* h_thread = GetCurrentThread();
-        printf("%s Thread W32ID: %d | LWP: %d | W32 Class: %d | W32 Priority: %d\n",
+        INF("%s Thread W32ID: %d | LWP: %d | W32 Class: %d | W32 Priority: %d\n",
 		th_name,
 		GetCurrentThreadId(),
 		(int) syscall (SYS_gettid),
@@ -704,7 +709,7 @@ void fst_event_loop () {
 	register_window_class();
 
 	if (!SetTimer (NULL, 1000, 100, NULL)) {
-		fst_error ("cannot set timer on dummy window");
+		ERR ("cannot set timer on dummy window");
 		return;
 	}
 
@@ -718,5 +723,5 @@ void fst_event_loop () {
 		fst_event_dispatcher();
 	}
 
-	fst_error( "GUI EVENT LOOP: THE END" );
+	INF( "GUI EVENT LOOP: THE END" );
 }

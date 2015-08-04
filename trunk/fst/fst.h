@@ -21,7 +21,7 @@
  *
  * @param msg error message text (no newline at end).
  */
-extern void (*fst_error_callback)(const char *msg);
+//extern void (*fst_error_callback)(const char *msg);
 
 /**
  * Set the @ref fst_error_callback for error message display.
@@ -29,7 +29,7 @@ extern void (*fst_error_callback)(const char *msg);
  * The FST library provides two built-in callbacks for this purpose:
  * default_fst_error_callback() and silent_fst_error_callback().
  */
-void fst_set_error_function (void (*func)(const char *));
+//void fst_set_error_function (void (*func)(const char *));
 
 /*
 typedef struct _FSTInfo 
