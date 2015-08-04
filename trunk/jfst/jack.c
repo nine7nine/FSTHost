@@ -4,6 +4,7 @@
 #include <sys/mman.h>
 #include <math.h>
 #include <string.h>
+#include <windows.h>
 
 #include "log/log.h"
 #include "jfst.h"

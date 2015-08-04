@@ -27,8 +27,9 @@
 #define _AEFFECTX_H
 
 #include <stdint.h>
-#include <windows.h>
+#include <windef.h>
 
+#pragma pack(push,8)
 #define VSTCALLBACK __cdecl
 
 #define CCONST(a, b, c, d)( ( ( (int) a ) << 24 ) | ( ( (int) b ) << 16 ) | ( ( (int) c ) << 8 ) | ( ( (int) d ) << 0 ) )
