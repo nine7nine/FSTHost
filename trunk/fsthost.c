@@ -29,7 +29,7 @@
 #include "serv/serv.h"
 #include "xmldb/info.h"
 
-#define VERSION "1.5.5.1"
+#define VERSION "1.5.5"
 #ifdef __x86_64__
 #define ARCH "64"
 #else
