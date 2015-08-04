@@ -623,7 +623,7 @@ static gboolean
 destroy_handler (GtkWidget* widget, GdkEventAny* ev, gpointer ptr) {
 	JFST* jfst = (JFST*) ptr;
 
-	printf("GTK destroy_handler\n");
+	g_info("GTK destroy_handler");
 
 	fst_call ( jfst->fst, EDITOR_CLOSE );
 
@@ -764,7 +764,7 @@ make_img_button(const gchar *stock_id, const gchar *tooltip, bool toggle,
 }
 
 bool gtk_gui_start (JFST* jfst) {
-//	printf("GTK Thread WineID: %d | LWP: %d\n", GetCurrentThreadId (), (int) syscall (SYS_gettid));
+//	g_info("GTK Thread WineID: %d | LWP: %d", GetCurrentThreadId (), (int) syscall (SYS_gettid));
 
 	// create a GtkWindow containing a GtkSocket...
 	//
@@ -866,7 +866,7 @@ bool gtk_gui_start (JFST* jfst) {
 	// GTK GUI idle
         g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 500, (GSourceFunc) idle_cb, jfst, NULL);
 	
-	printf( "calling gtk_main now\n" );
+	g_info( "calling gtk_main now" );
 	gtk_main ();
 
 	return TRUE;
@@ -879,10 +879,10 @@ int fst_xerror_handler( Display *disp, XErrorEvent *ev ) {
 	XGetErrorText(disp, error_code, (char *) &error_text, 256);
 
 	if ( disp == the_gtk_display ) {
-		printf( "Xerror : GTK: %s\n", error_text );
+		g_info( "Xerror : GTK: %s", error_text );
 		return gtk_error_handler( disp, ev );
 	} else {
-		printf( "Xerror:  Wine : %s\n", error_text );
+		g_info( "Xerror:  Wine : %s", error_text );
 		return wine_error_handler( disp, ev );
 	}
 }
