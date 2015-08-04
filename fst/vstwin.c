@@ -4,6 +4,7 @@
 #include <limits.h>
 #include <unistd.h>
 #include <sys/syscall.h>
+#include <windows.h>
 
 #include "fst.h"
 

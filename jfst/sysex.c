@@ -33,8 +33,10 @@ void jfst_sysex_init ( JFST* jfst ) {
 }
 
 void jfst_sysex_gen_random_id ( JFST* jfst ) {
+	struct timeval time; 
+	gettimeofday(&time,NULL);
 
-	srand(GetTickCount()); /* Init ramdom generator */
+	srand(time.tv_sec * 1000 + time.tv_usec/1000); /* Init ramdom generator */
 	unsigned short g;
 	size_t size = sizeof jfst->sysex_ident_reply.version;
 	for(g=0; g < size; g++)
