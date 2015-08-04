@@ -1,7 +1,12 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+#include "log/log.h"
 #include "fst.h"
+
+#define INF log_info
+#define DEBUG log_debug
+#define ERR log_error
 
 /** Root chunk identifier for Programs (fxp) and Banks (fxb). */
 #define cMagic			'CcnK'
@@ -18,6 +23,8 @@
 /** Bank (fxb) identifier for opaque chunk data. */
 #define chunkBankMagic		'FBCh'
 
+#define FXB_BLANK_HOLE 156
+
 static inline uint32_t endian_swap(uint32_t x)
 {
 //	return (x>>24) | ((x<<8) & 0x00FF0000) | ((x>>8) & 0x0000FF00) | (x<<24);
@@ -29,6 +36,25 @@ static inline float endian_swap_float ( float x )
 	return (float) endian_swap ( (uint32_t) x );
 }
 
+static void INF_TYPE ( int32_t type ) {
+	const char* strType = "Unknown";
+	switch ( type ) {
+	case fMagic:
+		strType = "fMagic";
+		break;
+	case chunkPresetMagic:
+		strType = "chunkPresetMagic";
+		break;
+	case bankMagic:
+		strType = "bankMagic";
+		break;
+	case chunkBankMagic:
+		strType = "chunkBankMagic";
+		break;
+	}
+	INF( "FX File type is: %s", strType );
+}
+
 static void fx_load_chunk ( FST *fst, FILE *fxfile, enum FxFileType chunkType )
 {
 	size_t chunkSize;
@@ -37,7 +63,7 @@ static void fx_load_chunk ( FST *fst, FILE *fxfile, enum FxFileType chunkType )
 	br = fread (&chunkSize, sizeof(size_t), 1, fxfile);
 	if (br != 1) return; // This should never happend
 	chunkSize = endian_swap(chunkSize);
-	printf("Chunk size: %zu\n", chunkSize);
+	INF("Chunk size: %zu", chunkSize);
 
 	// FIXME: are we should call this also for regular bank ? if not then why there is numElements ?
 	VstPatchChunkInfo chunkInfo;
@@ -54,10 +80,10 @@ static void fx_load_chunk ( FST *fst, FILE *fxfile, enum FxFileType chunkType )
 	void* chunk = malloc ( chunkSize );
 	br = fread (chunk, 1, chunkSize, fxfile);
 	if (br == chunkSize) {
-		printf("SetChunk type : %d\n", chunkType);
+		INF("SetChunk type : %d", chunkType);
 		fst_call_dispatcher(fst, effSetChunk, chunkType, chunkSize, chunk, 0);
 	} else {
-		printf("Error while read chunk (got: %zu, want: %zu)\n", br, chunkSize);
+		ERR("Error while read chunk (got: %zu, want: %zu)", br, chunkSize);
 	}
 	free(chunk);
 }
@@ -95,7 +121,7 @@ static void fx_load_program ( FST *fst, FILE *fxfile, short programNumber )
 		} else if (fxHeader.fxMagic == fMagic) {
 			isChunk=FALSE;
 		} else {
-			printf("FX File: program %d is unknown type", programNumber);
+			ERR("FX File: program %d is unknown type", programNumber);
 			return;
 		}
 	} else if (programNumber == -1) {
@@ -103,7 +129,7 @@ static void fx_load_program ( FST *fst, FILE *fxfile, short programNumber )
 	} else if (programNumber == -2) {
 		isChunk=TRUE;
 	} else {
-		printf("programNumber - wrong set to %d\n", programNumber);
+		ERR("programNumber - wrongly set to %d", programNumber);
 		return;
 	}
 
@@ -135,14 +161,14 @@ int fst_load_fxfile ( FST *fst, const char *filename )
 	FILE *fxfile = fopen( filename, "rb" );
 
 	if (! fxfile) {
-		printf("Can't open file: %s\n", filename);
+		ERR("Can't open file: %s", filename);
 		return 0;
 	}
 
 	FXHeader fxHeader;
 	br = fread ( &fxHeader, sizeof(FXHeader), 1, fxfile );
 	if (br != 1) {
-		printf("FX File is corupted - can not load header. Loaded only: %zu\n", br);
+		ERR("FX File is corupted - can not load header. Loaded only: %zu", br);
 		fclose(fxfile);
 		return 0; // This should never happend
 	}
@@ -152,60 +178,56 @@ int fst_load_fxfile ( FST *fst, const char *filename )
 	fxHeader.fxMagic = endian_swap( fxHeader.fxMagic );
 	fxHeader.version = endian_swap( fxHeader.version );
 
-	printf("Numprograms: %d\n", fxHeader.numPrograms);
+	ERR("Numprograms: %d", fxHeader.numPrograms);
 
 	if (fxHeader.chunkMagic != cMagic) {
-		printf("FX File is corupted\n");
+		ERR("FX File is corupted - wrong magic (%d != %d)", fxHeader.chunkMagic, cMagic);
 		fclose(fxfile);
 		return 0;
 	}
 
-	printf("Compare: Plugin UniqueID (%d) to Bank fxID (%d)\n", fst_uid(fst), fxHeader.fxID);
+	INF("Compare: Plugin UniqueID (%d) to Bank fxID (%d)", fst_uid(fst), fxHeader.fxID);
 	if (fst_uid(fst) != fxHeader.fxID) {
-		printf( "Error: Plugin UniqID not match\n");
+		ERR( "Error: Plugin UniqID not match");
 		fclose( fxfile );
 		return 0;
 	}
 
-	printf("FX File type is: ");
 	switch (fxHeader.fxMagic) {
 		// Preset file with float parameters
 		case fMagic:
-			printf("fMagic\n");
 			fx_load_program(fst, fxfile, -1);
 			break;
 		// Preset file with one chunk
 		case chunkPresetMagic:
-			printf("chunkPresetMagic\n");
 			fx_load_program(fst, fxfile, -2);
 			break;
 		// Bank file with programs
 		case bankMagic:
-			printf("bankMagic\n");
 			// For version 2 read current program
 			if (fxHeader.version == 2)
 				fx_load_current_program(fst, fxfile);
 			// skip blank hole
-			fseek ( fxfile , 156 , SEEK_SET );
+			fseek ( fxfile , FXB_BLANK_HOLE, SEEK_SET );
 			int32_t i;
 			for (i=0; i < fxHeader.numPrograms; i++)
 				fx_load_program(fst, fxfile, i);
 			break;
 		// Bank file with one chunk
 		case chunkBankMagic:
-			printf("chunkBankMagic\n");
 			// For version 2 read current program
 			if (fxHeader.version == 2)
 				fx_load_current_program(fst, fxfile);
 			// skip blank hole
-			fseek ( fxfile , 156 , SEEK_SET );
+			fseek ( fxfile , FXB_BLANK_HOLE , SEEK_SET );
 			fx_load_chunk(fst, fxfile, FXBANK);
 			break;
 		default:
-			printf("Unknown\n");
+			ERR("Unknown FX file type");
 			fclose(fxfile);
 			return 0;
 	}
+	INF_TYPE ( fxHeader.fxMagic );
 
 	fclose(fxfile);
 	return 1;
@@ -237,24 +259,10 @@ int fst_save_fxfile ( FST *fst, const char *filename, enum FxFileType fileType )
         fxHeader.chunkMagic = endian_swap( cMagic );
 
 	// Determine type
-	printf ("Save FX files type: ");
-	if (isBank) {
-		if (isChunk) {
-			fxHeader.fxMagic = chunkBankMagic;
-                        printf("chunkBankMagic\n");
-		} else {
-			fxHeader.fxMagic = bankMagic;
-                        printf("bankMagic\n");
-		}
-	} else {
-		if (isChunk) {
-			fxHeader.fxMagic = chunkPresetMagic;
-                        printf("chunkPresetMagic\n");
-		} else {
-			fxHeader.fxMagic = fMagic;
-                        printf("fMagic\n");
-		}
-	}
+	fxHeader.fxMagic = (isBank)
+		? ( (isChunk) ? chunkBankMagic : bankMagic )
+		: ( (isChunk) ? chunkPresetMagic : fMagic );
+	INF_TYPE ( fxHeader.fxMagic );
 
 	fxHeader.fxMagic = endian_swap ( fxHeader.fxMagic );
         fxHeader.version = endian_swap( (isBank) ? 2 : 1 );
@@ -272,9 +280,8 @@ int fst_save_fxfile ( FST *fst, const char *filename, enum FxFileType fileType )
         void * chunk = NULL;
 	int32_t chunkSize;
 	if (isChunk) {
-		printf("Getting chunk ...");
 		chunkSize = fst_call_dispatcher( fst, effGetChunk, chunkType, 0, &chunk, 0 );
-		printf("%zu B -  DONE\n", (size_t) chunkSize);
+		INF("Got chunk %zu B", (size_t) chunkSize);
 		fxHeader.byteSize += chunkSize + sizeof(chunkSize);
 	} else {
 		fxHeader.byteSize += (isBank) ? fst_num_presets(fst) * programSize : paramSize;
@@ -290,9 +297,8 @@ int fst_save_fxfile ( FST *fst, const char *filename, enum FxFileType fileType )
 	if (isBank) {
 		currentProgram = endian_swap(currentProgram);
 		fwrite(&currentProgram, sizeof(currentProgram), 1, fxfile);
-		char blank[124];
-		memset(blank, 0, sizeof blank);
-		fwrite(&blank, sizeof blank, 1, fxfile);
+		// write blank hole
+		fseek ( fxfile , FXB_BLANK_HOLE, SEEK_SET );
 	} else { /* isProgram */
 //		prgName = endian_swap(prgName);
 		fst_get_program_name ( fst, fst->current_program, prgName, sizeof prgName );

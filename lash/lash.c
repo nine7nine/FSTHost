@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <lash/lash.h>
-#include "../jfst/jfst.h"
+#include "jfst/jfst.h"
 
 static lash_client_t *lash_client = NULL;
 

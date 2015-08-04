@@ -6,8 +6,8 @@
 #include <jack/midiport.h>
 #include <jack/thread.h>
 
-#include "../fst/fst.h"
-#include "../xmldb/info.h"
+#include "fst/fst.h"
+#include "xmldb/info.h"
 
 #define CHANNELS 2
 

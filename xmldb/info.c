@@ -5,7 +5,7 @@
 #include <libxml/tree.h>
 
 #include "info.h"
-#include "../fst/fst.h"
+#include "log/log.h"
 
 #ifdef __x86_64__
 #define ARCH "64"
@@ -38,7 +38,7 @@ fst_exists(char *path, xmlNode *xml_rn) {
 		if (xmlStrcmp(fst_node->name, BAD_CAST "fst")) continue;
 
 		if (! xmlStrcmp(xmlGetProp(fst_node, BAD_CAST "path"), BAD_CAST fullpath)) {
-			printf("%s already exists\n", path);
+			log_info("%s already exists", path);
 			return true;
 		}
 	}
@@ -95,7 +95,7 @@ static void scandirectory( const char *dir, xmlNode *xml_rn ) {
 	DIR *d = opendir(dir);
 
 	if ( !d ) {
-		fst_error("Can't open directory %s", dir);
+		log_error("Can't open directory %s", dir);
 		return;
 	}
 
@@ -171,11 +171,11 @@ free_p_cont:	xmlFree ( p );
 }
 
 FST* fst_info_load_open ( const char* dbpath, const char* plug_spec ) {
-	fst_error ( "Try load directly" );
+	log_info ( "Try load directly" );
 	FST* fst = fst_load_open ( plug_spec );
 	if ( fst ) return fst;
 
-	fst_error ( "Try load using XML DB" );
+	log_info ( "Try load using XML DB (%s)", dbpath );
 	char *p = fst_info_get_plugin_path ( dbpath, plug_spec );
 	if (!p) return NULL;
 
@@ -194,7 +194,7 @@ int fst_info_update(const char *dbpath, const char *fst_path) {
 	if (xml_db) {
 		xml_rn = xmlDocGetRootElement(xml_db);
 	} else {
-//		printf("Could not open/parse file %s. Create new one.\n", xmlpath);
+		log_debug("Could not open/parse file %s. Create new one.", xmlpath);
 		xml_db = xmlNewDoc(BAD_CAST "1.0");
 
 		xml_rn = xmlNewDocRawNode(xml_db, NULL, BAD_CAST "fst_database", NULL);
@@ -218,13 +218,13 @@ int fst_info_update(const char *dbpath, const char *fst_path) {
 	if (need_save) {
 		FILE * f = fopen (xmlpath, "wb");
 		if (! f) {
-			printf ("Could not open xml database: %s\n", xmlpath);
+			log_error("Could not open xml database: %s", xmlpath);
 			return 8;
 		}
 
 		xmlDocFormatDump(f, xml_db, true);
 		fclose(f);
-		printf ( "xml database updated: %s\n", xmlpath );
+		log_error ( "xml database updated: %s", xmlpath );
 	}
 
 	xmlFreeDoc(xml_db);
