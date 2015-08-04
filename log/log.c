@@ -1,7 +1,10 @@
 #include <stdio.h>
 #include <stdarg.h>
+#include <string.h>
 
 #include "log.h"
+
+#define ERROR_STRING "ERROR: "
 
 static LogSeverity log_severity = LOG_ERROR;
 static void* user_ptr = NULL;
@@ -21,9 +24,14 @@ static void logprintf (LogSeverity severity, const char *fmt, va_list ap ) {
 }
 
 void log_error ( const char* fmt, ... ) {
+	size_t fmt_size = strlen(fmt);
+	size_t err_size = strlen(ERROR_STRING);
+	char new_fmt[fmt_size + err_size];
+	sprintf( new_fmt, "%s%s", ERROR_STRING, fmt );
+
 	va_list ap;
 	va_start (ap, fmt);
-	logprintf( LOG_ERROR, fmt, ap );
+	logprintf( LOG_ERROR, new_fmt, ap );
 	va_end (ap);
 }
 
