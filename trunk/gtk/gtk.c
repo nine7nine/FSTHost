@@ -30,30 +30,37 @@ extern void CPUusage_init();
 extern double CPUusage_getCurrentValue();
 
 static short mode_cc = 0;
-static bool have_fwin = FALSE;
 
 static	GtkWidget* window;
 static	GtkWidget* gtk_socket;
 static	GtkWidget* socket_align;
-static	GtkWidget* fvpacker;
 static	GtkWidget* vpacker;
-static	GtkWidget* hpacker;
-static	GtkWidget* bypass_button;
-static	GtkWidget* editor_button;
-static	GtkWidget* editor_checkbox;
-static	GtkWidget* channel_listbox;
-static	GtkWidget* transposition_spin;
-static  GtkWidget* preset_listbox;
-static	GtkWidget* midi_learn_toggle;
-static	GtkWidget* midi_pc;
-static	GtkWidget* midi_filter;
-static	GtkWidget* load_button;
-static	GtkWidget* save_button;
-static	GtkWidget* sysex_button;
-static	GtkWidget* volume_slider;
-static	GtkWidget* cpu_usage;
-static	gulong preset_listbox_signal;
-static	gulong volume_signal;
+
+typedef struct {
+	JFST* jfst;
+	GtkWidget* fvpacker;
+	GtkWidget* hpacker;
+	GtkWidget* bypass_button;
+	GtkWidget* editor_button;
+	GtkWidget* editor_checkbox;
+	GtkWidget* channel_listbox;
+	GtkWidget* transposition_spin;
+	GtkWidget* preset_listbox;
+	GtkWidget* midi_learn_toggle;
+	GtkWidget* midi_pc;
+	GtkWidget* change_pn;
+	GtkWidget* midi_filter;
+	GtkWidget* load_button;
+	GtkWidget* save_button;
+	GtkWidget* sysex_button;
+	GtkWidget* volume_slider;
+	GtkWidget* cpu_usage;
+	gulong preset_listbox_signal;
+	gulong volume_signal;
+	bool have_fwin;
+} GJFST;
+
+static GJFST* gjfst_first;
 
 typedef int (*error_handler_t)( Display *, XErrorEvent *);
 static Display *the_gtk_display;
@@ -89,13 +96,14 @@ vumeter_draw_handler (GtkWidget *widget, cairo_t *cr, gpointer user_data) {
 
 static void
 gtk_edit_close_handler ( void* arg ) {
-//	JFST* jfst = (JFST*) arg;
-	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(editor_button), FALSE );
+	GJFST* gjfst = (GJFST*) arg;
+	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(gjfst->editor_button), FALSE );
 }
 
 static void
 learn_handler (GtkToggleButton *but, gpointer ptr) {
-	JFST* jfst = (JFST*) ptr;
+	GJFST* gjfst = (GJFST*) ptr;
+	JFST* jfst = gjfst->jfst;
 	
 	if ( gtk_toggle_button_get_active (but) ) {
 		jfst_midi_learn(jfst, true);
@@ -121,20 +129,23 @@ volume_handler (GtkVScale *slider, gpointer ptr) {
 
 static void
 sysex_handler (GtkToggleButton *but, gpointer ptr) {
-	JFST* jfst = (JFST*) ptr;
+	GJFST* gjfst = (GJFST*) ptr;
+	JFST* jfst = gjfst->jfst;
 	jfst_send_sysex(jfst, SYSEX_TYPE_DUMP);
 }
 
 static void
 midi_pc_handler (GtkToggleButton *but, gpointer ptr) {
-	JFST* jfst = (JFST*) ptr;
+	GJFST* gjfst = (GJFST*) ptr;
+	JFST* jfst = gjfst->jfst;
 	jfst->midi_pc = 
 		(gtk_toggle_button_get_active (but)) ? MIDI_PC_SELF : MIDI_PC_PLUG;
 }
 
 static void
 save_handler (GtkToggleButton *but, gpointer ptr) {
-	JFST* jfst = (JFST*) ptr;
+	GJFST* gjfst = (GJFST*) ptr;
+	JFST* jfst = gjfst->jfst;
 
 	GtkWidget *dialog;
 	dialog = gtk_file_chooser_dialog_new ("Save Plugin State",
@@ -227,7 +238,8 @@ create_preset_store( GtkListStore* store, FST *fst ) {
 
 static void
 change_name_handler ( GtkToggleButton *but, gpointer ptr ) {
-	JFST* jfst = (JFST*) ptr;
+	GJFST* gjfst = (GJFST*) ptr;
+	JFST* jfst = gjfst->jfst;
 
 	GtkWidget* dialog = gtk_dialog_new_with_buttons (
 		"Change preset name",
@@ -253,11 +265,11 @@ change_name_handler ( GtkToggleButton *but, gpointer ptr ) {
 		fst_set_program_name ( jfst->fst, text );
 
 		// update preset combo
-		g_signal_handler_block (preset_listbox, preset_listbox_signal);
-		GtkListStore *store = GTK_LIST_STORE(gtk_combo_box_get_model(GTK_COMBO_BOX(preset_listbox)));
+		g_signal_handler_block (gjfst->preset_listbox, gjfst->preset_listbox_signal);
+		GtkListStore *store = GTK_LIST_STORE(gtk_combo_box_get_model(GTK_COMBO_BOX(gjfst->preset_listbox)));
 		gtk_list_store_clear(store);
 		create_preset_store(store, jfst->fst );
-        	g_signal_handler_unblock (preset_listbox, preset_listbox_signal);
+        	g_signal_handler_unblock (gjfst->preset_listbox, gjfst->preset_listbox_signal);
 	}
 	gtk_widget_destroy (entry);
 	gtk_widget_destroy (dialog);
@@ -265,7 +277,8 @@ change_name_handler ( GtkToggleButton *but, gpointer ptr ) {
 
 static void
 load_handler (GtkToggleButton *but, gpointer ptr) {
-	JFST* jfst = (JFST*) ptr;
+	GJFST* gjfst = (GJFST*) ptr;
+	JFST* jfst = gjfst->jfst;
 
 	GtkWidget *dialog;
 	dialog = gtk_file_chooser_dialog_new ("Load Plugin State",
@@ -315,17 +328,17 @@ load_handler (GtkToggleButton *but, gpointer ptr) {
 	gtk_widget_destroy (dialog);
 
 	// update preset combo
-	g_signal_handler_block (preset_listbox, preset_listbox_signal);
-	GtkListStore *store = GTK_LIST_STORE(gtk_combo_box_get_model(GTK_COMBO_BOX(preset_listbox)));
+	g_signal_handler_block (gjfst->preset_listbox, gjfst->preset_listbox_signal);
+	GtkListStore *store = GTK_LIST_STORE(gtk_combo_box_get_model(GTK_COMBO_BOX(gjfst->preset_listbox)));
 	gtk_list_store_clear(store);
 	create_preset_store(store, jfst->fst );
-        g_signal_handler_unblock (preset_listbox, preset_listbox_signal);
+        g_signal_handler_unblock (gjfst->preset_listbox, gjfst->preset_listbox_signal);
 
 	// Update MIDI PC button
-	gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON( midi_pc ), (jfst->midi_pc == MIDI_PC_SELF) );
+	gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON( gjfst->midi_pc ), (jfst->midi_pc == MIDI_PC_SELF) );
 
 	// Update transposition spin button
-	gtk_spin_button_set_value(GTK_SPIN_BUTTON(transposition_spin), midi_filter_transposition_get(jfst->transposition));
+	gtk_spin_button_set_value(GTK_SPIN_BUTTON(gjfst->transposition_spin), midi_filter_transposition_get(jfst->transposition));
 }
 
 #ifdef MOVING_WINDOWS_WORKAROUND
@@ -343,13 +356,14 @@ configure_handler (GtkWidget* widget, GdkEventConfigure* ev, JFST* jfst) {
 
 static void
 editor_handler (GtkToggleButton *but, gpointer ptr) {
-	JFST* jfst = (JFST*) ptr;
+	GJFST* gjfst = (GJFST*) ptr;
+	JFST* jfst = gjfst->jfst;
 
 	if (gtk_toggle_button_get_active (but)) {
-		bool popup = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(editor_checkbox));
+		bool popup = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(gjfst->editor_checkbox));
 		if (! fst_run_editor(jfst->fst, popup)) return;
 		if (! popup) return;
-		
+
 		// Create GTK Socket (Widget)
 		gtk_socket = gtk_socket_new ();
 		gtk_widget_set_can_default(gtk_socket, TRUE);
@@ -529,9 +543,12 @@ filter_remove_handler(GtkButton* button, gpointer ptr) {
 	struct RemoveFilterData* rbd = (struct RemoveFilterData*) ptr;
 
 	midi_filter_remove ( rbd->filters, rbd->toRemove );
+
+	GtkWidget* fvpacker = gtk_widget_get_ancestor( rbd->hpacker, GTK_TYPE_BOX );
 	gtk_container_remove(GTK_CONTAINER(fvpacker), rbd->hpacker);
-	GtkWidget* mywin = gtk_widget_get_toplevel (fvpacker);
-	gtk_window_resize(GTK_WINDOW(mywin), 400, 1);
+
+	GtkWidget* mywin = gtk_widget_get_toplevel (rbd->hpacker);
+	gtk_window_resize( GTK_WINDOW(mywin), 400, 1);
 }
 
 static void
@@ -577,11 +594,13 @@ void filter_addrow(GtkWidget* vpacker, MIDIFILTER **filters, MIDIFILTER *filter)
 
 static void
 filter_new_handler( GtkToggleButton *but, gpointer ptr ) {
-	JFST* jfst = (JFST*) ptr;
+	GJFST* gjfst = (GJFST*) ptr;
+	JFST* jfst = gjfst->jfst;
 	MIDIFILTER mf = {0};
 	MIDIFILTER* nmf = midi_filter_add( &jfst->filters, &mf );
-	filter_addrow(fvpacker, &jfst->filters, nmf);
- 	gtk_widget_show_all (fvpacker);
+
+	filter_addrow(gjfst->fvpacker, &jfst->filters, nmf);
+ 	gtk_widget_show_all (gjfst->fvpacker);
 }
 
 static gboolean
@@ -592,40 +611,41 @@ fwin_destroy_handler (GtkWidget* widget, GdkEventAny* ev, gpointer ptr) {
 }
 
 static void
-midifilter_handler (GtkWidget* widget, JFST *jfst) {
-	if (have_fwin) return;
-	have_fwin = TRUE;
+midifilter_handler (GtkWidget* widget, GJFST *gjfst) {
+	if (gjfst->have_fwin) return;
+	gjfst->have_fwin = TRUE;
+	JFST* jfst = gjfst->jfst;
 
 	GtkWidget* fwin = gtk_window_new (GTK_WINDOW_TOPLEVEL);
 	gtk_window_set_default_size (GTK_WINDOW (fwin), 400, -1);
 //	gtk_widget_set_size_request (fwin, 400, -1);
 	gtk_window_set_icon(GTK_WINDOW(fwin), gdk_pixbuf_new_from_xpm_data((const char**) fsthost_xpm));
-	g_signal_connect (G_OBJECT(fwin), "delete_event", G_CALLBACK(fwin_destroy_handler), &have_fwin);
+	g_signal_connect (G_OBJECT(fwin), "delete_event", G_CALLBACK(fwin_destroy_handler), &gjfst->have_fwin);
 	GtkWidget* ftoolbar = gtk_toolbar_new();
 
-	fvpacker = gtk_box_new (GTK_ORIENTATION_VERTICAL, 7);
+	gjfst->fvpacker = gtk_box_new (GTK_ORIENTATION_VERTICAL, 7);
 
-	gtk_container_add (GTK_CONTAINER (fwin), fvpacker);
+	gtk_container_add (GTK_CONTAINER (fwin), gjfst->fvpacker);
 
 	GtkToolItem* button_new = gtk_tool_button_new_from_stock(GTK_STOCK_ADD);
 	gtk_toolbar_insert(GTK_TOOLBAR(ftoolbar), button_new, 0);
-	gtk_box_pack_start(GTK_BOX(fvpacker), ftoolbar, FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(gjfst->fvpacker), ftoolbar, FALSE, FALSE, 0);
 	gtk_widget_set_tooltip_text(GTK_WIDGET(button_new), "New Filter");
-	g_signal_connect (G_OBJECT(button_new),  "clicked", G_CALLBACK(filter_new_handler), jfst);
+	g_signal_connect (G_OBJECT(button_new),  "clicked", G_CALLBACK(filter_new_handler), gjfst);
 
 	MIDIFILTER *f;
-	for (f = jfst->filters; f; f = f->next) filter_addrow(fvpacker, &jfst->filters, f);
+	for (f = jfst->filters; f; f = f->next) filter_addrow(gjfst->fvpacker, &jfst->filters, f);
 
 	gtk_widget_show_all (fwin);
 }
 
 static gboolean
 destroy_handler (GtkWidget* widget, GdkEventAny* ev, gpointer ptr) {
-	JFST* jfst = (JFST*) ptr;
+	GJFST* gjfst = (GJFST*) ptr;
 
 	g_info("GTK destroy_handler");
 
-	fst_call ( jfst->fst, EDITOR_CLOSE );
+	fst_call ( gjfst->jfst->fst, EDITOR_CLOSE );
 
 	gtk_main_quit();
 	
@@ -633,9 +653,9 @@ destroy_handler (GtkWidget* widget, GdkEventAny* ev, gpointer ptr) {
 }
 
 static void
-program_change (GtkComboBox *combo, JFST *jfst) {
+program_change (GtkComboBox *combo, FST* fst) {
 	short program = gtk_combo_box_get_active (combo);
-	fst_program_change(jfst->fst, program);
+	fst_program_change( fst, program );
 }
 
 static void
@@ -659,21 +679,22 @@ channel_change (GtkComboBox *combo, JFST *jfst) {
 }
 
 static gboolean
-idle_cb(JFST *jfst) {
-	FST* fst = (FST*) jfst->fst;
+idle_cb(GJFST *gjfst) {
+	JFST* jfst = gjfst->jfst;
+	FST* fst = jfst->fst;
 
 	// If program was changed via plugin or MIDI
 	if ( fst->event_call.type != PROGRAM_CHANGE &&
-	    gtk_combo_box_get_active( GTK_COMBO_BOX( preset_listbox ) ) != fst->current_program )
+	    gtk_combo_box_get_active( GTK_COMBO_BOX( gjfst->preset_listbox ) ) != fst->current_program )
 	{
-		g_signal_handler_block (preset_listbox, preset_listbox_signal);
-		gtk_combo_box_set_active( GTK_COMBO_BOX( preset_listbox ), fst->current_program );
-        	g_signal_handler_unblock (preset_listbox, preset_listbox_signal);
+		g_signal_handler_block (gjfst->preset_listbox, gjfst->preset_listbox_signal);
+		gtk_combo_box_set_active( GTK_COMBO_BOX( gjfst->preset_listbox ), fst->current_program );
+        	g_signal_handler_unblock (gjfst->preset_listbox, gjfst->preset_listbox_signal);
 	}
 
 	// MIDI learn support
 	MidiLearn* ml = &jfst->midi_learn;
-	if ( gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(midi_learn_toggle) )
+	if ( gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(gjfst->midi_learn_toggle) )
 		&& ! ml->wait
 	) {
 		bool show_tooltip = false;
@@ -698,39 +719,39 @@ idle_cb(JFST *jfst) {
 		}
 
 		if (show_tooltip)
-			gtk_widget_set_tooltip_text(midi_learn_toggle, tooltip);
-		gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON( midi_learn_toggle ), FALSE );
+			gtk_widget_set_tooltip_text(gjfst->midi_learn_toggle, tooltip);
+		gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON( gjfst->midi_learn_toggle ), FALSE );
 	}
 
 	// If volume was changed by MIDI CC7 message
 	if (jfst->volume != -1) {
-		g_signal_handler_block(volume_slider, volume_signal);
-		gtk_range_set_value(GTK_RANGE(volume_slider), jfst_get_volume(jfst));
-		g_signal_handler_unblock(volume_slider, volume_signal);
+		g_signal_handler_block(gjfst->volume_slider, gjfst->volume_signal);
+		gtk_range_set_value(GTK_RANGE(gjfst->volume_slider), jfst_get_volume(jfst));
+		g_signal_handler_unblock(gjfst->volume_slider, gjfst->volume_signal);
 	}
 
 #ifdef VUMETER
 	// VU Meter
 	vumeter_level = jfst->out_level;
-	gtk_widget_queue_draw ( vumeter );
+	gtk_widget_queue_draw ( gjfst->vumeter );
 #endif
 
 	// Channel combo
-	channel_check(GTK_COMBO_BOX(channel_listbox), jfst);
+	channel_check(GTK_COMBO_BOX(gjfst->channel_listbox), jfst);
 
 	// CPU Usage
 	gchar tmpstr[24];
 	sprintf(tmpstr, "%06.2f", CPUusage_getCurrentValue());
-	gtk_label_set_text(GTK_LABEL(cpu_usage), tmpstr);
+	gtk_label_set_text(GTK_LABEL(gjfst->cpu_usage), tmpstr);
 
 	// All about Bypass/Resume
-	if (jfst->bypassed != gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(bypass_button))) {
-		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(bypass_button), jfst->bypassed);
+	if (jfst->bypassed != gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(gjfst->bypass_button))) {
+		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(gjfst->bypass_button), jfst->bypassed);
 	}
 	if (jfst->want_state_cc != mode_cc) {
 		mode_cc = jfst->want_state_cc;
 		sprintf(tmpstr, "Bypass (MIDI CC: %d)", mode_cc);
-		gtk_widget_set_tooltip_text(bypass_button, tmpstr);
+		gtk_widget_set_tooltip_text(gjfst->bypass_button, tmpstr);
 	}
 
 	return TRUE;
@@ -746,7 +767,7 @@ static void gtk_gui_resize ( JFST* jfst ) {
 // Really ugly auxiliary function for create buttons ;-)
 static GtkWidget*
 make_img_button(const gchar *stock_id, const gchar *tooltip, bool toggle,
-	void* handler, JFST* jfst, bool state, GtkWidget* hpacker)
+	void* handler, GJFST* gjfst, bool state, GtkWidget* hpacker)
 {
 	GtkWidget* button = (toggle) ? gtk_toggle_button_new() : gtk_button_new();
 	GtkWidget* image = gtk_image_new_from_stock(stock_id, GTK_ICON_SIZE_SMALL_TOOLBAR);
@@ -754,13 +775,101 @@ make_img_button(const gchar *stock_id, const gchar *tooltip, bool toggle,
 
 	gtk_widget_set_tooltip_text(button, tooltip);
 
-	g_signal_connect (G_OBJECT(button), (toggle ? "toggled" : "clicked"), G_CALLBACK(handler), jfst); 
+	g_signal_connect (G_OBJECT(button), (toggle ? "toggled" : "clicked"), G_CALLBACK(handler), gjfst); 
 
 	if (state) gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(button), state);
 	
-	gtk_box_pack_start(GTK_BOX(hpacker), button, FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(gjfst->hpacker), button, FALSE, FALSE, 0);
 
 	return button;
+}
+
+static GJFST* gjfst_new ( JFST* jfst ) {
+	GJFST* gjfst = malloc ( sizeof(GJFST) );
+	gjfst->jfst = jfst;
+
+	GtkWidget* hpacker = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 7);
+	gjfst->hpacker = hpacker;
+
+	gjfst->bypass_button = make_img_button(GTK_STOCK_STOP, "Bypass", TRUE, &bypass_handler,
+		gjfst, jfst->bypassed, hpacker);
+
+	gjfst->load_button = make_img_button(GTK_STOCK_OPEN, "Load", FALSE, &load_handler,
+		gjfst, FALSE, hpacker);
+	gjfst->save_button = make_img_button(GTK_STOCK_SAVE_AS, "Save", FALSE, &save_handler,
+		gjfst, FALSE, hpacker);
+	//------- EDITOR ------------------------------------------------------------------------------
+	gjfst->editor_button = make_img_button(GTK_STOCK_PROPERTIES, "Editor", TRUE, &editor_handler,
+		gjfst, FALSE, hpacker);
+	gjfst->editor_checkbox = gtk_check_button_new();
+	gtk_widget_set_tooltip_text(gjfst->editor_checkbox, "Embedded Editor");
+	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(gjfst->editor_checkbox), FALSE);
+	gtk_box_pack_start(GTK_BOX(hpacker), gjfst->editor_checkbox, FALSE, FALSE, 0);
+	fst_set_window_close_callback( jfst->fst, gtk_edit_close_handler, gjfst );
+	//------- MIDI LEARN / SYSEX / MIDI SELF PROGRAM CHANGE / MIDI FILTER -------------------------
+	gjfst->midi_learn_toggle = make_img_button(GTK_STOCK_DND, "MIDI Learn", TRUE, &learn_handler,
+		gjfst, FALSE, hpacker);
+	gjfst->sysex_button = make_img_button(GTK_STOCK_EXECUTE, "Send SysEx", FALSE, &sysex_handler,
+		gjfst, FALSE, hpacker);
+	gjfst->midi_pc = make_img_button(GTK_STOCK_CONVERT, "Self handling MIDI PC", TRUE, &midi_pc_handler,
+		gjfst, (jfst->midi_pc > MIDI_PC_PLUG), hpacker);
+	gjfst->midi_filter = make_img_button(GTK_STOCK_PAGE_SETUP, "MIDI FILTER", FALSE, &midifilter_handler,
+		gjfst, FALSE, hpacker);
+	gjfst->have_fwin = FALSE;
+	//------- VOLUME CONTROL ----------------------------------------------------------------------
+	if (jfst->volume != -1) {
+		gjfst->volume_slider = gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL,0,127,1);
+		gtk_widget_set_size_request(gjfst->volume_slider, 100, -1);
+		gtk_scale_set_value_pos (GTK_SCALE(gjfst->volume_slider), GTK_POS_LEFT);
+		gtk_range_set_value(GTK_RANGE(gjfst->volume_slider), jfst_get_volume(jfst));
+		gjfst->volume_signal = g_signal_connect (G_OBJECT(gjfst->volume_slider), "value_changed", 
+			G_CALLBACK(volume_handler), gjfst);
+		gtk_widget_set_tooltip_text(gjfst->volume_slider, "Volume");
+		gtk_box_pack_start(GTK_BOX(hpacker), gjfst->volume_slider, FALSE, FALSE, 0);
+	}
+	//------- MIDI CHANNEL ------------------------------------------------------------------------
+	gjfst->channel_listbox = add_combo_nosig(hpacker, create_channel_store(), 0, "MIDI Channel");
+	channel_check( GTK_COMBO_BOX(gjfst->channel_listbox), jfst );
+	g_signal_connect( G_OBJECT(gjfst->channel_listbox), "changed", G_CALLBACK(channel_change), gjfst ); 
+	//------- TRANSPOSITION -----------------------------------------------------------------------
+	GtkWidget* t = gtk_spin_button_new_with_range (-36, 36, 1);
+	gtk_spin_button_set_increments (GTK_SPIN_BUTTON(t), 1, 12);
+	gtk_spin_button_set_value(GTK_SPIN_BUTTON(t), midi_filter_transposition_get(jfst->transposition));
+	gtk_widget_set_tooltip_text(t, "Transposition");
+	g_signal_connect( G_OBJECT(t), "value-changed", G_CALLBACK( transposition_change ), jfst->transposition );
+	gtk_box_pack_start(GTK_BOX(hpacker), t, FALSE, FALSE, 0);
+	gjfst->transposition_spin = t;
+	//------- PRESETS -----------------------------------------------------------------------------
+	GtkListStore* preset_store = gtk_list_store_new( 2, G_TYPE_STRING, G_TYPE_INT );
+	create_preset_store( preset_store, jfst->fst );
+	gjfst->preset_listbox = add_combo_nosig(hpacker, preset_store, jfst->fst->current_program, "Plugin Presets");
+	gjfst->preset_listbox_signal = g_signal_connect( G_OBJECT(gjfst->preset_listbox), "changed", 
+		G_CALLBACK( program_change ), jfst->fst ); 
+	//------- CHANGE PROGRAM NAME ------------------------------------------------------------------
+	gjfst->change_pn = make_img_button(GTK_STOCK_EDIT, "Change program name", FALSE, &change_name_handler,
+		gjfst, FALSE, hpacker);
+	//------- CPU USAGE ----------------------------------------------------------------------------
+	gjfst->cpu_usage = gtk_label_new ("0");
+	gtk_box_pack_start(GTK_BOX(hpacker), gjfst->cpu_usage, FALSE, FALSE, 0);
+	gtk_widget_set_tooltip_text(gjfst->cpu_usage, "CPU Usage");
+	//------- VU METER -----------------------------------------------------------------------------
+#ifdef VUMETER
+	gjfst->vumeter = gtk_drawing_area_new();
+	gtk_widget_set_size_request(gjfst->vumeter, VUMETER_SIZE, 20);
+	g_signal_connect(G_OBJECT(gjfst->vumeter), "draw", G_CALLBACK(vumeter_draw_handler), NULL);
+	gtk_box_pack_start(GTK_BOX(hpacker), gjfst->vumeter, FALSE, FALSE, 0);
+#endif
+	//----------------------------------------------------------------------------------------------
+	gtk_container_set_border_width (GTK_CONTAINER(hpacker), 3); 
+	g_signal_connect (G_OBJECT(window), "delete_event", G_CALLBACK(destroy_handler), gjfst);
+
+	jfst_set_gui_resize_cb( jfst, gtk_gui_resize );
+
+	// Nasty hack - this also emit signal which do the rest ;-)
+	if (jfst->with_editor == WITH_EDITOR_SHOW)
+		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(gjfst->editor_button), TRUE);
+
+	return gjfst;
 }
 
 bool gtk_gui_start (JFST* jfst) {
@@ -778,93 +887,18 @@ bool gtk_gui_start (JFST* jfst) {
 	gtk_window_set_icon(GTK_WINDOW(window), gdk_pixbuf_new_from_xpm_data((const char**) fsthost_xpm));
 
 	vpacker = gtk_box_new (GTK_ORIENTATION_VERTICAL, 7);
-	hpacker = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 7);
-	bypass_button = make_img_button(GTK_STOCK_STOP, "Bypass", TRUE, &bypass_handler,
-		jfst, jfst->bypassed, hpacker);
-
-	load_button = make_img_button(GTK_STOCK_OPEN, "Load", FALSE, &load_handler,
-		jfst, FALSE, hpacker);
-	save_button = make_img_button(GTK_STOCK_SAVE_AS, "Save", FALSE, &save_handler,
-		jfst, FALSE, hpacker);
-	//----------------------------------------------------------------------------------
-	editor_button = make_img_button(GTK_STOCK_PROPERTIES, "Editor", TRUE, &editor_handler,
-		jfst, FALSE, hpacker);
-	editor_checkbox = gtk_check_button_new();
-	gtk_widget_set_tooltip_text(editor_checkbox, "Embedded Editor");
-	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(editor_checkbox), FALSE);
-	gtk_box_pack_start(GTK_BOX(hpacker), editor_checkbox, FALSE, FALSE, 0);
-	fst_set_window_close_callback( jfst->fst, gtk_edit_close_handler, jfst );
-	//----------------------------------------------------------------------------------
-	midi_learn_toggle = make_img_button(GTK_STOCK_DND, "MIDI Learn", TRUE, &learn_handler,
-		jfst, FALSE, hpacker);
-	sysex_button = make_img_button(GTK_STOCK_EXECUTE, "Send SysEx", FALSE, &sysex_handler,
-		jfst, FALSE, hpacker);
-	midi_pc = make_img_button(GTK_STOCK_CONVERT, "Self handling MIDI PC", TRUE, &midi_pc_handler,
-		jfst, (jfst->midi_pc > MIDI_PC_PLUG), hpacker);
-	midi_filter = make_img_button(GTK_STOCK_PAGE_SETUP, "MIDI FILTER", FALSE, &midifilter_handler, jfst, FALSE, hpacker);
-	//----------------------------------------------------------------------------------
-	if (jfst->volume != -1) {
-		volume_slider = gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL,0,127,1);
-		gtk_widget_set_size_request(volume_slider, 100, -1);
-		gtk_scale_set_value_pos (GTK_SCALE(volume_slider), GTK_POS_LEFT);
-		gtk_range_set_value(GTK_RANGE(volume_slider), jfst_get_volume(jfst));
-		volume_signal = g_signal_connect (G_OBJECT(volume_slider), "value_changed", 
-			G_CALLBACK(volume_handler), jfst);
-		gtk_box_pack_start(GTK_BOX(hpacker), volume_slider, FALSE, FALSE, 0);
-		gtk_widget_set_tooltip_text(volume_slider, "Volume");
-	}
-	//----------------------------------------------------------------------------------
-	channel_listbox = add_combo_nosig(hpacker, create_channel_store(), 0, "MIDI Channel");
-	channel_check( GTK_COMBO_BOX(channel_listbox), jfst );
-	g_signal_connect( G_OBJECT(channel_listbox), "changed", G_CALLBACK(channel_change), jfst ); 
-	//----------------------------------------------------------------------------------
-	transposition_spin = gtk_spin_button_new_with_range (-36, 36, 1);
-	gtk_spin_button_set_increments (GTK_SPIN_BUTTON(transposition_spin), 1, 12);
-	gtk_spin_button_set_value(GTK_SPIN_BUTTON(transposition_spin), midi_filter_transposition_get(jfst->transposition));
-	gtk_box_pack_start(GTK_BOX(hpacker), transposition_spin, FALSE, FALSE, 0);
-	gtk_widget_set_tooltip_text(transposition_spin, "Transposition");
-	g_signal_connect( G_OBJECT(transposition_spin), "value-changed", G_CALLBACK( transposition_change ), jfst->transposition );
-	//----------------------------------------------------------------------------------
-	GtkListStore* preset_store = gtk_list_store_new( 2, G_TYPE_STRING, G_TYPE_INT );
-	create_preset_store( preset_store, jfst->fst );
-	preset_listbox = add_combo_nosig(hpacker, preset_store, jfst->fst->current_program, "Plugin Presets");
-	preset_listbox_signal = g_signal_connect( G_OBJECT(preset_listbox), "changed", 
-		G_CALLBACK( program_change ), jfst ); 
-	//----------------------------------------------------------------------------------
-	midi_pc = make_img_button(GTK_STOCK_EDIT, "Change program name", FALSE, &change_name_handler,
-		jfst, FALSE, hpacker);
-	//----------------------------------------------------------------------------------
-	cpu_usage = gtk_label_new ("0");
-	gtk_box_pack_start(GTK_BOX(hpacker), cpu_usage, FALSE, FALSE, 0);
-	gtk_widget_set_tooltip_text(cpu_usage, "CPU Usage");
-	//----------------------------------------------------------------------------------
-#ifdef VUMETER
-	vumeter = gtk_drawing_area_new();
-	gtk_widget_set_size_request(vumeter, VUMETER_SIZE, 20);
-	g_signal_connect(G_OBJECT(vumeter), "draw", G_CALLBACK(vumeter_draw_handler), NULL);
-	gtk_box_pack_start(GTK_BOX(hpacker), vumeter, FALSE, FALSE, 0);
-#endif
-	//----------------------------------------------------------------------------------
-	gtk_container_set_border_width (GTK_CONTAINER(hpacker), 3); 
-	g_signal_connect (G_OBJECT(window), "delete_event", G_CALLBACK(destroy_handler), jfst);
-	
-	gtk_box_pack_start(GTK_BOX(vpacker), hpacker, FALSE, FALSE, 0);
-
 	gtk_container_add (GTK_CONTAINER (window), vpacker);
 
-	jfst_set_gui_resize_cb( jfst, gtk_gui_resize );
-
-	// Nasty hack - this also emit signal which do the rest ;-)
-	if (jfst->with_editor == WITH_EDITOR_SHOW)
-		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(editor_button), TRUE);
-
- 	gtk_widget_show_all (window);
+	gjfst_first = gjfst_new ( jfst );
+	gtk_box_pack_start(GTK_BOX(vpacker), gjfst_first->hpacker, FALSE, FALSE, 0);
 
 	// "global" idle
         g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 100, (GSourceFunc) fsthost_idle, NULL, NULL);
 
 	// GTK GUI idle
-        g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 500, (GSourceFunc) idle_cb, jfst, NULL);
+	g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 500, (GSourceFunc) idle_cb, gjfst_first, NULL);
+ 
+	gtk_widget_show_all (window);
 	
 	g_info( "calling gtk_main now" );
 	gtk_main ();
@@ -895,4 +929,7 @@ void gtk_gui_init(int *argc, char **argv[]) {
 	CPUusage_init();
 }
 
-void gtk_gui_quit() { gtk_main_quit(); }
+void gtk_gui_quit() {
+	gtk_main_quit();
+	free(gjfst_first);
+}
