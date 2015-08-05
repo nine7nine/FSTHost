@@ -103,42 +103,36 @@ gtk_edit_close_handler ( void* arg ) {
 static void
 learn_handler (GtkToggleButton *but, gpointer ptr) {
 	GJFST* gjfst = (GJFST*) ptr;
-	JFST* jfst = gjfst->jfst;
-	
 	if ( gtk_toggle_button_get_active (but) ) {
-		jfst_midi_learn(jfst, true);
+		jfst_midi_learn(gjfst->jfst, true);
 	} else {
-		jfst_midi_learn(jfst, false);
+		jfst_midi_learn(gjfst->jfst, false);
 	}
 }
 
 static void
 bypass_handler (GtkToggleButton *but, gpointer ptr) {
-	JFST* jfst = (JFST*) ptr;
-
-	jfst_bypass(jfst, gtk_toggle_button_get_active(but));
+	GJFST* gjfst = (GJFST*) ptr;
+	jfst_bypass(gjfst->jfst, gtk_toggle_button_get_active(but));
 }
 
 static void
 volume_handler (GtkVScale *slider, gpointer ptr) {
-	JFST* jfst = (JFST*) ptr;
-
+	GJFST* gjfst = (GJFST*) ptr;
 	short volume = gtk_range_get_value(GTK_RANGE(slider));
-	jfst_set_volume(jfst, volume);
+	jfst_set_volume(gjfst->jfst, volume);
 }
 
 static void
 sysex_handler (GtkToggleButton *but, gpointer ptr) {
 	GJFST* gjfst = (GJFST*) ptr;
-	JFST* jfst = gjfst->jfst;
-	jfst_send_sysex(jfst, SYSEX_TYPE_DUMP);
+	jfst_send_sysex(gjfst->jfst, SYSEX_TYPE_DUMP);
 }
 
 static void
 midi_pc_handler (GtkToggleButton *but, gpointer ptr) {
 	GJFST* gjfst = (GJFST*) ptr;
-	JFST* jfst = gjfst->jfst;
-	jfst->midi_pc = 
+	gjfst->jfst->midi_pc = 
 		(gtk_toggle_button_get_active (but)) ? MIDI_PC_SELF : MIDI_PC_PLUG;
 }
 
@@ -830,7 +824,7 @@ static GJFST* gjfst_new ( JFST* jfst ) {
 	//------- MIDI CHANNEL ------------------------------------------------------------------------
 	gjfst->channel_listbox = add_combo_nosig(hpacker, create_channel_store(), 0, "MIDI Channel");
 	channel_check( GTK_COMBO_BOX(gjfst->channel_listbox), jfst );
-	g_signal_connect( G_OBJECT(gjfst->channel_listbox), "changed", G_CALLBACK(channel_change), gjfst ); 
+	g_signal_connect( G_OBJECT(gjfst->channel_listbox), "changed", G_CALLBACK(channel_change), jfst ); 
 	//------- TRANSPOSITION -----------------------------------------------------------------------
 	GtkWidget* t = gtk_spin_button_new_with_range (-36, 36, 1);
 	gtk_spin_button_set_increments (GTK_SPIN_BUTTON(t), 1, 12);
