@@ -11,11 +11,11 @@ typedef enum {
 	LOG_ERROR,
 	LOG_INFO,
 	LOG_DEBUG
-} LogSeverity;
+} LogLevel;
 
 typedef void (*LogCallback)(const char* msg, void* arg);
 
-void log_init( LogSeverity severity, LogCallback callback, void* arg );
+void log_init( LogLevel severity, LogCallback callback, void* arg );
 void log_error ( const char* fmt, ... );
 void log_info ( const char* fmt, ... );
 void log_debug ( const char* fmt, ... );
