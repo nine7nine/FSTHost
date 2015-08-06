@@ -359,10 +359,10 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	sigemptyset(&sa.sa_mask);
 	sa.sa_flags = 0;
 	sa.sa_handler = &signal_handler;
-	sigaction(SIGINT, &sa, NULL); // SIGINT for clean quit
-	sigaction(SIGTERM, &sa, NULL); // SIGTERM for clean quit
-	sigaction(SIGUSR2, &sa, NULL);// SIGUSR2 open editor
-	sigaction(SIGUSR1, &sa, NULL); // SIGUSR1 for save state ( ladish support )
+	sigaction(SIGINT, &sa, NULL);  // SIGINT  - clean quit
+	sigaction(SIGTERM, &sa, NULL); // SIGTERM - clean quit
+	sigaction(SIGUSR1, &sa, NULL); // SIGUSR1 - save state ( ladish support )
+	sigaction(SIGUSR2, &sa, NULL); // SIGUSR2 - open editor
 
 #ifdef HAVE_LASH
 	jfst_lash_init(jfst, &argc, &argv);
