@@ -1,5 +1,5 @@
-#ifndef __jack_vst_h__
-#define __jack_vst_h__
+#ifndef __jfst_h__
+#define __jfst_h__
 
 #include <sys/types.h>
 #include <jack/jack.h>
@@ -114,6 +114,9 @@ typedef struct _JFST {
 
 	// Method for GUI resize
 	void (*gui_resize) ( struct _JFST* );
+
+	// User / GUI ptr
+	void*		user_ptr;
 } JFST;
 
 static inline void jfst_set_gui_resize_cb ( JFST* jfst, void (*f) ) {
@@ -148,4 +151,7 @@ void jfst_send_sysex(JFST* jfst, SysExType type);
 /* process.c */
 void jfst_process( JFST* jfst, jack_nframes_t nframes );
 
-#endif /* __jack_vst_h__ */
+/* jfstproto.c */
+bool jfst_proto_init ( JFST* jfst );
+
+#endif /* __jfst_h__ */

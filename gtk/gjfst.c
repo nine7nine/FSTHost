@@ -1,4 +1,3 @@
-#include "jfst/jfst.h"
 #include <gtk/gtk.h>
 #include <strings.h>
 
@@ -14,8 +13,14 @@
 #include <sys/syscall.h>
 #include "fsthost.xpm"
 
+#include "gjfst.h"
+
 /* fsthost.c */
 extern void fsthost_idle();
+
+/* cpuusage.c */
+extern void CPUusage_init();
+extern double CPUusage_getCurrentValue();
 
 #if (GTK_MAJOR_VERSION < 3)
 /* FIXME: workaround code - will be removed */
@@ -24,10 +29,6 @@ extern void fsthost_idle();
 #define gtk_scale_new_with_range(chuj, ...) gtk_hscale_new_with_range( __VA_ARGS__ )
 #define GDK_POINTER_TO_XID GDK_GPOINTER_TO_NATIVE_WINDOW
 #endif /* (GTK_MAJOR_VERSION < 3) */
-
-/* cpuusage.c */
-extern void CPUusage_init();
-extern double CPUusage_getCurrentValue();
 
 static short mode_cc = 0;
 
@@ -59,8 +60,6 @@ typedef struct {
 	gulong volume_signal;
 	bool have_fwin;
 } GJFST;
-
-static GJFST* gjfst_first;
 
 typedef int (*error_handler_t)( Display *, XErrorEvent *);
 static Display *the_gtk_display;
@@ -416,7 +415,7 @@ static GtkListStore* create_channel_store() {
 	return retval;
 }
 
-void store_add(GtkListStore* store, int value) {
+static void store_add(GtkListStore* store, int value) {
 	gtk_list_store_insert_with_values(store, NULL, -1, 0, midi_filter_key2name(value), 1, value, -1 );
 }
 
@@ -551,7 +550,8 @@ filter_enable_handler(GtkButton* button, gpointer ptr) {
 	*enable = (uint8_t) ( gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(button)) ? 1 : 0 );
 }
 
-void filter_addrow(GtkWidget* vpacker, MIDIFILTER **filters, MIDIFILTER *filter) {
+static void
+filter_addrow(GtkWidget* vpacker, MIDIFILTER **filters, MIDIFILTER *filter) {
 	GtkWidget* hpacker = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 7);
 	gtk_box_pack_start(GTK_BOX(vpacker), hpacker, FALSE, FALSE, 0);
 
@@ -866,41 +866,7 @@ static GJFST* gjfst_new ( JFST* jfst ) {
 	return gjfst;
 }
 
-bool gtk_gui_start (JFST* jfst) {
-//	g_info("GTK Thread WineID: %d | LWP: %d", GetCurrentThreadId (), (int) syscall (SYS_gettid));
-
-	// create a GtkWindow containing a GtkSocket...
-	//
-	// notice the order of the functions.
-	// you can only add an id to an anchored widget.
-
-	window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
-	gtk_window_set_title (GTK_WINDOW(window), jfst->client_name);
-	gtk_window_set_resizable (GTK_WINDOW(window), FALSE);
-
-	gtk_window_set_icon(GTK_WINDOW(window), gdk_pixbuf_new_from_xpm_data((const char**) fsthost_xpm));
-
-	vpacker = gtk_box_new (GTK_ORIENTATION_VERTICAL, 7);
-	gtk_container_add (GTK_CONTAINER (window), vpacker);
-
-	gjfst_first = gjfst_new ( jfst );
-	gtk_box_pack_start(GTK_BOX(vpacker), gjfst_first->hpacker, FALSE, FALSE, 0);
-
-	// "global" idle
-        g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 100, (GSourceFunc) fsthost_idle, NULL, NULL);
-
-	// GTK GUI idle
-	g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 500, (GSourceFunc) idle_cb, gjfst_first, NULL);
- 
-	gtk_widget_show_all (window);
-	
-	g_info( "calling gtk_main now" );
-	gtk_main ();
-
-	return TRUE;
-}
-
-int fst_xerror_handler( Display *disp, XErrorEvent *ev ) {
+static int gjfst_xerror_handler( Display *disp, XErrorEvent *ev ) {
 	int error_code = (int) ev->error_code;
 	char error_text[256];
 
@@ -915,15 +881,52 @@ int fst_xerror_handler( Display *disp, XErrorEvent *ev ) {
 	}
 }
 
-void gtk_gui_init(int *argc, char **argv[]) {
+void gjfst_add (JFST* jfst) {
+//	g_info("GTK Thread WineID: %d | LWP: %d", GetCurrentThreadId (), (int) syscall (SYS_gettid));
+
+	GJFST* gjfst = gjfst_new ( jfst );
+	gtk_box_pack_start(GTK_BOX(vpacker), gjfst->hpacker, FALSE, FALSE, 0);
+
+	// GTK GUI idle
+	g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 500, (GSourceFunc) idle_cb, gjfst, NULL);
+
+	// TODO: wrong place
+	gtk_window_set_title (GTK_WINDOW(window), jfst->client_name);
+
+	jfst->user_ptr = gjfst;
+}
+
+void gjfst_init(int *argc, char **argv[]) {
 	wine_error_handler = XSetErrorHandler( NULL );
 	gtk_init (argc, argv);
 	the_gtk_display = gdk_x11_display_get_xdisplay( gdk_display_get_default() );
-	gtk_error_handler = XSetErrorHandler( fst_xerror_handler );
+	gtk_error_handler = XSetErrorHandler( gjfst_xerror_handler );
 	CPUusage_init();
+
+	window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+	gtk_window_set_resizable (GTK_WINDOW(window), FALSE);
+
+	gtk_window_set_icon(GTK_WINDOW(window), gdk_pixbuf_new_from_xpm_data((const char**) fsthost_xpm));
+
+	vpacker = gtk_box_new (GTK_ORIENTATION_VERTICAL, 7);
+	gtk_container_add (GTK_CONTAINER (window), vpacker);
+
+	// "global" idle
+        g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 100, (GSourceFunc) fsthost_idle, NULL, NULL);
 }
 
-void gtk_gui_quit() {
+void gjfst_start() {
+	gtk_widget_show_all (window);
+
+	g_info( "calling gtk_main now" );
+	gtk_main ();
+}
+
+void gjfst_free(JFST* jfst) {
+	GJFST* gjfst = jfst->user_ptr;
+	free( gjfst );
+}
+
+void gjfst_quit() {
 	gtk_main_quit();
-	free(gjfst_first);
 }
