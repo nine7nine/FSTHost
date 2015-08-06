@@ -29,6 +29,10 @@
 #include "serv/serv.h"
 #include "xmldb/info.h"
 
+#ifndef NO_GTK
+#include "gtk/gjfst.h"
+#endif
+
 #define VERSION "1.5.5"
 #ifdef __x86_64__
 #define ARCH "64"
@@ -39,16 +43,6 @@
 #define APPNAME_ARCH APPNAME ARCH
 
 #define STR_NO_CONNECT "!"
-
-/* jfstproto.c */
-bool jfst_proto_init ( JFST* jfst );
-
-/* gtk.c */
-#ifndef NO_GTK
-extern void gtk_gui_init (int* argc, char** argv[]);
-extern int gtk_gui_start (JFST * jfst);
-extern void gtk_gui_quit();
-#endif
 
 /* lash.c */
 #ifdef HAVE_LASH
@@ -66,7 +60,7 @@ void jfst_quit(JFST* jfst) {
 
 #ifndef NO_GTK
 	if (jfst->with_editor != WITH_EDITOR_NO)
-		gtk_gui_quit();
+		gjfst_quit();
 #endif
 }
 
@@ -385,8 +379,10 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	// Create GTK or GlibMain thread
 	if (jfst->with_editor != WITH_EDITOR_NO) {
 		log_info( "Start GUI" );
-		gtk_gui_init(&argc, &argv);
-		gtk_gui_start(jfst);
+		gjfst_init(&argc, &argv);
+		gjfst_add ( jfst );
+		gjfst_start();
+		gjfst_free ( jfst );
 	} else {
 		main_loop( jfst );
 	}
