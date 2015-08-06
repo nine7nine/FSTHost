@@ -25,6 +25,16 @@
 
 #define FXB_BLANK_HOLE 156
 
+typedef struct {
+	int32_t chunkMagic;
+	int32_t byteSize;
+	int32_t fxMagic;
+	int32_t version;
+	int32_t fxID;
+	int32_t fxVersion;
+	int32_t numPrograms;
+} FXHeader;
+
 static inline uint32_t endian_swap(uint32_t x)
 {
 //	return (x>>24) | ((x<<8) & 0x00FF0000) | ((x>>8) & 0x0000FF00) | (x<<24);

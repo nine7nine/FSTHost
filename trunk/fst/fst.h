@@ -143,16 +143,6 @@ enum FxFileType {
 	FXPROGRAM	= 1
 };
 
-typedef struct {
-	int32_t chunkMagic;
-	int32_t byteSize;
-	int32_t fxMagic;
-	int32_t version;
-	int32_t fxID;
-	int32_t fxVersion;
-	int32_t numPrograms;
-} FXHeader;
-
 static inline bool fst_want_midi_in ( FST* fst ) {
 	/* No MIDI at all - very old/rare v1 plugins */
 	if (fst->vst_version < 2) return false;

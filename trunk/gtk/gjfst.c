@@ -66,11 +66,255 @@ static Display *the_gtk_display;
 error_handler_t wine_error_handler;
 error_handler_t gtk_error_handler;
 
+/* ------------------------------- HELPERS ---------------------------------------------- */
+static void
+combo_changed_handler(GtkComboBox* combo, gpointer ptr) {
+	int* value = (int*) ptr;
+
+	GtkTreeIter iter;
+	GtkTreeModel *tree = gtk_combo_box_get_model( combo );
+	gtk_combo_box_get_active_iter( combo, &iter );
+	gtk_tree_model_get( tree, &iter, 1 , value, -1 );
+
+//	*value = gtk_combo_box_get_active(GTK_COMBO_BOX(combo));
+}
+
+static void combo_set_active( GtkComboBox* combo, int active ) {
+	GtkTreeIter iter;
+	GtkTreeModel *model = gtk_combo_box_get_model( combo );
+	int value;
+	gboolean valid;
+	for ( valid = gtk_tree_model_get_iter_first (model, &iter);
+		valid;
+		valid = gtk_tree_model_iter_next (model, &iter)
+	) {
+		gtk_tree_model_get( model, &iter, 1 , &value, -1 );
+		if ( value == active ) {
+			gtk_combo_box_set_active_iter( combo, &iter );
+			break;
+		}
+	}
+}
+
+GtkWidget* add_combo_nosig(GtkWidget* hpacker, GtkListStore* store, int active, const char* tooltip) {
+	GtkWidget* combo = gtk_combo_box_new_with_model ( GTK_TREE_MODEL(store) );
+	g_object_unref( G_OBJECT( store ) );
+	GtkCellRenderer *renderer = gtk_cell_renderer_text_new ();
+	gtk_cell_layout_pack_start (GTK_CELL_LAYOUT (combo), renderer, TRUE);
+	gtk_cell_layout_set_attributes (GTK_CELL_LAYOUT (combo), renderer, "text", 0, NULL);
+	gtk_widget_set_tooltip_text( combo, tooltip);
+	combo_set_active ( GTK_COMBO_BOX ( combo ), active );
+	gtk_box_pack_start(GTK_BOX(hpacker), GTK_WIDGET(combo), FALSE, FALSE, 0);
+
+	return combo;
+}
+
+GtkWidget* add_combo(GtkWidget* hpacker, GtkListStore* store, int* value, const char* tooltip) {
+	GtkWidget* combo = add_combo_nosig(hpacker, store, *value, tooltip);
+	g_signal_connect( G_OBJECT(combo), "changed", G_CALLBACK(combo_changed_handler), value ); 
+
+	return combo;
+}
+
+static void
+entry_changed_handler_uint8 (GtkEntry* entry, gpointer ptr) {
+	uint8_t* value = (uint8_t*) ptr;
+	*value = (uint8_t) strtol(gtk_entry_get_text(entry), NULL, 10);
+}
+
+static void
+entry_changed_handler_int8 (GtkEntry* entry, gpointer ptr) {
+	int8_t* value = (int8_t*) ptr;
+	*value = (int8_t) strtol(gtk_entry_get_text(entry), NULL, 10);
+}
+
+enum VTYPE {
+	VTYPE_UINT8,
+	VTYPE_INT8
+};
+
+GtkWidget* add_entry(GtkWidget* hpacker, void* value, enum VTYPE vtype,int len, const char* tooltip) {
+	GtkWidget *entry = gtk_entry_new();
+
+	char buf[4];
+	if ( vtype == VTYPE_UINT8 ) {
+		uint8_t* vp = (uint8_t*) value;
+		snprintf(buf, sizeof buf, "%d", *vp);
+		g_signal_connect( G_OBJECT(entry), "changed", G_CALLBACK(entry_changed_handler_uint8), value);
+	} else { /* VTYPE_INT8 */
+		int8_t* vp = (int8_t*) value;
+		snprintf(buf, sizeof buf, "%d", *vp);
+		g_signal_connect( G_OBJECT(entry), "changed", G_CALLBACK(entry_changed_handler_int8), value);
+	}
+
+	gtk_entry_set_text(GTK_ENTRY(entry), buf);
+	gtk_widget_set_tooltip_text(entry, tooltip);
+	gtk_entry_set_max_length(GTK_ENTRY(entry), len);
+	gtk_entry_set_width_chars(GTK_ENTRY(entry), len);
+	gtk_box_pack_start(GTK_BOX(hpacker), entry, FALSE, FALSE, 0);
+
+	return entry;
+}
+
+static GtkListStore* create_channel_store() {
+	GtkListStore *retval = gtk_list_store_new( 2, G_TYPE_STRING, G_TYPE_INT );
+	unsigned short i;
+	char buf[10];
+	
+	for( i=0; i <= 17; i++ ) {
+		GtkTreeIter new_row_iter;
+
+		if (i == 0) {
+			strcpy( buf, "Omni");
+		} else if (i == 17) {
+			strcpy( buf, "None");
+		} else {
+			sprintf( buf, "Ch %d", i);
+		}
+
+		gtk_list_store_insert( retval, &new_row_iter, i );
+		gtk_list_store_set( retval, &new_row_iter, 0, buf, 1, i, -1 );
+	}
+
+	return retval;
+}
+
+/* ------------------------------- MIDI FILTERS ---------------------------------------------- */
 struct RemoveFilterData {
 	MIDIFILTER** filters;
 	MIDIFILTER* toRemove;
 	GtkWidget* hpacker;
 };
+
+static void store_add(GtkListStore* store, int value) {
+	gtk_list_store_insert_with_values(store, NULL, -1, 0, midi_filter_key2name(value), 1, value, -1 );
+}
+
+GtkListStore* mf_rule_store() {
+	GtkListStore *store = gtk_list_store_new( 2, G_TYPE_STRING, G_TYPE_INT );
+	store_add(store, CHANNEL_REDIRECT);
+	store_add(store, TRANSPOSE);
+	store_add(store, DROP_ALL);
+	store_add(store, ACCEPT);
+	return store;
+}
+
+GtkListStore* mf_type_store() {
+	GtkListStore *store = gtk_list_store_new( 2, G_TYPE_STRING, G_TYPE_INT );
+	store_add(store, MM_ALL);
+	store_add(store, MM_NOTE);
+	store_add(store, MM_NOTE_OFF);
+	store_add(store, MM_NOTE_ON);
+	store_add(store, MM_AFTERTOUCH);
+	store_add(store, MM_CONTROL_CHANGE);
+	store_add(store, MM_PROGRAM_CHANGE);
+	store_add(store, MM_CHANNEL_PRESSURE);
+	store_add(store, MM_PITCH_BEND);
+	return store;
+}
+
+static void
+filter_remove_handler(GtkButton* button, gpointer ptr) {
+	struct RemoveFilterData* rbd = (struct RemoveFilterData*) ptr;
+
+	midi_filter_remove ( rbd->filters, rbd->toRemove );
+
+	GtkWidget* fvpacker = gtk_widget_get_ancestor( rbd->hpacker, GTK_TYPE_BOX );
+	gtk_container_remove(GTK_CONTAINER(fvpacker), rbd->hpacker);
+
+	GtkWidget* mywin = gtk_widget_get_toplevel (rbd->hpacker);
+	gtk_window_resize( GTK_WINDOW(mywin), 400, 1);
+}
+
+static void
+filter_enable_handler(GtkButton* button, gpointer ptr) {
+	uint8_t* enable = (uint8_t*) ptr;
+	*enable = (uint8_t) ( gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(button)) ? 1 : 0 );
+}
+
+static void
+filter_addrow(GtkWidget* vpacker, MIDIFILTER **filters, MIDIFILTER *filter) {
+	GtkWidget* hpacker = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 7);
+	gtk_box_pack_start(GTK_BOX(vpacker), hpacker, FALSE, FALSE, 0);
+
+	GtkWidget* checkbox_enable = gtk_check_button_new();
+	gtk_widget_set_tooltip_text(checkbox_enable, "Enable");
+	if (filter->enabled) gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(checkbox_enable), TRUE);
+	g_signal_connect( G_OBJECT(checkbox_enable), "clicked", G_CALLBACK(filter_enable_handler), &filter->enabled);
+	gtk_box_pack_start(GTK_BOX(hpacker), checkbox_enable, FALSE, FALSE, 0);
+
+	GtkWidget* combo_type = add_combo(hpacker, mf_type_store(), (int*) &filter->type, "Filter Type");
+	GtkWidget* combo_channel = add_combo(hpacker, create_channel_store(), (int*) &filter->channel, "MIDI Channel");
+//	GtkWidget* entry_value1 = add_entry(hpacker, &filter->value1, VTYPE_UINT8, 3, "Value 1");
+//	GtkWidget* entry_value2 = add_entry(hpacker, &filter->value2, VTYPE_UINT8, 3, "Value 2");
+	GtkWidget* combo_rule = add_combo(hpacker, mf_rule_store(), (int*) &filter->rule, "Filter Rule");
+	GtkWidget* entry_rvalue = add_entry(hpacker, &filter->rvalue, VTYPE_INT8, 3, "Rule Value");
+
+	/* Compiler remove this lines - but this suppress warnings ;-) */
+	combo_type = combo_type;
+	combo_channel = combo_channel;
+	combo_rule = combo_rule;
+	entry_rvalue = entry_rvalue;
+	/***************************************************************/
+
+	GtkWidget* button_remove = gtk_button_new_from_stock(GTK_STOCK_DELETE);
+	struct RemoveFilterData* rbd = malloc( sizeof (struct RemoveFilterData) );
+	rbd->filters = filters;
+	rbd->toRemove = filter;
+	rbd->hpacker = hpacker;
+	if (filter->built_in) gtk_widget_set_sensitive (hpacker, FALSE);
+	g_signal_connect_data ( G_OBJECT(button_remove), "clicked",
+		G_CALLBACK(filter_remove_handler), rbd, (GClosureNotify) free, 0);
+	gtk_box_pack_start(GTK_BOX(hpacker), button_remove, FALSE, FALSE, 0);
+}
+
+static void
+filter_new_handler( GtkToggleButton *but, gpointer ptr ) {
+	GJFST* gjfst = (GJFST*) ptr;
+	JFST* jfst = gjfst->jfst;
+	MIDIFILTER mf = {0};
+	MIDIFILTER* nmf = midi_filter_add( &jfst->filters, &mf );
+
+	filter_addrow(gjfst->fvpacker, &jfst->filters, nmf);
+ 	gtk_widget_show_all (gjfst->fvpacker);
+}
+
+static gboolean
+fwin_destroy_handler (GtkWidget* widget, GdkEventAny* ev, gpointer ptr) {
+	bool* hf = (bool*) ptr;
+	*hf = FALSE;
+	return FALSE;
+}
+
+static void
+midifilter_handler (GtkWidget* widget, GJFST *gjfst) {
+	if (gjfst->have_fwin) return;
+	gjfst->have_fwin = TRUE;
+	JFST* jfst = gjfst->jfst;
+
+	GtkWidget* fwin = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+	gtk_window_set_default_size (GTK_WINDOW (fwin), 400, -1);
+//	gtk_widget_set_size_request (fwin, 400, -1);
+	gtk_window_set_icon(GTK_WINDOW(fwin), gdk_pixbuf_new_from_xpm_data((const char**) fsthost_xpm));
+	g_signal_connect (G_OBJECT(fwin), "delete_event", G_CALLBACK(fwin_destroy_handler), &gjfst->have_fwin);
+	GtkWidget* ftoolbar = gtk_toolbar_new();
+
+	gjfst->fvpacker = gtk_box_new (GTK_ORIENTATION_VERTICAL, 7);
+
+	gtk_container_add (GTK_CONTAINER (fwin), gjfst->fvpacker);
+
+	GtkToolItem* button_new = gtk_tool_button_new_from_stock(GTK_STOCK_ADD);
+	gtk_toolbar_insert(GTK_TOOLBAR(ftoolbar), button_new, 0);
+	gtk_box_pack_start(GTK_BOX(gjfst->fvpacker), ftoolbar, FALSE, FALSE, 0);
+	gtk_widget_set_tooltip_text(GTK_WIDGET(button_new), "New Filter");
+	g_signal_connect (G_OBJECT(button_new),  "clicked", G_CALLBACK(filter_new_handler), gjfst);
+
+	MIDIFILTER *f;
+	for (f = jfst->filters; f; f = f->next) filter_addrow(gjfst->fvpacker, &jfst->filters, f);
+
+	gtk_widget_show_all (fwin);
+}
+/* ------------------------------------------------------------------------------------------- */
 
 #ifdef VUMETER
 static	GtkWidget* vumeter;
@@ -392,247 +636,6 @@ editor_handler (GtkToggleButton *but, gpointer ptr) {
 	}
 }
 
-static GtkListStore* create_channel_store() {
-	GtkListStore *retval = gtk_list_store_new( 2, G_TYPE_STRING, G_TYPE_INT );
-	unsigned short i;
-	char buf[10];
-	
-	for( i=0; i <= 17; i++ ) {
-		GtkTreeIter new_row_iter;
-
-		if (i == 0) {
-			strcpy( buf, "Omni");
-		} else if (i == 17) {
-			strcpy( buf, "None");
-		} else {
-			sprintf( buf, "Ch %d", i);
-		}
-
-		gtk_list_store_insert( retval, &new_row_iter, i );
-		gtk_list_store_set( retval, &new_row_iter, 0, buf, 1, i, -1 );
-	}
-
-	return retval;
-}
-
-static void store_add(GtkListStore* store, int value) {
-	gtk_list_store_insert_with_values(store, NULL, -1, 0, midi_filter_key2name(value), 1, value, -1 );
-}
-
-GtkListStore* mf_rule_store() {
-	GtkListStore *store = gtk_list_store_new( 2, G_TYPE_STRING, G_TYPE_INT );
-	store_add(store, CHANNEL_REDIRECT);
-	store_add(store, TRANSPOSE);
-	store_add(store, DROP_ALL);
-	store_add(store, ACCEPT);
-	return store;
-}
-
-GtkListStore* mf_type_store() {
-	GtkListStore *store = gtk_list_store_new( 2, G_TYPE_STRING, G_TYPE_INT );
-	store_add(store, MM_ALL);
-	store_add(store, MM_NOTE);
-	store_add(store, MM_NOTE_OFF);
-	store_add(store, MM_NOTE_ON);
-	store_add(store, MM_AFTERTOUCH);
-	store_add(store, MM_CONTROL_CHANGE);
-	store_add(store, MM_PROGRAM_CHANGE);
-	store_add(store, MM_CHANNEL_PRESSURE);
-	store_add(store, MM_PITCH_BEND);
-	return store;
-}
-
-static void
-combo_changed_handler(GtkComboBox* combo, gpointer ptr) {
-	int* value = (int*) ptr;
-
-	GtkTreeIter iter;
-	GtkTreeModel *tree = gtk_combo_box_get_model( combo );
-	gtk_combo_box_get_active_iter( combo, &iter );
-	gtk_tree_model_get( tree, &iter, 1 , value, -1 );
-
-//	*value = gtk_combo_box_get_active(GTK_COMBO_BOX(combo));
-}
-
-static void combo_set_active( GtkComboBox* combo, int active ) {
-	GtkTreeIter iter;
-	GtkTreeModel *model = gtk_combo_box_get_model( combo );
-	int value;
-	gboolean valid;
-	for ( valid = gtk_tree_model_get_iter_first (model, &iter);
-		valid;
-		valid = gtk_tree_model_iter_next (model, &iter)
-	) {
-		gtk_tree_model_get( model, &iter, 1 , &value, -1 );
-		if ( value == active ) {
-			gtk_combo_box_set_active_iter( combo, &iter );
-			break;
-		}
-	}
-}
-
-GtkWidget* add_combo_nosig(GtkWidget* hpacker, GtkListStore* store, int active, const char* tooltip) {
-	GtkWidget* combo = gtk_combo_box_new_with_model ( GTK_TREE_MODEL(store) );
-	g_object_unref( G_OBJECT( store ) );
-	GtkCellRenderer *renderer = gtk_cell_renderer_text_new ();
-	gtk_cell_layout_pack_start (GTK_CELL_LAYOUT (combo), renderer, TRUE);
-	gtk_cell_layout_set_attributes (GTK_CELL_LAYOUT (combo), renderer, "text", 0, NULL);
-	gtk_widget_set_tooltip_text( combo, tooltip);
-	combo_set_active ( GTK_COMBO_BOX ( combo ), active );
-	gtk_box_pack_start(GTK_BOX(hpacker), GTK_WIDGET(combo), FALSE, FALSE, 0);
-
-	return combo;
-}
-
-GtkWidget* add_combo(GtkWidget* hpacker, GtkListStore* store, int* value, const char* tooltip) {
-	GtkWidget* combo = add_combo_nosig(hpacker, store, *value, tooltip);
-	g_signal_connect( G_OBJECT(combo), "changed", G_CALLBACK(combo_changed_handler), value ); 
-
-	return combo;
-}
-
-static void
-entry_changed_handler_uint8 (GtkEntry* entry, gpointer ptr) {
-	uint8_t* value = (uint8_t*) ptr;
-	*value = (uint8_t) strtol(gtk_entry_get_text(entry), NULL, 10);
-}
-
-static void
-entry_changed_handler_int8 (GtkEntry* entry, gpointer ptr) {
-	int8_t* value = (int8_t*) ptr;
-	*value = (int8_t) strtol(gtk_entry_get_text(entry), NULL, 10);
-}
-
-enum VTYPE {
-	VTYPE_UINT8,
-	VTYPE_INT8
-};
-
-GtkWidget* add_entry(GtkWidget* hpacker, void* value, enum VTYPE vtype,int len, const char* tooltip) {
-	GtkWidget *entry = gtk_entry_new();
-
-	char buf[4];
-	if ( vtype == VTYPE_UINT8 ) {
-		uint8_t* vp = (uint8_t*) value;
-		snprintf(buf, sizeof buf, "%d", *vp);
-		g_signal_connect( G_OBJECT(entry), "changed", G_CALLBACK(entry_changed_handler_uint8), value);
-	} else { /* VTYPE_INT8 */
-		int8_t* vp = (int8_t*) value;
-		snprintf(buf, sizeof buf, "%d", *vp);
-		g_signal_connect( G_OBJECT(entry), "changed", G_CALLBACK(entry_changed_handler_int8), value);
-	}
-
-	gtk_entry_set_text(GTK_ENTRY(entry), buf);
-	gtk_widget_set_tooltip_text(entry, tooltip);
-	gtk_entry_set_max_length(GTK_ENTRY(entry), len);
-	gtk_entry_set_width_chars(GTK_ENTRY(entry), len);
-	gtk_box_pack_start(GTK_BOX(hpacker), entry, FALSE, FALSE, 0);
-
-	return entry;
-}
-
-static void
-filter_remove_handler(GtkButton* button, gpointer ptr) {
-	struct RemoveFilterData* rbd = (struct RemoveFilterData*) ptr;
-
-	midi_filter_remove ( rbd->filters, rbd->toRemove );
-
-	GtkWidget* fvpacker = gtk_widget_get_ancestor( rbd->hpacker, GTK_TYPE_BOX );
-	gtk_container_remove(GTK_CONTAINER(fvpacker), rbd->hpacker);
-
-	GtkWidget* mywin = gtk_widget_get_toplevel (rbd->hpacker);
-	gtk_window_resize( GTK_WINDOW(mywin), 400, 1);
-}
-
-static void
-filter_enable_handler(GtkButton* button, gpointer ptr) {
-	uint8_t* enable = (uint8_t*) ptr;
-	*enable = (uint8_t) ( gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(button)) ? 1 : 0 );
-}
-
-static void
-filter_addrow(GtkWidget* vpacker, MIDIFILTER **filters, MIDIFILTER *filter) {
-	GtkWidget* hpacker = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 7);
-	gtk_box_pack_start(GTK_BOX(vpacker), hpacker, FALSE, FALSE, 0);
-
-	GtkWidget* checkbox_enable = gtk_check_button_new();
-	gtk_widget_set_tooltip_text(checkbox_enable, "Enable");
-	if (filter->enabled) gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(checkbox_enable), TRUE);
-	g_signal_connect( G_OBJECT(checkbox_enable), "clicked", G_CALLBACK(filter_enable_handler), &filter->enabled);
-	gtk_box_pack_start(GTK_BOX(hpacker), checkbox_enable, FALSE, FALSE, 0);
-
-	GtkWidget* combo_type = add_combo(hpacker, mf_type_store(), (int*) &filter->type, "Filter Type");
-	GtkWidget* combo_channel = add_combo(hpacker, create_channel_store(), (int*) &filter->channel, "MIDI Channel");
-//	GtkWidget* entry_value1 = add_entry(hpacker, &filter->value1, VTYPE_UINT8, 3, "Value 1");
-//	GtkWidget* entry_value2 = add_entry(hpacker, &filter->value2, VTYPE_UINT8, 3, "Value 2");
-	GtkWidget* combo_rule = add_combo(hpacker, mf_rule_store(), (int*) &filter->rule, "Filter Rule");
-	GtkWidget* entry_rvalue = add_entry(hpacker, &filter->rvalue, VTYPE_INT8, 3, "Rule Value");
-
-	/* Compiler remove this lines - but this suppress warnings ;-) */
-	combo_type = combo_type;
-	combo_channel = combo_channel;
-	combo_rule = combo_rule;
-	entry_rvalue = entry_rvalue;
-	/***************************************************************/
-
-	GtkWidget* button_remove = gtk_button_new_from_stock(GTK_STOCK_DELETE);
-	struct RemoveFilterData* rbd = malloc( sizeof (struct RemoveFilterData) );
-	rbd->filters = filters;
-	rbd->toRemove = filter;
-	rbd->hpacker = hpacker;
-	if (filter->built_in) gtk_widget_set_sensitive (hpacker, FALSE);
-	g_signal_connect_data ( G_OBJECT(button_remove), "clicked",
-		G_CALLBACK(filter_remove_handler), rbd, (GClosureNotify) free, 0);
-	gtk_box_pack_start(GTK_BOX(hpacker), button_remove, FALSE, FALSE, 0);
-}
-
-static void
-filter_new_handler( GtkToggleButton *but, gpointer ptr ) {
-	GJFST* gjfst = (GJFST*) ptr;
-	JFST* jfst = gjfst->jfst;
-	MIDIFILTER mf = {0};
-	MIDIFILTER* nmf = midi_filter_add( &jfst->filters, &mf );
-
-	filter_addrow(gjfst->fvpacker, &jfst->filters, nmf);
- 	gtk_widget_show_all (gjfst->fvpacker);
-}
-
-static gboolean
-fwin_destroy_handler (GtkWidget* widget, GdkEventAny* ev, gpointer ptr) {
-	bool* hf = (bool*) ptr;
-	*hf = FALSE;
-	return FALSE;
-}
-
-static void
-midifilter_handler (GtkWidget* widget, GJFST *gjfst) {
-	if (gjfst->have_fwin) return;
-	gjfst->have_fwin = TRUE;
-	JFST* jfst = gjfst->jfst;
-
-	GtkWidget* fwin = gtk_window_new (GTK_WINDOW_TOPLEVEL);
-	gtk_window_set_default_size (GTK_WINDOW (fwin), 400, -1);
-//	gtk_widget_set_size_request (fwin, 400, -1);
-	gtk_window_set_icon(GTK_WINDOW(fwin), gdk_pixbuf_new_from_xpm_data((const char**) fsthost_xpm));
-	g_signal_connect (G_OBJECT(fwin), "delete_event", G_CALLBACK(fwin_destroy_handler), &gjfst->have_fwin);
-	GtkWidget* ftoolbar = gtk_toolbar_new();
-
-	gjfst->fvpacker = gtk_box_new (GTK_ORIENTATION_VERTICAL, 7);
-
-	gtk_container_add (GTK_CONTAINER (fwin), gjfst->fvpacker);
-
-	GtkToolItem* button_new = gtk_tool_button_new_from_stock(GTK_STOCK_ADD);
-	gtk_toolbar_insert(GTK_TOOLBAR(ftoolbar), button_new, 0);
-	gtk_box_pack_start(GTK_BOX(gjfst->fvpacker), ftoolbar, FALSE, FALSE, 0);
-	gtk_widget_set_tooltip_text(GTK_WIDGET(button_new), "New Filter");
-	g_signal_connect (G_OBJECT(button_new),  "clicked", G_CALLBACK(filter_new_handler), gjfst);
-
-	MIDIFILTER *f;
-	for (f = jfst->filters; f; f = f->next) filter_addrow(gjfst->fvpacker, &jfst->filters, f);
-
-	gtk_widget_show_all (fwin);
-}
-
 static gboolean
 destroy_handler (GtkWidget* widget, GdkEventAny* ev, gpointer ptr) {
 	GJFST* gjfst = (GJFST*) ptr;
@@ -881,6 +884,7 @@ static int gjfst_xerror_handler( Display *disp, XErrorEvent *ev ) {
 	}
 }
 
+/* ------------------------------- PUBLIC ---------------------------------------------- */
 void gjfst_add (JFST* jfst) {
 //	g_info("GTK Thread WineID: %d | LWP: %d", GetCurrentThreadId (), (int) syscall (SYS_gettid));
 
@@ -923,7 +927,7 @@ void gjfst_start() {
 }
 
 void gjfst_free(JFST* jfst) {
-	GJFST* gjfst = jfst->user_ptr;
+	GJFST* gjfst = (GJFST*) jfst->user_ptr;
 	free( gjfst );
 }
 
