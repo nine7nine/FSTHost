@@ -305,7 +305,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	}
 
 	log_init ( log_level, NULL, NULL );
-	log_info( "FSTHost Version: %s (%s)\n", VERSION, ARCH "bit" );
+	log_info( "FSTHost Version: %s (%s)", VERSION, ARCH "bit" );
 
 	/* Under Jack Session Manager Control "-p -j !" is forced */
 	if ( getenv("SESSION_DIR") ) {
