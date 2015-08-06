@@ -6,7 +6,7 @@
 
 #define ERROR_STRING "ERROR: "
 
-static LogSeverity log_severity = LOG_ERROR;
+static LogLevel log_level = LOG_ERROR;
 static void* user_ptr = NULL;
 
 static void default_log_callback (const char *msg, void* arg) {
@@ -15,8 +15,8 @@ static void default_log_callback (const char *msg, void* arg) {
 
 static LogCallback log_callback = &default_log_callback;
 
-static void logprintf (LogSeverity severity, const char *fmt, va_list ap ) {
-	if ( severity > log_severity ) return;
+static void logprintf (LogLevel level, const char *fmt, va_list ap ) {
+	if ( level > log_level ) return;
 
 	char buffer[LOG_MAX_LINE_LEN];
 	vsnprintf (buffer, sizeof buffer, fmt, ap);
@@ -49,8 +49,8 @@ void log_debug ( const char* fmt, ... ) {
 	va_end (ap);
 }
 
-void log_init( LogSeverity severity, LogCallback callback, void* arg ) {
-	log_severity = severity;
+void log_init( LogLevel level, LogCallback callback, void* arg ) {
+	log_level = level;
 	if ( callback != NULL ) log_callback = callback;
 	user_ptr = arg;
 }

@@ -189,6 +189,7 @@ static void usage(char* appname) {
 	fprintf(stderr, format, "-T", "Separate threads");
 	fprintf(stderr, format, "-u uuid", "JackSession UUID");
 	fprintf(stderr, format, "-U SysExID", "SysEx ID (1-127). 0 is default (do not use it)");
+	fprintf(stderr, format, "-v", "Verbose");
 	fprintf(stderr, format, "-V", "Disable Volume control / filtering CC7 messages");
 }
 
@@ -257,6 +258,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	const char*	connect_to = NULL;
 	const char*	custom_path = NULL;
 	bool		serv = false;
+	LogLevel	log_level = LOG_INFO;
 
 	JFST*	jfst = jfst_new( APPNAME_ARCH );
 	jfst_first = jfst;
@@ -272,7 +274,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
         // Parse command line options
 	cmdline2arg(&argc, &argv, cmdline);
 	short c;
-	while ( (c = getopt (argc, argv, "Abd:egs:S:c:k:i:j:lLnNm:pPo:Tu:U:V")) != -1) {
+	while ( (c = getopt (argc, argv, "Abd:egs:S:c:k:i:j:lLnNm:pPo:Tu:U:vV")) != -1) {
 		switch (c) {
 			case 'A': jfst->want_port_aliases = true; break;
 			case 'b': jfst->bypassed = true; break;
@@ -296,12 +298,13 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 			case 'T': separate_threads = true;
 			case 'u': jfst->uuid = optarg; break;
 			case 'U': jfst_sysex_set_uuid( jfst, strtol(optarg, NULL, 10) ); break;
+			case 'v': log_level = LOG_DEBUG; break;
 			case 'V': jfst->volume = -1; break;
 			default: usage (argv[0]); return 1;
 		}
 	}
 
-	log_init ( LOG_INFO, NULL, NULL );
+	log_init ( log_level, NULL, NULL );
 	log_info( "FSTHost Version: %s (%s)\n", VERSION, ARCH "bit" );
 
 	/* Under Jack Session Manager Control "-p -j !" is forced */
