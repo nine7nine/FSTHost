@@ -1,4 +1,4 @@
-#include <stdlib.h>
+#include <stddef.h>
 
 extern int fst_info_list(const char* dbpath, const char* arch);
 
