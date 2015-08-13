@@ -31,6 +31,7 @@ extern double CPUusage_getCurrentValue();
 #endif /* (GTK_MAJOR_VERSION < 3) */
 
 static short mode_cc = 0;
+static bool no_cpu_usage = false;
 
 static	GtkWidget* window;
 static	GtkWidget* gtk_socket;
@@ -59,6 +60,7 @@ typedef struct {
 	gulong preset_listbox_signal;
 	gulong volume_signal;
 	bool have_fwin;
+	bool have_cpu_usage;
 } GJFST;
 
 typedef int (*error_handler_t)( Display *, XErrorEvent *);
@@ -737,9 +739,11 @@ idle_cb(GJFST *gjfst) {
 	channel_check(GTK_COMBO_BOX(gjfst->channel_listbox), jfst);
 
 	// CPU Usage
-	gchar tmpstr[24];
-	sprintf(tmpstr, "%06.2f", CPUusage_getCurrentValue());
-	gtk_label_set_text(GTK_LABEL(gjfst->cpu_usage), tmpstr);
+	if ( gjfst->have_cpu_usage ) {
+		gchar tmpstr[24];
+		sprintf(tmpstr, "%06.2f", CPUusage_getCurrentValue());
+		gtk_label_set_text(GTK_LABEL(gjfst->cpu_usage), tmpstr);
+	}
 
 	// All about Bypass/Resume
 	if (jfst->bypassed != gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(gjfst->bypass_button))) {
@@ -747,6 +751,7 @@ idle_cb(GJFST *gjfst) {
 	}
 	if (jfst->want_state_cc != mode_cc) {
 		mode_cc = jfst->want_state_cc;
+		gchar tmpstr[24];
 		sprintf(tmpstr, "Bypass (MIDI CC: %d)", mode_cc);
 		gtk_widget_set_tooltip_text(gjfst->bypass_button, tmpstr);
 	}
@@ -846,9 +851,15 @@ static GJFST* gjfst_new ( JFST* jfst ) {
 	gjfst->change_pn = make_img_button(GTK_STOCK_EDIT, "Change program name", FALSE, &change_name_handler,
 		gjfst, FALSE, hpacker);
 	//------- CPU USAGE ----------------------------------------------------------------------------
-	gjfst->cpu_usage = gtk_label_new ("0");
-	gtk_box_pack_start(GTK_BOX(hpacker), gjfst->cpu_usage, FALSE, FALSE, 0);
-	gtk_widget_set_tooltip_text(gjfst->cpu_usage, "CPU Usage");
+	if ( no_cpu_usage ) {
+		gjfst->have_cpu_usage = false;
+	} else {
+		no_cpu_usage = true;
+		gjfst->have_cpu_usage = true;
+		gjfst->cpu_usage = gtk_label_new ("0");
+		gtk_box_pack_start(GTK_BOX(hpacker), gjfst->cpu_usage, FALSE, FALSE, 0);
+		gtk_widget_set_tooltip_text(gjfst->cpu_usage, "CPU Usage");
+	}
 	//------- VU METER -----------------------------------------------------------------------------
 #ifdef VUMETER
 	gjfst->vumeter = gtk_drawing_area_new();
@@ -914,9 +925,6 @@ void gjfst_init(int *argc, char **argv[]) {
 
 	vpacker = gtk_box_new (GTK_ORIENTATION_VERTICAL, 7);
 	gtk_container_add (GTK_CONTAINER (window), vpacker);
-
-	// "global" idle
-        g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 100, (GSourceFunc) fsthost_idle, NULL, NULL);
 }
 
 void gjfst_start() {

@@ -9,8 +9,8 @@
 #define ACK "<OK>"
 #define NAK "<FAIL>"
 
-/* jfst.c */
-extern void jfst_quit(JFST* jfst);
+/* fsthost.c */
+extern void fsthost_quit();
 
 /* cpuusage.c */
 extern void CPUusage_init();
@@ -270,7 +270,8 @@ static bool jfst_proto_client_dispatch ( JFST* jfst, char* msg, uint8_t* changes
 		help( client_sock );
 		break;
 	case CMD_KILL:
-		jfst_quit ( jfst );
+		// TODO: close only this plugin
+		fsthost_quit();
 		break;
 	case CMD_UNKNOWN:
 	default:
