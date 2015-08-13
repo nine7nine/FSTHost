@@ -18,6 +18,33 @@ extern void jfst_sysex_handler ( JFST* jfst );
 extern void jfst_sysex_notify ( JFST* jfst );
 extern void jfst_sysex_gen_random_id ( JFST* jfst );
 
+static JFST_DEFAULTS def = {
+.want_port_aliases = false,
+.with_editor = WITH_EDITOR_SHOW,
+.want_state_cc = 122, /* Local Keyboard MIDI CC message (122) is probably not used by any VST */
+.midi_pc = MIDI_PC_PLUG, // plugin take care of Program Change
+.want_auto_midi_physical = true, // By default autoconnect MIDI In port to all physical
+.bypassed = false,
+.dbinfo_file = NULL,
+.state_file = NULL, /* XXX: shared */
+.ctrl_port_number = 0, /* XXX: shared */
+.client_name = NULL, /* XXX: shared */
+.channel = 0, /* XXX: shared */
+.maxIns = -1,
+.maxOuts = -1,
+.want_auto_midi_physical = true,
+.sysex_want_notify = false,
+.want_state_cc = 0,
+.uuid = NULL, /* XXX: shared */
+.sysex_uuid = 0, /* XXX: shared */
+.connect_to = NULL,
+.no_volume = false,
+};
+
+JFST_DEFAULTS* jfst_get_defaults() {
+	return &def;
+}
+
 JFST* jfst_new( const char* appname ) {
 	JFST* jfst = calloc (1, sizeof (JFST));
 
@@ -26,14 +53,22 @@ JFST* jfst_new( const char* appname ) {
 	pthread_mutex_init (&jfst->sysex_lock, NULL);
 	pthread_cond_init (&jfst->sysex_sent, NULL);
 
-	jfst->with_editor = WITH_EDITOR_SHOW;
-	jfst->volume = 1; // 63 here mean zero
-	/* Local Keyboard MIDI CC message (122) is probably not used by any VST */
-	jfst->want_state_cc = 122;
-	jfst->midi_pc = MIDI_PC_PLUG; // plugin take care of Program Change
-	jfst->want_auto_midi_physical = true; // By default autoconnect MIDI In port to all physical
-
 	event_queue_init ( &jfst->event_queue );
+
+	jfst->want_port_aliases = def.want_port_aliases;
+	jfst->bypassed = def.bypassed;
+	jfst->dbinfo_file = (char*) def.dbinfo_file;
+	jfst->with_editor = def.with_editor;
+	jfst->default_state_file = (char*) def.state_file;
+	jfst->ctrl_port_number = def.ctrl_port_number;
+	jfst->client_name = (char*) def.client_name;
+	jfst->want_auto_midi_physical = def.want_auto_midi_physical;
+	jfst->midi_pc = def.midi_pc;
+	jfst->sysex_want_notify = def.sysex_want_notify;
+	jfst->want_state_cc = def.want_state_cc;
+	jfst->uuid = def.uuid;
+	jfst->volume = ( def.no_volume ) ? -1 : 1; // 63 here mean zero (?!?)
+	jfst_sysex_set_uuid(jfst, def.sysex_uuid);
 
 	/* MidiLearn */
 	short i;
@@ -45,6 +80,7 @@ JFST* jfst_new( const char* appname ) {
 
 	jfst->transposition = midi_filter_transposition_init ( &jfst->filters );
 	midi_filter_one_channel_init( &jfst->filters, &jfst->channel );
+	midi_filter_one_channel_set(&jfst->channel, def.channel);
 	
 	jfst_sysex_init ( jfst );
 
@@ -79,8 +115,10 @@ static void jfst_set_aliases ( JFST* jfst, FSTPortType type ) {
 			jack_port_set_alias ( ports[i], name );
 }
 
-bool jfst_init( JFST* jfst, int32_t max_in, int32_t max_out ) {
+bool jfst_init( JFST* jfst ) {
 	FST* fst = jfst->fst;
+	int32_t max_in = def.maxIns;
+	int32_t max_out = def.maxOuts;
 
 	// Set client name (if user did not provide own)
 	if (!jfst->client_name) jfst->client_name = fst->handle->name;
@@ -109,6 +147,16 @@ bool jfst_init( JFST* jfst, int32_t max_in, int32_t max_out ) {
 	fst_configure( fst, jfst->sample_rate, jfst->buffer_size );
 
 	jfst_sysex_gen_random_id ( jfst );
+
+	// Activate plugin
+	if (! jfst->bypassed)
+		fst_call ( jfst->fst, RESUME );
+
+	log_info( "Jack Activate" );
+	jack_activate(jfst->client);
+
+	// Autoconnect AUDIO on start
+	jfst_connect_audio(jfst, def.connect_to);
 
 	return true;
 }

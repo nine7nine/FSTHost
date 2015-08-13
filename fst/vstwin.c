@@ -688,7 +688,7 @@ bool fst_event_callback() {
 
 void fst_show_thread_info ( const char* th_name ) {
 	HANDLE* h_thread = GetCurrentThread();
-        INF("%s Thread W32ID: %d | LWP: %d | W32 Class: %d | W32 Priority: %d\n",
+        INF("%s Thread W32ID: %d | LWP: %d | W32 Class: %d | W32 Priority: %d",
 		th_name,
 		GetCurrentThreadId(),
 		(int) syscall (SYS_gettid),

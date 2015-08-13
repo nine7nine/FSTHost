@@ -12,6 +12,7 @@
 #include "fst/fst.h"
 #include "midifilter/midifilter.h"
 
+#define JFST_STR_NO_CONNECT "!"
 #define CTRLAPP "FHControl"
 
 enum MidiPC {
@@ -62,6 +63,27 @@ typedef struct {
 	int8_t		cc;
 	int32_t		param;
 } MidiLearn;
+
+typedef struct {
+	bool want_port_aliases;
+	bool bypassed;
+	const char* dbinfo_file;
+	enum WithEditor with_editor;
+	const char* state_file; /* XXX: shared */
+	uint16_t ctrl_port_number; /* XXX: shared */
+	const char* client_name; /* XXX: shared */
+	uint8_t channel; /* XXX: shared */
+	int32_t maxIns;
+	int32_t maxOuts;
+	const char* connect_to;
+	bool want_auto_midi_physical;
+	enum MidiPC midi_pc;
+	bool sysex_want_notify;
+	short want_state_cc;
+	char* uuid; /* XXX: shared */
+	uint8_t sysex_uuid; /* XXX: shared */
+	bool no_volume;
+} JFST_DEFAULTS;
 
 typedef struct _JFST {
 	const char*	appname;
@@ -124,8 +146,9 @@ static inline void jfst_set_gui_resize_cb ( JFST* jfst, void (*f) ) {
 }
 
 /* jfst.c */
+JFST_DEFAULTS* jfst_get_defaults();
 JFST* jfst_new( const char* appname );
-bool jfst_init( JFST* jfst, int32_t max_in, int32_t max_out );
+bool jfst_init( JFST* jfst );
 bool jfst_load(JFST* jfst, const char* plug_spec, bool want_state_and_amc, bool state_can_fail);
 bool jfst_load_state(JFST* jfst, const char * filename);
 bool jfst_save_state(JFST* jfst, const char * filename);
