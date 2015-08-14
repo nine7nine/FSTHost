@@ -20,6 +20,7 @@ typedef struct {
 	const char* cmd;
 	const char* plugin;
 	const char* value;
+	JFST* jfst;
 } CMD;
 
 void msg2cmd( char* msg, CMD* cmd ) {
@@ -27,9 +28,9 @@ void msg2cmd( char* msg, CMD* cmd ) {
 	short i;
 	for ( i=0, i < 3; i++ ) {
 		switch ( i ) {
-			case 0: cmd.cmd = p; break;
-			case 1: cmd.plugin = p; break;
-			case 2: cmd.value = p; break;
+			case 0: cmd->cmd = p; break;
+			case 1: cmd->plugin = p; break;
+			case 2: cmd->value = p; break;
 		}
 
 		// Find and replace next token
@@ -42,6 +43,7 @@ void msg2cmd( char* msg, CMD* cmd ) {
 			}
 		}
 	}
+	cmd->jfst = NULL;
 }
 
 static void send_fmt ( int client_sock, const char* fmt, ... ) {
@@ -317,20 +319,23 @@ bool jfst_proto_client_dispatch ( JFST* jfst, char* msg, uint8_t* changes, int c
 /******************** SERV ***********************************/
 
 static bool handle_client_callback ( char* msg, int client_sock, uint8_t* changes, void* data ) {
-	CMD cmd;
-	msg2cmd( msg, &cmd );
 
 	JFST_NODE** jfst_nodes = (JFST_NODE**) data;
 
-	bool ret = true;
-	JFST_NODE* jn = *jfst_nodes; /* first */
-	for ( ; jn; jn = jn->next ) {
-		log_info( "serv callback - CHUJ" );
-		JFST* jfst = jn->jfst;
-		if ( ! jfst_proto_client_dispatch(jfst,msg,changes,client_sock) )
-			ret = false;
+	CMD cmd;
+	msg2cmd( msg, &cmd );
+
+	if ( cmd.plugin != '\0' ) {
+		JFST_NODE* jn = *jfst_nodes; /* first */
+		for ( ; jn; jn = jn->next ) {
+			if ( !strcmp(jn->jfst->client_name,cmd.plugin) ) {
+				cmd.jfst = jn->jfst;
+				break;
+			}
+		}
 	}
-	return ret;
+
+	return proto_client_dispatch( CMD* cmd, changes, client_sock );
 }
 
 /* Public functions */
