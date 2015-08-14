@@ -96,7 +96,7 @@ jfst_node_free_all() {
 	}
 }
 
-/******************** JFST_NODE ***********************************/
+/*************************************************************/
 
 void fsthost_quit() {
 	quit = true;
@@ -333,6 +333,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	bool		opt_generate_dbinfo = false;
 	bool		opt_list_plugins = false;
 	bool		have_serv = false;
+	uint16_t	ctrl_port_number = 0;
 	const char*	custom_path = NULL;
 	LogLevel	log_level = LOG_INFO;
 
@@ -358,7 +359,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 			case 'g': opt_generate_dbinfo = true; break;
 			case 'L': opt_list_plugins = true; break;
 			case 's': def->state_file = optarg; break;
-			case 'S': have_serv=true; def->ctrl_port_number = strtol(optarg,NULL,10); break;
+			case 'S': have_serv=true; ctrl_port_number = strtol(optarg,NULL,10); break;
 			case 'c': def->client_name = optarg; break;
 			case 'k': def->channel = strtol(optarg, NULL, 10); break;
 			case 'i': def->maxIns = strtol(optarg, NULL, 10); break;
@@ -405,10 +406,11 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 #ifdef HAVE_LASH
 	jfst_lash_init(jfst, &argc, &argv);
 #endif
-	// Socket stuff
-	if ( have_serv && ! jfst_proto_init(jfst) )
-		return 1;
 */
+	// Socket stuff
+	if ( have_serv && ! fsthost_proto_init(&jfst_node_first,ctrl_port_number) )
+		return 1;
+
 	// Set Thread policy - usefull only with WineRT/LPA patch
 	//fst_set_thread_priority ( "Main", REALTIME_PRIORITY_CLASS, THREAD_PRIORITY_TIME_CRITICAL );
 	fst_set_thread_priority ( "Main", ABOVE_NORMAL_PRIORITY_CLASS, THREAD_PRIORITY_ABOVE_NORMAL );
@@ -428,6 +430,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 		if ( ! plugin_new( argv[optind] ) )
 			goto game_over;
 	}
+
 #ifdef NO_GTK
 	main_loop();
 #else

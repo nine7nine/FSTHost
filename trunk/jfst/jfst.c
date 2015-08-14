@@ -27,7 +27,6 @@ static JFST_DEFAULTS def = {
 .bypassed = false,
 .dbinfo_file = NULL,
 .state_file = NULL, /* XXX: shared */
-.ctrl_port_number = 0, /* XXX: shared */
 .client_name = NULL, /* XXX: shared */
 .channel = 0, /* XXX: shared */
 .maxIns = -1,
@@ -60,7 +59,6 @@ JFST* jfst_new( const char* appname ) {
 	jfst->dbinfo_file = (char*) def.dbinfo_file;
 	jfst->with_editor = def.with_editor;
 	jfst->default_state_file = (char*) def.state_file;
-	jfst->ctrl_port_number = def.ctrl_port_number;
 	jfst->client_name = (char*) def.client_name;
 	jfst->want_auto_midi_physical = def.want_auto_midi_physical;
 	jfst->midi_pc = def.midi_pc;

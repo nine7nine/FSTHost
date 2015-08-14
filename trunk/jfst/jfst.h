@@ -109,7 +109,6 @@ typedef struct _JFST {
 	enum WithEditor	with_editor;
 	float		volume;		/* where 0.0 mean silence */
 	uint8_t		out_level;	/* for VU-meter */
-	uint16_t	ctrl_port_number;
 	char*		uuid;		/* Jack Session support */
 
 	MidiLearn	midi_learn;
@@ -173,8 +172,5 @@ void jfst_send_sysex(JFST* jfst, SysExType type);
 
 /* process.c */
 void jfst_process( JFST* jfst, jack_nframes_t nframes );
-
-/* jfstproto.c */
-bool jfst_proto_init ( JFST* jfst );
 
 #endif /* __jfst_h__ */
