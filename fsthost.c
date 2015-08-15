@@ -50,53 +50,13 @@ extern void jfst_lash_init(JFST *jfst, int* argc, char** argv[]);
 extern bool jfst_lash_idle(JFST *jfst);
 #endif
 
+/* fsthost_proto */
+bool fsthost_proto_init( uint16_t ctrl_port_number );
+
 volatile bool quit = false;
 volatile bool open_editor = false;
 volatile bool separate_threads = false;
 volatile bool sigusr1_save_state = false;
-
-/******************** JFST_NODE ***********************************/
-typedef struct _JFST_NODE {
-	struct _JFST_NODE* next;
-	JFST* jfst;
-} JFST_NODE;
-
-JFST_NODE* jfst_node_first = NULL;
-
-static JFST_NODE*
-jfst_node_new() {
-	JFST_NODE* n = malloc ( sizeof(JFST_NODE) );
-	n->jfst = jfst_new( APPNAME_ARCH );
-	n->next = NULL;
-
-	/* Link to list */
-	if ( jfst_node_first ) {
-		JFST_NODE* p = jfst_node_first;
-		while ( p->next ) p = p->next;
-		p->next = n;
-	} else {
-		jfst_node_first = n; // I'm the first !
-	}
-
-	return n;
-}
-
-static void
-jfst_node_free_all() {
-	JFST_NODE* n = jfst_node_first;
-	while ( n ) {
-		JFST_NODE* t = n;
-		n = n->next;
-
-		log_info( "Jack Deactivate (%s)", t->jfst->client_name );
-		jack_deactivate ( t->jfst->client );
-
-		jfst_close(t->jfst);
-		free(t);
-	}
-}
-
-/*************************************************************/
 
 void fsthost_quit() {
 	quit = true;
@@ -122,7 +82,7 @@ static void signal_handler (int signum) {
 		break;
 	case SIGUSR1:
 		log_info("Caught signal to save state (SIGUSR1)");
-		JFST *jfst = jfst_node_first->jfst;
+		JFST *jfst = jfst_node_get_first()->jfst;
 		if (sigusr1_save_state && jfst->default_state_file) {
 			jfst_save_state(jfst, jfst->default_state_file);
 		} else {
@@ -137,11 +97,11 @@ static void signal_handler (int signum) {
 }
 
 bool fsthost_idle () {
-	if ( ! jfst_node_first ) return true;
-	Changes change;
+	if ( ! jfst_node_get_first() ) return true;
+	Changes change = 0;
 
-	JFST_NODE* jn;
-	for ( jn = jfst_node_first; jn; jn = jn->next ) {
+	JFST_NODE* jn= jfst_node_get_first();
+	for ( ; jn; jn = jn->next ) {
 		JFST* jfst = jn->jfst;;
 
 		change = jfst_idle ( jfst );
@@ -163,7 +123,7 @@ quit:
 
 	if ( open_editor ) {
 		open_editor = false;
-		for ( jn = jfst_node_first; jn; jn = jn->next )
+		for ( jn = jfst_node_get_first(); jn; jn = jn->next )
 			fst_run_editor( jn->jfst->fst, false );
 	}
 
@@ -298,7 +258,7 @@ main_loop() {
 
 static bool
 plugin_new( const char* custom_path ) {
-	JFST_NODE* jn = jfst_node_new();
+	JFST_NODE* jn = jfst_node_new(APPNAME);
 	JFST* jfst = jn->jfst;
 
 	/* Load plugin - in this thread or dedicated */
@@ -408,7 +368,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 #endif
 */
 	// Socket stuff
-	if ( have_serv && ! fsthost_proto_init(&jfst_node_first,ctrl_port_number) )
+	if ( have_serv && ! fsthost_proto_init(ctrl_port_number) )
 		return 1;
 
 	// Set Thread policy - usefull only with WineRT/LPA patch
@@ -439,13 +399,13 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 		log_info( "Start GUI" );
 		gjfst_init(&argc, &argv);
 
-		JFST_NODE* jn;
-		for ( jn = jfst_node_first; jn; jn = jn->next )
+		JFST_NODE* jn = jfst_node_get_first();
+		for ( ; jn; jn = jn->next )
 			gjfst_add( jn->jfst );
 
 		gjfst_start();
 
-		for ( jn = jfst_node_first; jn; jn = jn->next )
+		for ( jn = jfst_node_get_first(); jn; jn = jn->next )
 			gjfst_free( jn->jfst );
 	} else {
 		g_main_loop = g_main_loop_new(NULL, TRUE);

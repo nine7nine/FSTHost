@@ -68,7 +68,7 @@ LDFLAGS32          := -m32 $(LDFLAGS) -L/usr/lib/i386-linux-gnu/wine
 LDFLAGS64          := -m64 $(LDFLAGS)
 
 ### Global source lists
-C_SRCS             := fsthost.c cpuusage.c
+C_SRCS             := fsthost.c cpuusage.c proto.c
 
 # JFST
 C_SRCS             += $(wildcard jfst/*.c)

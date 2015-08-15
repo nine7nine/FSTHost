@@ -3,8 +3,8 @@
 #include <string.h>
 
 #include "serv/serv.h"
+#include "jfst/jfst.h"
 #include "log/log.h"
-#include "jfst.h"
 
 #define ACK "<OK>"
 #define NAK "<FAIL>"
@@ -15,36 +15,6 @@ extern void fsthost_quit();
 /* cpuusage.c */
 extern void CPUusage_init();
 extern double CPUusage_getCurrentValue();
-
-typedef struct {
-	const char* cmd;
-	const char* plugin;
-	const char* value;
-	JFST* jfst;
-} CMD;
-
-void msg2cmd( char* msg, CMD* cmd ) {
-	char* p = msg;
-	short i;
-	for ( i=0, i < 3; i++ ) {
-		switch ( i ) {
-			case 0: cmd->cmd = p; break;
-			case 1: cmd->plugin = p; break;
-			case 2: cmd->value = p; break;
-		}
-
-		// Find and replace next token
-		while ( *p != '\0' ) {
-			p++; // assume at least one character token
-			if ( *p == ':' || *p == ' ' ) {
-				*p = '\0';
-				p++;
-				break;
-			}
-		}
-	}
-	cmd->jfst = NULL;
-}
 
 static void send_fmt ( int client_sock, const char* fmt, ... ) {
 	va_list ap;
@@ -106,9 +76,9 @@ static void get_volume ( JFST* jfst, int sock ) {
 	send_fmt( sock, "VOLUME:%d", jfst_get_volume(jfst) );
 }
 
-//static void cpu_usage ( int sock ) {
-//	send_fmt( sock, "%g", CPUusage_getCurrentValue() );
-//}
+static void cpu_usage ( int sock ) {
+	send_fmt( sock, "%g", CPUusage_getCurrentValue() );
+}
 
 static void news ( JFST* jfst, int sock, uint8_t* changes ) {
 
@@ -135,9 +105,10 @@ static void news ( JFST* jfst, int sock, uint8_t* changes ) {
 	*changes = 0;
 }
 
-enum PROTO_CMD {
+typedef enum {
 	CMD_UNKNOWN,
 	CMD_EDITOR,
+	CMD_LIST_PLUGINS,
 	CMD_LIST_PROGRAMS,
 	CMD_LIST_PARAMS,
 	CMD_LIST_MIDI_MAP,
@@ -153,19 +124,20 @@ enum PROTO_CMD {
 	CMD_LOAD,
 	CMD_SAVE,
 	CMD_NEWS,
-//	CMD_CPU,
+	CMD_CPU,
 	CMD_HELP,
 	CMD_QUIT,
 	CMD_KILL
-};
+} PROTO_CMD;
 
 struct PROTO_MAP {
-	enum PROTO_CMD key;
+	PROTO_CMD key;
 	const char* name;
 };
 
 static struct PROTO_MAP proto_string_map[] = {
 	{ CMD_EDITOR, "editor" },
+	{ CMD_LIST_PLUGINS, "list_plugins" },
 	{ CMD_LIST_PROGRAMS, "list_programs" },
 	{ CMD_LIST_PARAMS, "list_params" },
 	{ CMD_LIST_MIDI_MAP, "list_midi_map" },
@@ -181,20 +153,60 @@ static struct PROTO_MAP proto_string_map[] = {
 	{ CMD_LOAD, "load" },
 	{ CMD_SAVE, "save" },
 	{ CMD_NEWS, "news" },
-//	{ CMD_CPU, "cpu" },
+	{ CMD_CPU, "cpu" },
 	{ CMD_HELP, "help" },
 	{ CMD_QUIT, "quit" },
 	{ CMD_KILL, "kill" },
 	{ CMD_UNKNOWN, NULL }
 };
 
-static enum PROTO_CMD proto_lookup ( const char* name ) {
+static PROTO_CMD proto_lookup ( const char* name ) {
 	short i;
 	for ( i = 0; proto_string_map[i].key != CMD_UNKNOWN; i++ ) {
 		if ( ! strcasecmp( proto_string_map[i].name, name ) )
 			return proto_string_map[i].key;
 	}
 	return CMD_UNKNOWN;
+}
+
+typedef struct {
+	const char* cmd;
+	const char* plugin;
+	const char* value;
+	PROTO_CMD proto_cmd;
+	JFST* jfst;
+	/* return */
+	bool ack;
+	bool quit;
+	bool done;
+} CMD;
+
+void msg2cmd( char* msg, CMD* cmd ) {
+	char* p = msg;
+	short i;
+	for ( i=0; i < 3; i++ ) {
+		switch ( i ) {
+			case 0: cmd->cmd = p; break;
+			case 1: cmd->plugin = p; break;
+			case 2: cmd->value = p; break;
+		}
+
+		// Find and replace next token
+		while ( *p != '\0' ) {
+			p++; // assume at least one character token
+			if ( *p == ':' || *p == ' ' ) {
+				*p = '\0';
+				p++;
+				break;
+			}
+		}
+	}
+
+	cmd->proto_cmd = proto_lookup( cmd->cmd );
+	cmd->ack = false;
+	cmd->quit = false;
+	cmd->done = false;
+	cmd->jfst = NULL;
 }
 
 static void help( int sock ) {
@@ -207,23 +219,13 @@ static void help( int sock ) {
 	serv_send_client_data ( sock, msg );
 }
 
-bool jfst_proto_client_dispatch ( JFST* jfst, char* msg, uint8_t* changes, int client_sock ) {
-	log_debug ( "GOT MSG: %s", msg );
-
-	bool ret = true;
-	bool ack = true;
-
-	char* value = msg;
-	while ( *(++value) != '\0' ) { // at least one character cmd
-		if ( *value == ':' || *value == ' ' ) {
-			*value = '\0';
-			value++;
-			break;
-		}
-	}
+void jfst_proto_dispatch( CMD* cmd, uint8_t* changes, int client_sock ) {
+	JFST* jfst = cmd->jfst;
+	const char* value = cmd->value;
+	cmd->done = cmd->ack = true;
 
 	uint8_t all_changes = -1;
-	switch ( proto_lookup ( msg ) ) {
+	switch ( cmd->proto_cmd ) {
 	case CMD_EDITOR:
 		if ( !strcasecmp(value, "open") ) {
 			fst_run_editor ( jfst->fst, false );
@@ -231,7 +233,7 @@ bool jfst_proto_client_dispatch ( JFST* jfst, char* msg, uint8_t* changes, int c
 			fst_call ( jfst->fst, EDITOR_CLOSE );
 		} else {
 			puts ( "Need value: open|close" );
-			ack = false;
+			cmd->ack = false;
 		}
 		break;
 	case CMD_LIST_PROGRAMS:
@@ -262,7 +264,7 @@ bool jfst_proto_client_dispatch ( JFST* jfst, char* msg, uint8_t* changes, int c
 			jfst_midi_learn(jfst, false);
 		} else {
 			puts ( "Need value: start|stop" );
-			ack = false;
+			cmd->ack = false;
 		}
 		break;
 	case CMD_SET_VOLUME:
@@ -278,10 +280,10 @@ bool jfst_proto_client_dispatch ( JFST* jfst, char* msg, uint8_t* changes, int c
 		jfst_bypass ( jfst, false );
 		break;
 	case CMD_LOAD:
-		ack = jfst_load_state ( jfst, value );
+		cmd->ack = jfst_load_state ( jfst, value );
 		break;
 	case CMD_SAVE:
-		ack = jfst_save_state ( jfst, value );
+		cmd->ack = jfst_save_state ( jfst, value );
 		break;
 	case CMD_NEWS:
 		if ( !strcasecmp(value,"all") ) {
@@ -290,58 +292,79 @@ bool jfst_proto_client_dispatch ( JFST* jfst, char* msg, uint8_t* changes, int c
 			news( jfst, client_sock, changes );
 		}
 		break;
-//	case CMD_CPU:
-//		cpu_usage( client_sock );
-//		break;
-	case CMD_QUIT:
-		ret = false;
-		break;
-	case CMD_HELP:
-		help( client_sock );
-		break;
 	case CMD_KILL:
 		// TODO: close only this plugin
 		fsthost_quit();
 		break;
-	case CMD_UNKNOWN:
 	default:
-		log_error ( "Unknown command: %s", msg );
-		ack = false;
+		cmd->ack = cmd->done = false;
 	}
-
-	// Send ACK / NAK
-	const char* RESP = (ack) ? ACK : NAK;
-	serv_send_client_data ( client_sock, RESP );
-
-	return ret;
 }
 
 /******************** SERV ***********************************/
 
+void fsthost_proto_dispatch ( CMD* cmd, int client_sock ) {
+	cmd->ack = cmd->done = true;
+
+	switch ( cmd->proto_cmd ) {
+	case CMD_CPU:
+		cpu_usage( client_sock );
+		break;
+	case CMD_QUIT:
+		cmd->quit = true;
+		break;
+	case CMD_HELP:
+		help( client_sock );
+		break;
+	case CMD_UNKNOWN:
+		log_error ( "GOT INVALID CMD: %s", cmd );
+		cmd->ack = false;
+		break;
+	default:
+		cmd->ack = cmd->done = false;
+	}
+}
+
+static JFST* jfst_get_by_name( const char* name ) {
+	if ( name == '\0' ) return NULL;
+
+	JFST_NODE* jn = jfst_node_get_first();
+	for ( ; jn; jn = jn->next ) {
+		JFST* jfst = jn->jfst;
+		if ( !strcmp( jfst->client_name, name) )
+			return jfst;
+	}
+	return NULL;
+}
+
 static bool handle_client_callback ( char* msg, int client_sock, uint8_t* changes, void* data ) {
-
-	JFST_NODE** jfst_nodes = (JFST_NODE**) data;
-
 	CMD cmd;
 	msg2cmd( msg, &cmd );
 
-	if ( cmd.plugin != '\0' ) {
-		JFST_NODE* jn = *jfst_nodes; /* first */
-		for ( ; jn; jn = jn->next ) {
-			if ( !strcmp(jn->jfst->client_name,cmd.plugin) ) {
-				cmd.jfst = jn->jfst;
-				break;
-			}
-		}
+	fsthost_proto_dispatch( &cmd, client_sock );
+	if ( cmd.done ) goto quit;
+
+	cmd.jfst = jfst_get_by_name( cmd.plugin );
+	if ( ! cmd.jfst ) {
+		log_error( "Invalid plugin name \"%s\"", cmd.plugin );
+		goto quit;
 	}
 
-	return proto_client_dispatch( CMD* cmd, changes, client_sock );
+	jfst_proto_dispatch( &cmd, changes, client_sock );
+
+quit:
+	if ( cmd.done ) log_debug ( "GOT VALID MSG: %s", msg );
+
+	// Send ACK / NAK
+	serv_send_client_data ( client_sock, (cmd.ack) ? ACK : NAK );
+
+	return ( ! cmd.quit );
 }
 
 /* Public functions */
-bool fsthost_proto_init ( JFST_NODE** jfst_nodes, uint16_t ctrl_port_number ) {
+bool fsthost_proto_init ( uint16_t ctrl_port_number ) {
 	log_info ( "Starting JFST control server ..." );
-	bool ok = serv_init ( ctrl_port_number, handle_client_callback, jfst_nodes );
+	bool ok = serv_init ( ctrl_port_number, handle_client_callback, NULL );
 	if ( ! ok ) log_error ( "Cannot create CTRL socket :(" );
 
 	return ok;

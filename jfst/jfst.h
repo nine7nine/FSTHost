@@ -140,6 +140,11 @@ typedef struct _JFST {
 	void*		user_ptr;
 } JFST;
 
+typedef struct _JFST_NODE {
+	struct _JFST_NODE* next;
+	JFST* jfst;
+} JFST_NODE;
+
 static inline void jfst_set_gui_resize_cb ( JFST* jfst, void (*f) ) {
 	jfst->gui_resize = f;
 }
@@ -172,5 +177,10 @@ void jfst_send_sysex(JFST* jfst, SysExType type);
 
 /* process.c */
 void jfst_process( JFST* jfst, jack_nframes_t nframes );
+
+/* node.c */
+JFST_NODE* jfst_node_get_first();
+JFST_NODE* jfst_node_new( const char* appname );
+void jfst_node_free_all();
 
 #endif /* __jfst_h__ */

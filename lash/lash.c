@@ -2,15 +2,15 @@
 #include <lash/lash.h>
 #include "jfst/jfst.h"
 
-static lash_client_t *lash_client = NULL;
+static lash_args_t* lash_args;
 
-void jfst_lash_init(JFST *jfst, int* argc, char** argv[]) {
-	lash_event_t* event;
-	lash_args_t* lash_args = lash_extract_args(argc, argv);
+void jfst_lash_init(int* argc, char** argv[]) {
+	lash_args = lash_extract_args(argc, argv);
+}
 
+void jfst_lash_add ( JFST* jfst ) {
 	int flags = LASH_Config_Data_Set;
-
-	lash_client = lash_init(lash_args, jfst->client_name, flags, LASH_PROTOCOL(2, 0));
+	lash_client_t* lash_client = lash_init(lash_args, jfst->client_name, flags, LASH_PROTOCOL(2, 0));
 
 	if (!lash_client) {
 		fprintf(stderr, "%s: could not initialise lash\n", __FUNCTION__);
@@ -23,6 +23,7 @@ void jfst_lash_init(JFST *jfst, int* argc, char** argv[]) {
 	if (lash_enabled(lash_client))
 		return;
 
+	lash_event_t* event;
 	event = lash_event_new_with_type(LASH_Client_Name);
 	lash_event_set_string(event, jfst->client_name);
 	lash_send_event(lash_client, event);
@@ -94,9 +95,7 @@ jfst_lash_save(JFST *jfst) {
 
 static void
 jfst_lash_restore(lash_config_t *config, JFST *jfst ) {
-	const char *key;
-
-	key = lash_config_get_key(config);
+	const char *key = lash_config_get_key(config);
 
 	if (strncmp(key, "midi_map", strlen( "midi_map")) == 0) {
 	    short cc = atoi( key+strlen("midi_map") );
