@@ -160,12 +160,15 @@ bool jfst_init( JFST* jfst ) {
 }
 
 void jfst_close ( JFST* jfst ) {
-	jack_client_close ( jfst->client );
+	if ( jfst->client )
+		jack_client_close ( jfst->client );
 
-	fst_close(jfst->fst);
+	if ( jfst->fst ) {
+		fst_close(jfst->fst);
 
-	free ( jfst->inports );
-	free ( jfst->outports );
+		free ( jfst->inports );
+		free ( jfst->outports );
+	}
 
 	jfst_destroy( jfst );
 }
