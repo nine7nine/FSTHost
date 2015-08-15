@@ -26,6 +26,14 @@ static void send_fmt ( int client_sock, const char* fmt, ... ) {
 	va_end (ap);
 }
 
+static void list_plugins ( int sock ) {
+	JFST_NODE* jn = jfst_node_get_first();
+	for ( ; jn; jn = jn->next ) {
+		JFST* jfst = jn->jfst;
+		serv_send_client_data( sock, jfst->client_name );
+	}
+}
+
 static void list_programs ( JFST* jfst, int sock ) {
 	char progName[FST_MAX_PROG_NAME];
 
@@ -307,6 +315,9 @@ void fsthost_proto_dispatch ( CMD* cmd, int client_sock ) {
 	cmd->ack = cmd->done = true;
 
 	switch ( cmd->proto_cmd ) {
+	case CMD_LIST_PLUGINS:
+		list_plugins ( client_sock );
+		break;
 	case CMD_CPU:
 		cpu_usage( client_sock );
 		break;
