@@ -246,7 +246,7 @@ void jfst_midi_learn( JFST* jfst, bool learn ) {
 	ml->wait = learn;
 }
 
-static Changes detect_change( JFST* jfst ) {
+Changes jfst_detect_changes( JFST* jfst ) {
         // Wait until program change
         if (jfst->fst->event_call.type == PROGRAM_CHANGE)
 		return 0;
@@ -329,14 +329,14 @@ Changes jfst_idle(JFST* jfst ) {
 		log_info("MIDIMAP CC: %d => %s", ml->cc, name);
 	}
 
-	Changes change = detect_change( jfst );
-	Changes change_sysex_mask = CHANGE_BYPASS|CHANGE_CHANNEL|CHANGE_VOLUME|CHANGE_PROGRAM;
-	if ( change & change_sysex_mask ) {
+	Changes changes = jfst_detect_changes( jfst );
+	Changes changes_sysex_mask = CHANGE_BYPASS|CHANGE_CHANNEL|CHANGE_VOLUME|CHANGE_PROGRAM;
+	if ( changes & changes_sysex_mask ) {
 		// Send notify if we want notify and something change
 		if (jfst->sysex_want_notify) jfst_sysex_notify(jfst);
 	}
 
-	return change;
+	return changes;
 }
 
 typedef enum {

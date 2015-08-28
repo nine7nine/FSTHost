@@ -1,4 +1,4 @@
-#include "jfst.h"
+#include "node.h"
 #include "log/log.h"
 
 static JFST_NODE* jfst_node_first = NULL;
@@ -11,6 +11,10 @@ JFST_NODE* jfst_node_new( const char* appname ) {
 	JFST_NODE* n = malloc ( sizeof(JFST_NODE) );
 	n->jfst = jfst_new( appname );
 	n->next = NULL;
+
+	int i;
+	for ( i=0; i < SERV_POLL_SIZE; i++ )
+		n->changes[i] = 0;
 
 	/* Link to list */
 	if ( jfst_node_first ) {

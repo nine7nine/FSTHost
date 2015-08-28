@@ -25,7 +25,7 @@
 #include <windows.h>
 
 #include "log/log.h"
-#include "jfst/jfst.h"
+#include "jfst/node.h"
 #include "serv/serv.h"
 #include "xmldb/info.h"
 
@@ -98,15 +98,20 @@ static void signal_handler (int signum) {
 
 bool fsthost_idle () {
 	if ( ! jfst_node_get_first() ) return true;
-	Changes change = 0;
 
 	JFST_NODE* jn= jfst_node_get_first();
 	for ( ; jn; jn = jn->next ) {
 		JFST* jfst = jn->jfst;;
 
-		change = jfst_idle ( jfst );
-		if ( change & CHANGE_QUIT )
+		Changes changes = jfst_idle ( jfst );
+		if ( changes & CHANGE_QUIT )
 			quit = true;
+
+		// Update client changes
+		int i;
+		for ( i=0; i < SERV_POLL_SIZE; i++ )
+			jn->changes[i] |= changes;
+
 #ifdef HAVE_LASH
 		if ( ! jfst_lash_idle(jfst) )
 			quit = true;
@@ -119,7 +124,7 @@ quit:
 		return false;
 	}
 
-	serv_poll( change );
+	serv_poll();
 
 	if ( open_editor ) {
 		open_editor = false;

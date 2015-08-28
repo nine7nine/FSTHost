@@ -2,8 +2,7 @@
 #include <stdarg.h>
 #include <string.h>
 
-#include "serv/serv.h"
-#include "jfst/jfst.h"
+#include "jfst/node.h"
 #include "log/log.h"
 
 #define ACK "<OK>"
@@ -16,12 +15,15 @@ extern void fsthost_quit();
 extern void CPUusage_init();
 extern double CPUusage_getCurrentValue();
 
-static void send_fmt ( int client_sock, const char* fmt, ... ) {
+static void jfst_send_fmt ( JFST* jfst, int client_sock, const char* fmt, ... ) {
 	va_list ap;
 	char msg[512];
+	char new_fmt[128];
 
-	va_start (ap, fmt);
-	vsnprintf (msg, sizeof msg, fmt, ap);
+	sprintf( new_fmt, "%s:%s", jfst->client_name, fmt );
+
+	va_start (ap, new_fmt);
+	vsnprintf (msg, sizeof msg, new_fmt, ap);
 	serv_send_client_data ( client_sock, msg );
 	va_end (ap);
 }
@@ -41,7 +43,7 @@ static void list_programs ( JFST* jfst, int sock ) {
 	int32_t i;
 	for ( i = 0; i < fst_num_presets(fst); i++ ) {
 		fst_get_program_name(fst, i, progName, sizeof(progName));
-		send_fmt(sock, "%d:%s", i, progName);
+		jfst_send_fmt(jfst, sock, "%d:%s", i, progName);
         }
 }
 
@@ -52,7 +54,7 @@ static void list_params ( JFST* jfst, int sock ) {
 	int32_t i;
 	for ( i = 0; i < fst_num_params(fst); i++ ) {
 		fst_call_dispatcher ( fst, effGetParamName, i, 0, paramName, 0 );
-		send_fmt(sock, "%d:%s", i, paramName);
+		jfst_send_fmt(jfst, sock, "%d:%s", i, paramName);
         }
 }
 
@@ -68,33 +70,34 @@ static void list_midi_map ( JFST* jfst, int sock ) {
 			continue;
 
 		fst_call_dispatcher( fst, effGetParamName, paramIndex, 0, name, 0 );
-		send_fmt(sock, "%d:%s", cc, name);
+		jfst_send_fmt(jfst, sock, "%d:%s", cc, name);
 	}
 }
 
 static void get_program ( JFST* jfst, int sock ) {
-	send_fmt( sock, "PROGRAM:%d", jfst->fst->current_program );
+	jfst_send_fmt( jfst, sock, "PROGRAM:%d", jfst->fst->current_program );
 }
 
 static void get_channel ( JFST* jfst, int sock ) {
-	send_fmt( sock, "CHANNEL:%d", midi_filter_one_channel_get(&jfst->channel) );
+	jfst_send_fmt( jfst, sock, "CHANNEL:%d", midi_filter_one_channel_get(&jfst->channel) );
 }
 
 static void get_volume ( JFST* jfst, int sock ) {
-	send_fmt( sock, "VOLUME:%d", jfst_get_volume(jfst) );
+	jfst_send_fmt( jfst, sock, "VOLUME:%d", jfst_get_volume(jfst) );
 }
 
 static void cpu_usage ( int sock ) {
-	send_fmt( sock, "%g", CPUusage_getCurrentValue() );
+	char msg[16];
+	snprintf( msg, sizeof msg, "%g", CPUusage_getCurrentValue() );
+	serv_send_client_data ( sock, msg );
 }
 
-static void news ( JFST* jfst, int sock, uint8_t* changes ) {
-
+static void jfst_news ( int sock, JFST* jfst, Changes* changes ) {
 	if ( *changes & CHANGE_BYPASS )
-		send_fmt( sock, "BYPASS:%d", jfst->bypassed );
+		jfst_send_fmt( jfst, sock, "BYPASS:%d", jfst->bypassed );
 
 	if ( *changes & CHANGE_EDITOR )
-		send_fmt( sock, "EDITOR:%d", (bool) jfst->fst->window );
+		jfst_send_fmt( jfst, sock, "EDITOR:%d", (bool) jfst->fst->window );
 
 	if ( *changes & CHANGE_CHANNEL )
 		get_channel(jfst, sock);
@@ -104,13 +107,25 @@ static void news ( JFST* jfst, int sock, uint8_t* changes ) {
 
 	if ( *changes & CHANGE_MIDILE ) {
 		MidiLearn* ml = &jfst->midi_learn;
-		send_fmt( sock, "MIDI_LEARN:%d", ml->wait );
+		jfst_send_fmt( jfst, sock, "MIDI_LEARN:%d", ml->wait );
 	}
 
 	if ( *changes & CHANGE_PROGRAM )
 		get_program( jfst, sock );
 
 	*changes = 0;
+}
+
+static void news ( int sock, int client, bool all ) {
+
+	Changes all_changes = (unsigned int) -1;
+
+	JFST_NODE* jn = jfst_node_get_first();
+	for ( ; jn; jn = jn->next ) {
+		if ( all ) jn->changes = all_changes;
+
+		jfst_news ( sock, jn->jfst, &(jn->changes[client]) );
+	}
 }
 
 typedef enum {
@@ -227,12 +242,11 @@ static void help( int sock ) {
 	serv_send_client_data ( sock, msg );
 }
 
-void jfst_proto_dispatch( CMD* cmd, uint8_t* changes, int client_sock ) {
+void jfst_proto_dispatch( CMD* cmd, Changes* changes, int client_sock ) {
 	JFST* jfst = cmd->jfst;
 	const char* value = cmd->value;
 	cmd->done = cmd->ack = true;
 
-	uint8_t all_changes = -1;
 	switch ( cmd->proto_cmd ) {
 	case CMD_EDITOR:
 		if ( !strcasecmp(value, "open") ) {
@@ -293,13 +307,6 @@ void jfst_proto_dispatch( CMD* cmd, uint8_t* changes, int client_sock ) {
 	case CMD_SAVE:
 		cmd->ack = jfst_save_state ( jfst, value );
 		break;
-	case CMD_NEWS:
-		if ( !strcasecmp(value,"all") ) {
-			news( jfst, client_sock, &all_changes );
-		} else {
-			news( jfst, client_sock, changes );
-		}
-		break;
 	case CMD_KILL:
 		// TODO: close only this plugin
 		fsthost_quit();
@@ -327,6 +334,13 @@ void fsthost_proto_dispatch ( CMD* cmd, int client_sock ) {
 	case CMD_HELP:
 		help( client_sock );
 		break;
+	case CMD_NEWS:
+		if ( !strcasecmp(cmd->value,"all") ) {
+			news( client_sock, true );
+		} else {
+			news( client_sock, false );
+		}
+		break;
 	case CMD_UNKNOWN:
 		log_error ( "GOT INVALID CMD: %s", cmd );
 		cmd->ack = false;
@@ -336,32 +350,33 @@ void fsthost_proto_dispatch ( CMD* cmd, int client_sock ) {
 	}
 }
 
-static JFST* jfst_get_by_name( const char* name ) {
+static JFST_NODE* jfst_node_get_by_name( const char* name ) {
 	if ( name == '\0' ) return NULL;
 
 	JFST_NODE* jn = jfst_node_get_first();
 	for ( ; jn; jn = jn->next ) {
 		JFST* jfst = jn->jfst;
 		if ( !strcmp( jfst->client_name, name) )
-			return jfst;
+			return jn;
 	}
 	return NULL;
 }
 
-static bool handle_client_callback ( char* msg, int client_sock, uint8_t* changes, void* data ) {
+static bool handle_client_callback ( char* msg, int client_sock, int client_number, void* data ) {
 	CMD cmd;
 	msg2cmd( msg, &cmd );
 
 	fsthost_proto_dispatch( &cmd, client_sock );
 	if ( cmd.done ) goto quit;
 
-	cmd.jfst = jfst_get_by_name( cmd.plugin );
-	if ( ! cmd.jfst ) {
+	JFST_NODE* jn = jfst_node_get_by_name( cmd.plugin );
+	if ( ! jn ) {
 		log_error( "Invalid plugin name \"%s\"", cmd.plugin );
 		goto quit;
 	}
 
-	jfst_proto_dispatch( &cmd, changes, client_sock );
+	cmd.jfst = jn->jfst;
+	jfst_proto_dispatch( &cmd, &(jn->changes[client_number]), client_sock );
 
 quit:
 	if ( cmd.done ) log_debug ( "GOT VALID MSG: %s", msg );
