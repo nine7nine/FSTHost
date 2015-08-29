@@ -14,25 +14,81 @@
 #define DEBUG log_debug
 #define ERROR log_error
 
-struct _ServClient {
-	struct pollfd* pfd;
-	void* data;
-};
+static void strip_trailing ( char* string, char chr ) {
+	char* c = strrchr ( string, chr );
+	if ( c ) *c = '\0';
+}
 
-static struct pollfd fds[SERV_POLL_SIZE];
-static serv_client_callback client_callback;
-static void* serv_usr_data = NULL;
-static bool initialized = false;
-static char* port_file = NULL;
+static bool serv_save_port_number ( Serv* serv ) {
+	char path[64];
 
-static int serv_get_client ( int serv_fd ) {
+	mkdir ( SERV_PORT_DIR, 0777 );
+
+	pid_t pid = getpid();
+	snprintf( path, sizeof path, "%s/%d.%d.port", SERV_PORT_DIR, pid, serv->port );
+
+	FILE* f = fopen(path, "w");
+	if ( ! f ) {
+		ERROR ( "Can't open file: %s", path );
+		return false;
+	}
+
+	fprintf( f, "%d", serv->port );
+	fclose(f);
+
+	serv->port_file = strdup( path );
+
+	return true;
+}
+
+static void serv_client_close ( ServClient* client ) {
+	if ( client->fd != -1 ) {
+		close ( client->fd );
+		client->fd = -1;
+	}
+        bool closed = true;
+}
+
+static void serv_client_close ( ServClient* client ) {
+	if ( client->fd != -1 ) {
+		close ( client->fd );
+		client->fd = -1;
+	}
+        bool closed = true;
+}
+
+static void serv_client_get_data ( ServClient* client ) {
+	char msg[64];
+
+	//Receive a message from client
+	ssize_t read_size = read (client->fd, msg, sizeof msg );
+	if (read_size == 0) {
+		INFO("Client disconnected");
+		serv_client_close( client );
+	} else if (read_size < 0) {
+		ERROR("recv failed");
+		serv_client_close( client );
+	} else {
+		// Message normalize
+		msg[read_size] = '\0'; /* make sure there is end */
+		strip_trailing ( msg, '\n' );
+		strip_trailing ( msg, '\r' );
+	}
+
+	if ( ! client_callback(client, msg) )
+		serv_client_close( client );
+
+	return true;
+}
+
+static int serv_get_client_fd ( Serv* serv ) {
 	//Accept and incoming connection
 	INFO("Waiting for incoming connections...");
 	int c = sizeof(struct sockaddr_in);
      
 	//accept connection from an incoming client
 	struct sockaddr_in client;
-	int client_sock = accept(serv_fd, (struct sockaddr *)&client, (socklen_t*)&c);
+	int client_sock = accept(serv->fd, (struct sockaddr *)&client, (socklen_t*)&c);
 	if (client_sock < 0) {
 		ERROR("accept failed");
 		return 0;
@@ -42,70 +98,27 @@ static int serv_get_client ( int serv_fd ) {
 	return client_sock;
 }
 
-static void strip_trailing ( char* string, char chr ) {
-	char* c = strrchr ( string, chr );
-	if ( c ) *c = '\0';
-}
-
-static bool serv_save_port_number ( uint16_t port ) {
-	char path[64];
-
-	mkdir ( SERV_PORT_DIR, 0777 );
-
-	pid_t pid = getpid();
-	snprintf( path, sizeof path, "%s/%d.%d.port", SERV_PORT_DIR, pid, port );
-
-	FILE* f = fopen(path, "w");
-	if ( ! f ) {
-		ERROR ( "Can't open file: %s", path );
-		return false;
+static void serv_client_open ( Serv* serv ) {
+	/* Find space for new client */
+	int i;
+	for ( i = 0; i < SERV_MAX_CLIENTS; i++ ) {
+		if ( serv->clients[i].fd == -1 ) {
+			ServClient* client = &serv->clients[i];
+			client->fd = serv_get_client_fd( serv->fd );
+			client->closed = false;
+			client->data = NULL;
+			return;
+		}
 	}
-
-	fprintf( f, "%d", port );
-	fclose(f);
-
-	port_file = strdup( path );
-
-	return true;
 }
 
-static bool serv_client_get_data ( int client_sock, char* msg, size_t msg_max_len ) {
-	//Receive a message from client
-	ssize_t read_size = read (client_sock , msg , msg_max_len );
-	if (read_size == 0) {
-		INFO("Client disconnected");
-		return false;
-	} else if (read_size < 0) {
-		ERROR("recv failed");
-		return false;
-	}
-
-	// Message normalize
-	msg[read_size] = '\0'; /* make sure there is end */
-
-	strip_trailing ( msg, '\n' );
-	strip_trailing ( msg, '\r' );
-
-	return true;
-}
-
-int serv_init ( uint16_t port, serv_client_callback cb, void* data ) {
+Serv* serv_init ( uint16_t port, serv_client_callback cb );
 	struct sockaddr_in server;
 	socklen_t addrlen = sizeof(server);
 
-	client_callback = cb;
-	serv_usr_data = data;
-	memset(fds, 0 , sizeof(fds));
-
-	int i;
-	for ( i = 0; i < SERV_POLL_SIZE; i++ ) {
-		fds[i].fd = -1;
-		fds[i].events = POLLIN;
-	}
-
 	//Create listener socket
-	fds[0].fd = socket(AF_INET , SOCK_STREAM , 0);
-	if (fds[0].fd == -1) {
+	int fd = socket(AF_INET , SOCK_STREAM , 0);
+	if (fd == -1) {
 		ERROR("Could not create socket");
 		return 2;
 	}
@@ -118,93 +131,102 @@ int serv_init ( uint16_t port, serv_client_callback cb, void* data ) {
 
 	// Allow reuse this port ( TIME_WAIT issue )
 	int ofc = 1;
-	setsockopt(fds[0].fd, SOL_SOCKET, SO_REUSEADDR, &ofc, sizeof ofc);
+	setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &ofc, sizeof ofc);
 
 	//Bind
-	int ret = bind (fds[0].fd,(struct sockaddr *) &server , addrlen);
+	int ret = bind (fd,(struct sockaddr *) &server , addrlen);
 	if ( ret < 0 ) {
 		ERROR("bind failed. Error");
 		return 0;
 	}
-	getsockname ( fds[0].fd, (struct sockaddr *) &server , &addrlen );
-	port = ntohs( server.sin_port ) ;
-	INFO("bind done, port: %d", port);
-	serv_save_port_number ( port );
+	getsockname ( fd, (struct sockaddr *) &server , &addrlen );
 
 	//Listen
-	listen(fds[0].fd, SERV_MAX_CLIENTS);
+	listen(fd, SERV_MAX_CLIENTS);
 
-	initialized = true;
+	// Alloc new object
+	Serv* serv = malloc( sizeof(Serv) );
+	serv->fd = fd;
+	serv->port = ntohs( server.sin_port );
+	serv->client_callback = cb;
 
-	return fds[0].fd;
+	// Init clients
+	int i;
+	for ( i = 0; i < SERV_MAX_CLIENTS; i++ ) {
+		ServClient* client = &serv->clients[i];
+		client->fd = -1;
+		client->closed = true;
+		client->data = NULL;
+	}
+
+	serv_save_port_number( port );
+
+	INFO("Serv start on port: %d", serv->port);
+
+	return serv;
 }
 
-bool serv_send_client_data ( int client_sock, const char* msg ) {
+bool serv_client_send_data ( ServClient* client, const char* msg );
 	size_t msg_len = strlen(msg);
 	char data[msg_len + 2];
 	sprintf ( data, "%s\n", msg );
 	size_t len = sizeof(data) - 1;
-	ssize_t write_size = write ( client_sock , data, len );
+	ssize_t write_size = write ( client->fd, data, len );
 	return ( write_size == len ) ? true : false;
 }
 
-void serv_poll () {
-	if ( ! initialized ) return;
+void serv_poll (Serv* serv);
+	struct pollfd fds[SERV_POLL_SIZE];
+
+	int i;
+	for ( i = 0; i < SERV_POLL_SIZE; i++ ) {
+		if ( i == 0 ) {
+			fds[i].fd = serv->fd;
+		} else {
+			fds[i].fd = serv->clients[i-1];
+		}
+
+		fds[i].events = POLLIN;
+		fds[i].revents = 0;
+	}
 
 	//wait for an activity on one of the sockets, don't block
 	int activity = poll(fds, SERV_POLL_SIZE, 0);
 	if (activity < 1) return;
 
-	int i;
 	for ( i = 0; i < SERV_POLL_SIZE; i++ ) {
-		if ( fds[i].revents == 0 ) continue;
+		if ( fds[i].revents != POLLIN) {
+			if ( fds[i].revents != 0 )
+				ERROR("FDS: %d, Err revents = %d", i, fds[i].revents);
 
-		if( fds[i].revents != POLLIN) {
-			ERROR("Err revents = %d", fds[i].revents);
-			return;
+			continue;
 		}
 
 		// Server socket i.e. new client
 		if ( i == 0 ) {
-			int g;
-			for ( g = 1; g < SERV_POLL_SIZE; g++ ) {
-				if ( fds[g].fd == -1 ) {
-					fds[g].fd = serv_get_client ( fds[0].fd );
-					fds[g].revents = 0;
-					break;
-				}
-			}
+			serv_client_open(serv);
 		// Client socket
 		} else {
-			char msg[64];
-			if ( ! serv_client_get_data( fds[i].fd, msg, sizeof msg ) ||
-			     ! client_callback ( msg, fds[i].fd, i, serv_usr_data )
-			) {
-				close ( fds[i].fd );
-				fds[i].fd = -1;
-			}
+			serv_client_get_data( &serv->clients[i] );
 		}
 	}
 }
 
-void serv_close () {
-	if ( ! initialized ) return;
-
-	// Close clients
+void serv_close (Serv* serv);
+	// Close all clients
 	int i;
-	for ( i = 0; i < SERV_POLL_SIZE; i ++ ) {
-		if ( fds[i].fd != -1 ) {
-			close ( fds[i].fd );
-			fds[i].fd = -1; // just for beauty ;-)
-		}
-	}
+	for ( i = 0; i < SERV_MAX_CLIENTS; i ++ )
+		serv_client_close( &serv->clients[i] );
 
 	// Close server
-	close ( fds[0].fd );
+	close ( serv->fd );
 
-	if ( port_file ) {
-		unlink ( port_file );
-		free ( port_file );
+	// Remove port file ( if exists ;-)
+	if ( serv->port_file ) {
+		unlink ( serv->port_file );
+		free ( serv->port_file );
 	}
+
+	free(serv);
 }
 
