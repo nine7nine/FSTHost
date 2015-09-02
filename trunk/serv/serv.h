@@ -8,23 +8,26 @@
 #define SERV_POLL_SIZE SERV_MAX_CLIENTS + 1
 #define SERV_PORT_DIR "/tmp/fsthost"
 
-typedef bool (*serv_client_callback) ( Client* client, char* msg );
+typedef struct _ServClient ServClient;
+typedef bool (*serv_client_callback) ( ServClient* client, char* msg );
 
-typedef struct _ServClient {
+struct _ServClient {
 	int fd; /* descriptior */
+	int number; /* TODO: userfull only for news (?!?) */
+	serv_client_callback callback;
 	void* data;
 	bool closed;
-} ServClient;
+};
 
 typedef struct _Serv {
 	int fd; /* descriptor */
-	serv_client_callback client_callback;
+	uint16_t port;
 	void* serv_usr_data;
-	const char* port_file;
+	char* port_file;
 	ServClient clients[SERV_MAX_CLIENTS];
 } Serv;
 
-Serv* serv_init ( uint16_t port, serv_client_callback cb, void* data );
+Serv* serv_init ( uint16_t port, serv_client_callback cb );
 void serv_close (Serv* serv);
 void serv_poll (Serv* serv);
 bool serv_client_send_data ( ServClient* client, const char* msg );

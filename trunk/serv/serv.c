@@ -46,15 +46,7 @@ static void serv_client_close ( ServClient* client ) {
 		close ( client->fd );
 		client->fd = -1;
 	}
-        bool closed = true;
-}
-
-static void serv_client_close ( ServClient* client ) {
-	if ( client->fd != -1 ) {
-		close ( client->fd );
-		client->fd = -1;
-	}
-        bool closed = true;
+	client->closed = true;
 }
 
 static void serv_client_get_data ( ServClient* client ) {
@@ -75,10 +67,8 @@ static void serv_client_get_data ( ServClient* client ) {
 		strip_trailing ( msg, '\r' );
 	}
 
-	if ( ! client_callback(client, msg) )
+	if ( ! client->callback(client, msg) )
 		serv_client_close( client );
-
-	return true;
 }
 
 static int serv_get_client_fd ( Serv* serv ) {
@@ -104,7 +94,7 @@ static void serv_client_open ( Serv* serv ) {
 	for ( i = 0; i < SERV_MAX_CLIENTS; i++ ) {
 		if ( serv->clients[i].fd == -1 ) {
 			ServClient* client = &serv->clients[i];
-			client->fd = serv_get_client_fd( serv->fd );
+			client->fd = serv_get_client_fd( serv );
 			client->closed = false;
 			client->data = NULL;
 			return;
@@ -112,7 +102,7 @@ static void serv_client_open ( Serv* serv ) {
 	}
 }
 
-Serv* serv_init ( uint16_t port, serv_client_callback cb );
+Serv* serv_init ( uint16_t port, serv_client_callback cb ) {
 	struct sockaddr_in server;
 	socklen_t addrlen = sizeof(server);
 
@@ -120,7 +110,7 @@ Serv* serv_init ( uint16_t port, serv_client_callback cb );
 	int fd = socket(AF_INET , SOCK_STREAM , 0);
 	if (fd == -1) {
 		ERROR("Could not create socket");
-		return 2;
+		return NULL;
 	}
 	INFO("Socket created");
 
@@ -137,7 +127,7 @@ Serv* serv_init ( uint16_t port, serv_client_callback cb );
 	int ret = bind (fd,(struct sockaddr *) &server , addrlen);
 	if ( ret < 0 ) {
 		ERROR("bind failed. Error");
-		return 0;
+		return NULL;
 	}
 	getsockname ( fd, (struct sockaddr *) &server , &addrlen );
 
@@ -148,25 +138,26 @@ Serv* serv_init ( uint16_t port, serv_client_callback cb );
 	Serv* serv = malloc( sizeof(Serv) );
 	serv->fd = fd;
 	serv->port = ntohs( server.sin_port );
-	serv->client_callback = cb;
 
 	// Init clients
 	int i;
 	for ( i = 0; i < SERV_MAX_CLIENTS; i++ ) {
 		ServClient* client = &serv->clients[i];
 		client->fd = -1;
+		client->number = i;
+		client->callback = cb;
 		client->closed = true;
 		client->data = NULL;
 	}
 
-	serv_save_port_number( port );
+	serv_save_port_number( serv );
 
 	INFO("Serv start on port: %d", serv->port);
 
 	return serv;
 }
 
-bool serv_client_send_data ( ServClient* client, const char* msg );
+bool serv_client_send_data ( ServClient* client, const char* msg ) {
 	size_t msg_len = strlen(msg);
 	char data[msg_len + 2];
 	sprintf ( data, "%s\n", msg );
@@ -175,7 +166,7 @@ bool serv_client_send_data ( ServClient* client, const char* msg );
 	return ( write_size == len ) ? true : false;
 }
 
-void serv_poll (Serv* serv);
+void serv_poll (Serv* serv) {
 	struct pollfd fds[SERV_POLL_SIZE];
 
 	int i;
@@ -183,7 +174,7 @@ void serv_poll (Serv* serv);
 		if ( i == 0 ) {
 			fds[i].fd = serv->fd;
 		} else {
-			fds[i].fd = serv->clients[i-1];
+			fds[i].fd = serv->clients[i-1].fd;
 		}
 
 		fds[i].events = POLLIN;
@@ -212,7 +203,7 @@ void serv_poll (Serv* serv);
 	}
 }
 
-void serv_close (Serv* serv);
+void serv_close (Serv* serv) {
 	// Close all clients
 	int i;
 	for ( i = 0; i < SERV_MAX_CLIENTS; i ++ )
@@ -229,4 +220,3 @@ void serv_close (Serv* serv);
 
 	free(serv);
 }
-

@@ -12,6 +12,7 @@ JFST_NODE* jfst_node_new( const char* appname ) {
 	n->jfst = jfst_new( appname );
 	n->next = NULL;
 
+	// Reset changes
 	int i;
 	for ( i=0; i < SERV_POLL_SIZE; i++ )
 		n->changes[i] = 0;

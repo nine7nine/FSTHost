@@ -51,7 +51,9 @@ extern bool jfst_lash_idle(JFST *jfst);
 #endif
 
 /* fsthost_proto */
-bool fsthost_proto_init( uint16_t ctrl_port_number );
+extern bool fsthost_proto_init( uint16_t ctrl_port_number );
+extern void proto_poll();
+extern void proto_close();
 
 volatile bool quit = false;
 volatile bool open_editor = false;
@@ -83,11 +85,8 @@ static void signal_handler (int signum) {
 	case SIGUSR1:
 		log_info("Caught signal to save state (SIGUSR1)");
 		JFST *jfst = jfst_node_get_first()->jfst;
-		if (sigusr1_save_state && jfst->default_state_file) {
+		if (jfst->default_state_file)
 			jfst_save_state(jfst, jfst->default_state_file);
-		} else {
-			log_info ( "SIGUSR1 - skipped ( no \"-l\" option )" );
-		}
 		break;
 	case SIGUSR2:
 		log_info("Caught signal to open editor (SIGUSR2)");
@@ -124,7 +123,7 @@ quit:
 		return false;
 	}
 
-	serv_poll();
+	proto_poll();
 
 	if ( open_editor ) {
 		open_editor = false;
@@ -387,8 +386,12 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	sa.sa_handler = &signal_handler;
 	sigaction(SIGINT, &sa, NULL);  // SIGINT  - clean quit
 	sigaction(SIGTERM, &sa, NULL); // SIGTERM - clean quit
-	sigaction(SIGUSR1, &sa, NULL); // SIGUSR1 - save state ( ladish support )
 	sigaction(SIGUSR2, &sa, NULL); // SIGUSR2 - open editor
+
+	// SIGUSR1 - save state ( ladish support )
+	// NOTE: seems that wine use this signal internally
+	if ( sigusr1_save_state )
+		sigaction(SIGUSR1, &sa, NULL);
 
 /******************************************************************************/
 	for ( ; optind < argc; optind++ ) {
@@ -424,7 +427,7 @@ game_over:
 	/* Close CTRL socket */
 	if ( have_serv ) {
 		log_info( "Stopping JFST control" );
-		serv_close();
+		proto_close();
 	}
 
 	if ( ret > 0 ) usage ( argv[0] );
