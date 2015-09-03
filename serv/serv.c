@@ -57,9 +57,11 @@ static void serv_client_get_data ( ServClient* client ) {
 	if (read_size == 0) {
 		INFO("Client disconnected");
 		serv_client_close( client );
+		return;
 	} else if (read_size < 0) {
-		ERROR("recv failed");
+		ERROR("recv failed FD:%d", client->fd);
 		serv_client_close( client );
+		return;
 	} else {
 		// Message normalize
 		msg[read_size] = '\0'; /* make sure there is end */
@@ -93,8 +95,11 @@ static void serv_client_open ( Serv* serv ) {
 	int i;
 	for ( i = 0; i < SERV_MAX_CLIENTS; i++ ) {
 		if ( serv->clients[i].fd == -1 ) {
+			int fd = serv_get_client_fd( serv );
+			if ( ! fd ) return;
+
 			ServClient* client = &serv->clients[i];
-			client->fd = serv_get_client_fd( serv );
+			client->fd = fd;
 			client->closed = false;
 			client->data = NULL;
 			return;
@@ -198,7 +203,7 @@ void serv_poll (Serv* serv) {
 			serv_client_open(serv);
 		// Client socket
 		} else {
-			serv_client_get_data( &serv->clients[i] );
+			serv_client_get_data( &( serv->clients[i-1] ) );
 		}
 	}
 }
