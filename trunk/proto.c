@@ -122,14 +122,14 @@ static void news ( ServClient* serv_client, bool all ) {
 	JFST_NODE* jn = jfst_node_get_first();
 	for ( ; jn; jn = jn->next ) {
 		/* Change for that client/jfst pair */
-		Changes* jfst_change = &( jn->changes[serv_client->number] );
+		Changes* jfst_changes = &( jn->changes[serv_client->number] );
 
 		if ( all ) {
 			Changes all_changes = (unsigned int) -1;
-			*jfst_change = all_changes;
+			*jfst_changes = all_changes;
 		}
 
-		jfst_news ( jn->jfst, serv_client, jfst_change );
+		jfst_news ( jn->jfst, serv_client, jfst_changes );
 	}
 }
 
@@ -312,10 +312,6 @@ void jfst_proto_dispatch( ServClient* serv_client, CMD* cmd ) {
 	case CMD_SAVE:
 		cmd->ack = jfst_save_state ( jfst, value );
 		break;
-	case CMD_KILL:
-		// TODO: close only this plugin
-		fsthost_quit();
-		break;
 	default:
 		cmd->ack = cmd->done = false;
 	}
@@ -340,7 +336,8 @@ void fsthost_proto_dispatch ( ServClient* serv_client, CMD* cmd ) {
 		help( serv_client );
 		break;
 	case CMD_NEWS:
-		if ( !strcasecmp(cmd->value,"all") ) {
+		// NOTE: in fact plugin here mean value
+		if ( !strcasecmp(cmd->plugin, "all") ) {
 			news( serv_client, true );
 		} else {
 			news( serv_client, false );
@@ -350,6 +347,11 @@ void fsthost_proto_dispatch ( ServClient* serv_client, CMD* cmd ) {
 		log_error ( "GOT INVALID CMD: %s", cmd->proto_cmd );
 		cmd->ack = false;
 		break;
+	case CMD_KILL:
+		// TODO: close only one plugin
+		fsthost_quit();
+		break;
+
 	default:
 		cmd->ack = cmd->done = false;
 	}
