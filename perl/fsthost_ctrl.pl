@@ -47,6 +47,14 @@ sub new {
 	return $object;
 }
 
+sub add_fsthost {
+	my ( $self, $host, $port ) = @_;
+
+	$host //= 'localhost';
+	FSTHOST->new ( $host, $port, $self->{'vbox'} )
+		or return;
+}
+
 sub _autodetect {
 	my $self = shift;
 
@@ -60,23 +68,13 @@ sub _autodetect {
 #		say $F;
 		my $proc_exists = kill(0, $pid); 
 		if ( $proc_exists ) {
-			$self->add_fst(undef, $port);
+			$self->add_fsthost(undef, $port);
 		} else {
 			say "Process $pid daesn't exists";
 			unlink $F;
 		}
 	}
 	closedir($D);
-}
-
-sub add_fst {
-	my ( $self, $host, $port ) = @_;
-
-	$host //= 'localhost';
-	my $fst = FST_BOX->new ( $host, $port )
-		or return;
-
-	$self->{'vbox'}->pack_start ( $fst->{'hbox'}, 0, 0, 0 ); # child, expand, fill, padding
 }
 
 sub add_fst_entry {
@@ -87,7 +85,7 @@ sub add_fst_entry {
 	my $port = ($3) ? $3 : $2;
 	return unless $port;
 
-	$self->add_fst( $host, $port );
+	$self->add_fsthost( $host, $port );
 }
 
 sub _init {
@@ -132,6 +130,96 @@ sub _init {
 	return 1;
 }
 
+package FSTHOST
+
+sub new {
+	my $class = shift;
+	my $self = {
+		host => shift,
+		port => shift,
+		vbox => shift,
+		fst => {}
+	};
+
+        my $object = bless ( $self, $class );
+	$object->_connect() or
+		return undef;
+
+	$object->_init() or
+		return undef;
+
+	return $object;
+}
+
+sub _connect {
+	my $self = shift;
+	$self->{'socket'} = IO::Socket::INET->new ( $self->{'host'} . ':' . $self->{'port'} );
+	# return tru if this assignment is sucessfull
+}
+
+sub _init {
+	my $self = shift;
+
+	foreach ( $self->get_plugins ) {
+		my $fst = FST_BOX->new ( $host, $port )
+			or next;
+
+		$self->{'fst'}->{$_} = $fst;
+		$self->{'vbox'}->pack_start ( $fst->{'hbox'}, 0, 0, 0 ); # child, expand, fill, padding
+	}
+
+	# Get all initial values
+	$self->dispatch_news(1);
+
+	$self->{'idle_id'} = Glib::Timeout->add ( 1000, \&idle, $self );
+}
+
+sub call {
+	my ( $self, $plugins, $cmd, $value ) = @_;
+
+	my $socket = $self->{'socket'};
+
+	my $line = $cmd;
+	$line .= ':' . $value if $value;
+
+	say $socket $line;
+#	say $line;
+
+	my @ret;
+	while ( my $line = $socket->getline() ) {
+		chomp($line);
+#		$line =~ s/[^[:print:]]//g;
+#		say $line;
+		last if ( $line eq '<OK>' || $line eq '<FAIL>' );
+		push ( @ret, $line );
+	}
+	return @ret;
+}
+
+sub get_plugins {
+	my ( $self ) = shift;
+	return $self->call( 'list_plugins' );
+}
+
+sub idle {
+	my $self = shift;
+	$self->dispatch_news(0);
+	return 1;
+}
+
+sub close {
+	my $self = shift;
+	return unless ( $self->{'socket'} );
+	$self->call ('quit');
+	close $self->{'socket'};
+	Glib::Source->remove( $self->{'idle_id'} );
+}
+
+sub DESTROY {
+	my $self = shift;
+	$self->close();
+}
+
 package FST_BOX;
 
 use parent -norequire, 'FST';
@@ -141,7 +229,7 @@ sub new {
 
 	my $self = $class->SUPER::new ( shift, shift );
 	return undef unless ( $self );
-	
+
         my $object = bless ( $self, $class );
 	unless ( $object->show() ) {
 		$object->close();
@@ -257,47 +345,50 @@ sub channels_combo_change {
 sub close_button_clicked {
 	my ( $b, $self ) = @_;
 	my $window = $self->{'hbox'}->get_toplevel();
-	Glib::Source->remove( $self->{'idle_id'} );
 	$self->{'hbox'}->destroy();
 	$window->resize(1,1);
+}
+
+sub news {
+	my ( $self, $all ) = @_;
+	my $cmd = 'news';
+	$cmd .= ':all' if $all;
+
+	my %ret = map { m/(\w+):(\w+):(\d+)/; [ $1, {$2, $3} ]; } $self->call($cmd);
+
+	return \%ret;
 }
 
 sub dispatch_news {
 	my ( $self, $all ) = @_;
 
 	my %ACTION = (
-		PROGRAM	=> sub { $self->{'presets_combo'}->set_active(shift); },
-		CHANNEL	=> sub { $self->{'channels_combo'}->set_active(shift); },
-		BYPASS	=> sub { $self->{'bypass_button'}->set_active(shift); },
-		EDITOR	=> sub { $self->{'editor_button'}->set_active(shift); },
+		PROGRAM	=> sub { $box->{'presets_combo'}->set_active(shift); },
+		CHANNEL	=> sub { $box->{'channels_combo'}->set_active(shift); },
+		BYPASS	=> sub { $box->{'bypass_button'}->set_active(shift); },
+		EDITOR	=> sub { $box->{'editor_button'}->set_active(shift); },
 		VOLUME  => sub {
-			my $vb = $self->{'volume_button'};
-			$vb->signal_handlers_block_by_func(\&volume_change, $self);
+			my $vb = $box->{'volume_button'};
+			$vb->signal_handlers_block_by_func(\&volume_change, $box);
 			$vb->set_value((shift) / 127);
-			$vb->signal_handlers_unblock_by_func(\&volume_change, $self);
+			$vb->signal_handlers_unblock_by_func(\&volume_change, $box);
 		},
 		MIDI_LEARN => sub {
-			my $mle = $self->{'midi_learn_button'};
+			my $mle = $box->{'midi_learn_button'};
 			$mle->set_active(shift);
 			$mle->set_tooltip_text(
 				"MIDI Learn\n" .
-				join "\n", map { s/^(\d+):/CC $1 => / and $_ } $self->call('list_midi_map')
+				join "\n", map { s/^(\d+):/CC $1 => / and $_ } $box->call('list_midi_map')
 			);
 		}
 	);
 
 	my $news = $self->news($all);
 	foreach ( keys %$news ) {
+		my $
 		next unless exists $ACTION{$_};
 		$ACTION{$_}->( $news->{$_} );
 	}
-}
-
-sub idle {
-	my $self = shift;
-	$self->dispatch_news(0);
-
-	return 1;
 }
 
 sub show {
@@ -368,8 +459,6 @@ sub show {
 
 	$hbox->show_all();
 
-	$self->{'idle_id'} = Glib::Timeout->add ( 1000, \&idle, $self );
-
 	$self->{'bypass_button'} = $sr_button;
 	$self->{'editor_button'} = $editor_button;
 	$self->{'volume_button'} = $volume_button;
@@ -377,9 +466,6 @@ sub show {
 	$self->{'presets_combo'} = $presets_combo;
 	$self->{'channels_combo'} = $channels_combo;
 	$self->{'hbox'} = $hbox;
-
-	# Get all initial values
-	$self->dispatch_news(1);
 
 	return 1;
 }
@@ -389,77 +475,27 @@ package FST;
 sub new {
 	my $class = shift;
 	my $self = {
-		host => shift,
-		port => shift
+		fsthost => shift
 	};
-
-        my $object = bless ( $self, $class );
-	return ( $object->_connect() ) ? $object : undef;
-}
-
-sub _connect {
-	my $self = shift;
-	$self->{'socket'} = IO::Socket::INET->new ( $self->{'host'} . ':' . $self->{'port'} );
-	# return tru if this assignment is sucessfull
-}
-
-sub call {
-	my ( $self, $cmd, $value ) = @_;
-
-	my $socket = $self->{'socket'};
-
-	my $line = $cmd;
-	$line .= ':' . $value if $value;
-
-	say $socket $line;
-#	say $line;
-
-	my @ret;
-	while ( my $line = $socket->getline() ) {
-		chomp($line);
-#		$line =~ s/[^[:print:]]//g;
-#		say $line;
-		last if ( $line eq '<OK>' || $line eq '<FAIL>' );
-		push ( @ret, $line );
-	}
-	return @ret;
 }
 
 sub presets {
 	my $self = shift;
-	my @presets = map { s/^\d+:// and $_ } $self->call ( 'list_programs' );
+	my $fsthost = $self->{'fsthost'};
+	my @presets = map { s/^\d+:// and $_ } $fsthost->call ( 'list_programs' );
 	return @presets;
-}
-
-sub news {
-	my ( $self, $all ) = @_;
-	my $cmd = 'news';
-	$cmd .= ':all' if $all;
-
-	my %ret = map { /(\w+):(\d+)/ } $self->call($cmd);
-	return \%ret;
 }
 
 sub set_program {
 	my ( $self, $program ) = @_;
-	$self->call ( 'set_program', $program );
+	my $fsthost = $self->{'fsthost'};
+	$fsthost->call ( 'set_program', $program );
 }
 
 sub set_channel {
 	my ( $self, $channel ) = @_;
-	$self->call ( 'set_channel', $channel );
-}
-
-sub close {
-	my $self = shift;
-	return unless ( $self->{'socket'} );
-	$self->call ('quit');
-	close $self->{'socket'};
-}
-
-sub DESTROY {
-	my $self = shift;
-	$self->close();
+	my $fsthost = $self->{'fsthost'};
+	$fsthost->call ( 'set_channel', $channel );
 }
 
 ################### MAIN ######################################################
