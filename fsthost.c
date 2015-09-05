@@ -60,6 +60,11 @@ volatile bool open_editor = false;
 volatile bool separate_threads = false;
 volatile bool sigusr1_save_state = false;
 
+struct plugin {
+	const char* path;
+	const char* state;
+};
+
 void fsthost_quit() {
 	quit = true;
 #ifndef NO_GTK
@@ -261,16 +266,17 @@ main_loop() {
 }
 
 static bool
-plugin_new( const char* custom_path ) {
+plugin_new( const char* path, const char* state ) {
 	JFST_NODE* jn = jfst_node_new(APPNAME);
 	JFST* jfst = jn->jfst;
+	jfst->default_state_file = state;
 
 	/* Load plugin - in this thread or dedicated */
 	bool loaded;
 	if ( separate_threads ) {
-		loaded = jfst_load_sep_th ( jfst, custom_path, true, sigusr1_save_state );
+		loaded = jfst_load_sep_th ( jfst, path, true, sigusr1_save_state );
 	} else {
-		loaded = jfst_load ( jfst, custom_path, true, sigusr1_save_state );
+		loaded = jfst_load ( jfst, path, true, sigusr1_save_state );
 	}
 
 	/* Well .. Are we loaded plugin ? */
@@ -298,10 +304,12 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	bool		opt_list_plugins = false;
 	bool		have_serv = false;
 	uint16_t	ctrl_port_number = 0;
-	const char*	custom_path = NULL;
+	int		pc = 0;
 	LogLevel	log_level = LOG_INFO;
 
 	JFST_DEFAULTS* def = jfst_get_defaults();
+
+	struct plugin	plugins[32] = {0};
 
 	// Handle FSTHOST_GUI environment
 	char* menv = getenv("FSTHOST_GUI");
@@ -322,7 +330,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 			case 'e': def->with_editor = WITH_EDITOR_HIDE; break;
 			case 'g': opt_generate_dbinfo = true; break;
 			case 'L': opt_list_plugins = true; break;
-			case 's': def->state_file = optarg; break;
+			case 's': plugins[pc++].state = optarg; break;
 			case 'S': have_serv=true; ctrl_port_number = strtol(optarg,NULL,10); break;
 			case 'c': def->client_name = optarg; break;
 			case 'k': def->channel = strtol(optarg, NULL, 10); break;
@@ -344,6 +352,10 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 		}
 	}
 
+	/* We have more arguments than getops options */
+	for ( pc = 0; optind < argc; optind++, pc++ )
+		plugins[pc].path = argv[optind];
+
 	log_init ( log_level, NULL, NULL );
 	log_info( "FSTHost Version: %s (%s)", VERSION, ARCH "bit" );
 
@@ -356,15 +368,21 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	/* If use want to list plugins then abandon other tasks */
 	if (opt_list_plugins) return fst_info_list ( def->dbinfo_file, ARCH );
 
-	/* We have more arguments than getops options */
-	if (optind < argc) custom_path = argv[optind];
-
 	/* If NULL then Generate using VST_PATH */
 	if (opt_generate_dbinfo) {
-		int ret = fst_info_update ( def->dbinfo_file, custom_path );
+		int ret = fst_info_update ( def->dbinfo_file, plugins[0].path );
 		if (ret > 0) usage ( argv[0] );
 		return ret;
 	}
+
+	for ( pc = 0; pc < 32; pc++ ) { 
+		if ( ! plugins[pc].path && ! plugins[pc].state )
+			break;
+
+		if ( ! plugin_new( plugins[pc].path, plugins[pc].state ) )
+			goto game_over;
+	}
+	if ( pc == 0 ) goto game_over; // no any plugin loaded
 
 /*
 #ifdef HAVE_LASH
@@ -392,12 +410,6 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	// NOTE: seems that wine use this signal internally
 	if ( sigusr1_save_state )
 		sigaction(SIGUSR1, &sa, NULL);
-
-/******************************************************************************/
-	for ( ; optind < argc; optind++ ) {
-		if ( ! plugin_new( argv[optind] ) )
-			goto game_over;
-	}
 
 #ifdef NO_GTK
 	main_loop();

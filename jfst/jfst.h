@@ -69,8 +69,6 @@ typedef struct {
 	bool bypassed;
 	const char* dbinfo_file;
 	enum WithEditor with_editor;
-	const char* state_file; /* XXX: shared */
-	uint16_t ctrl_port_number; /* XXX: shared */
 	const char* client_name; /* XXX: shared */
 	uint8_t channel; /* XXX: shared */
 	int32_t maxIns;
@@ -91,7 +89,7 @@ typedef struct _JFST {
 	FST*		fst;
 	EventQueue	event_queue;
 	char*		client_name;
-	char*		default_state_file;
+	const char*	default_state_file;
 	char*		dbinfo_file;
 	int32_t		numIns;
 	int32_t		numOuts;
