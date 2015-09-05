@@ -26,7 +26,6 @@ static JFST_DEFAULTS def = {
 .want_auto_midi_physical = true, // By default autoconnect MIDI In port to all physical
 .bypassed = false,
 .dbinfo_file = NULL,
-.state_file = NULL, /* XXX: shared */
 .client_name = NULL, /* XXX: shared */
 .channel = 0, /* XXX: shared */
 .maxIns = -1,
@@ -58,7 +57,6 @@ JFST* jfst_new( const char* appname ) {
 	jfst->bypassed = def.bypassed;
 	jfst->dbinfo_file = (char*) def.dbinfo_file;
 	jfst->with_editor = def.with_editor;
-	jfst->default_state_file = (char*) def.state_file;
 	jfst->client_name = (char*) def.client_name;
 	jfst->want_auto_midi_physical = def.want_auto_midi_physical;
 	jfst->midi_pc = def.midi_pc;
