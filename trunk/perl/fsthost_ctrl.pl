@@ -130,7 +130,7 @@ sub _init {
 	return 1;
 }
 
-package FSTHOST
+package FSTHOST;
 
 sub new {
 	my $class = shift;
@@ -160,8 +160,8 @@ sub _connect {
 sub _init {
 	my $self = shift;
 
-	foreach ( $self->get_plugins ) {
-		my $fst = FST_BOX->new ( $host, $port )
+	foreach ( $self->call('list_plugins') ) {
+		my $fst = FST_BOX->new ( $_, $self )
 			or next;
 
 		$self->{'fst'}->{$_} = $fst;
@@ -175,15 +175,11 @@ sub _init {
 }
 
 sub call {
-	my ( $self, $plugins, $cmd, $value ) = @_;
+	my ( $self, $cmd ) = @_;
 
 	my $socket = $self->{'socket'};
-
-	my $line = $cmd;
-	$line .= ':' . $value if $value;
-
-	say $socket $line;
-#	say $line;
+	say $socket $cmd;
+#	say $cmd;
 
 	my @ret;
 	while ( my $line = $socket->getline() ) {
@@ -194,11 +190,6 @@ sub call {
 		push ( @ret, $line );
 	}
 	return @ret;
-}
-
-sub get_plugins {
-	my ( $self ) = shift;
-	return $self->call( 'list_plugins' );
 }
 
 sub idle {
@@ -218,6 +209,46 @@ sub close {
 sub DESTROY {
 	my $self = shift;
 	$self->close();
+}
+
+sub dispatch_news {
+	my ( $self, $all ) = @_;
+	my $cmd = 'news';
+	$cmd .= ':all' if $all;
+
+	my %ACTION = (
+		PROGRAM	=> sub { my $box = shift; $box->{'presets_combo'}->set_active(shift); },
+		CHANNEL	=> sub { my $box = shift; $box->{'channels_combo'}->set_active(shift); },
+		BYPASS	=> sub { my $box = shift; $box->{'bypass_button'}->set_active(shift); },
+		EDITOR	=> sub { my $box = shift; $box->{'editor_button'}->set_active(shift); },
+		VOLUME  => sub {
+			my ( $box, $value ) = @_;
+			my $vb = $box->{'volume_button'};
+			$vb->signal_handlers_block_by_func(\&volume_change, $box);
+			$vb->set_value( $value / 127 );
+			$vb->signal_handlers_unblock_by_func(\&volume_change, $box);
+		},
+		MIDI_LEARN => sub {
+			my ( $box, $value ) = @_;
+			my $mle = $box->{'midi_learn_button'};
+			$mle->set_active($value);
+			$mle->set_tooltip_text(
+				"MIDI Learn\n" .
+				join "\n", map { s/^(\d+):/CC $1 => / and $_ } $box->call('list_midi_map')
+			);
+		}
+	);
+
+	foreach ( $self->call($cmd) ) {
+		my ( $plug, $action, $value ) = m/(\w+):(\w+):(\d+)/;
+		next unless exists $ACTION{$action};
+
+		# TODO: if new plug .. 
+		next unless exists $self->{'fst'}->{$plug};
+		my $box = $self->{'fst'}->{$plug};
+
+		$ACTION{$action}->( $box, $value );
+	}
 }
 
 package FST_BOX;
@@ -349,48 +380,6 @@ sub close_button_clicked {
 	$window->resize(1,1);
 }
 
-sub news {
-	my ( $self, $all ) = @_;
-	my $cmd = 'news';
-	$cmd .= ':all' if $all;
-
-	my %ret = map { m/(\w+):(\w+):(\d+)/; [ $1, {$2, $3} ]; } $self->call($cmd);
-
-	return \%ret;
-}
-
-sub dispatch_news {
-	my ( $self, $all ) = @_;
-
-	my %ACTION = (
-		PROGRAM	=> sub { $box->{'presets_combo'}->set_active(shift); },
-		CHANNEL	=> sub { $box->{'channels_combo'}->set_active(shift); },
-		BYPASS	=> sub { $box->{'bypass_button'}->set_active(shift); },
-		EDITOR	=> sub { $box->{'editor_button'}->set_active(shift); },
-		VOLUME  => sub {
-			my $vb = $box->{'volume_button'};
-			$vb->signal_handlers_block_by_func(\&volume_change, $box);
-			$vb->set_value((shift) / 127);
-			$vb->signal_handlers_unblock_by_func(\&volume_change, $box);
-		},
-		MIDI_LEARN => sub {
-			my $mle = $box->{'midi_learn_button'};
-			$mle->set_active(shift);
-			$mle->set_tooltip_text(
-				"MIDI Learn\n" .
-				join "\n", map { s/^(\d+):/CC $1 => / and $_ } $box->call('list_midi_map')
-			);
-		}
-	);
-
-	my $news = $self->news($all);
-	foreach ( keys %$news ) {
-		my $
-		next unless exists $ACTION{$_};
-		$ACTION{$_}->( $news->{$_} );
-	}
-}
-
 sub show {
 	my $self = shift;
 
@@ -399,7 +388,9 @@ sub show {
 	$hbox->set_border_width ( 2 );
 
 	# Label
-	my $label = ($Gtk.'::Label')->new( $self->{'host'} . ':' . $self->{'port'} );
+	my $fsthost = $self->{'fsthost'};
+	my $L = $fsthost->{'host'} . ':' . $fsthost->{'port'} . ':' . $self->{'name'};
+	my $label = ($Gtk.'::Label')->new( $L );
 	$hbox->pack_start ( $label, 0, 0, 0 ); # child, expand, fill, padding
 
 	# Suspend / Resume
@@ -475,27 +466,35 @@ package FST;
 sub new {
 	my $class = shift;
 	my $self = {
+		name => shift,
 		fsthost => shift
 	};
 }
 
 sub presets {
 	my $self = shift;
-	my $fsthost = $self->{'fsthost'};
-	my @presets = map { s/^\d+:// and $_ } $fsthost->call ( 'list_programs' );
+	my @presets = map { s/^\w+:\d+:// and $_ } $self->call ( 'list_programs' );
 	return @presets;
 }
 
 sub set_program {
 	my ( $self, $program ) = @_;
-	my $fsthost = $self->{'fsthost'};
-	$fsthost->call ( 'set_program', $program );
+	$self->call ( 'set_program', $program );
 }
 
 sub set_channel {
 	my ( $self, $channel ) = @_;
+	$self->call ( 'set_channel', $channel );
+}
+
+sub call {
+	my ( $self, $cmd, $value ) = @_;
+
+	$cmd .= ':' . $self->{'name'};
+	$cmd .= ':' . $value if defined $value;
+
 	my $fsthost = $self->{'fsthost'};
-	$fsthost->call ( 'set_channel', $channel );
+	return $fsthost->call($cmd);
 }
 
 ################### MAIN ######################################################
