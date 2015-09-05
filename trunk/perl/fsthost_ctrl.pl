@@ -240,7 +240,7 @@ sub dispatch_news {
 	);
 
 	foreach ( $self->call($cmd) ) {
-		my ( $plug, $action, $value ) = m/(\w+):(\w+):(\d+)/;
+		my ( $plug, $action, $value ) = m/([\w-]+):([\w-]+):(\d+)/;
 		next unless exists $ACTION{$action};
 
 		# TODO: if new plug .. 
@@ -387,12 +387,6 @@ sub show {
 	my $hbox = main::gtk_hbox();
 	$hbox->set_border_width ( 2 );
 
-	# Label
-	my $fsthost = $self->{'fsthost'};
-	my $L = $fsthost->{'host'} . ':' . $fsthost->{'port'} . ':' . $self->{'name'};
-	my $label = ($Gtk.'::Label')->new( $L );
-	$hbox->pack_start ( $label, 0, 0, 0 ); # child, expand, fill, padding
-
 	# Suspend / Resume
 	my $sr_button = ($Gtk.'::ToggleToolButton')->new_from_stock('gtk-stop');
 	$sr_button->set_tooltip_text ( 'Suspend / Resume' );
@@ -422,14 +416,6 @@ sub show {
 	$mle_button->signal_connect ( 'clicked' => \&mle_button_toggle, $self );
 	$hbox->pack_start ( $mle_button, 0, 0, 0 ); # child, expand, fill, padding
 
-	# Presets:
-	my $presets_combo = main::gtk_combo();
-	$presets_combo->set_tooltip_text ( 'Presets' );
-	my $t = 0;
-	$presets_combo->insert_text ( $t, $t++ . '. ' . $_  ) for $self->presets();
-	$presets_combo->signal_connect ( 'changed' => \&presets_combo_change, $self );
-	$hbox->pack_start ( $presets_combo, 0, 0, 0 ); # child, expand, fill, padding
-
 	# Channels:
 	my $channels_combo = main::gtk_combo();
 	$channels_combo->set_tooltip_text ( 'MIDI Channels' );
@@ -447,6 +433,20 @@ sub show {
 	$close_button->set_tooltip_text ( 'Close' );
 	$close_button->signal_connect ( 'clicked' => \&close_button_clicked, $self );
 	$hbox->pack_start ( $close_button, 0, 0, 0 ); # child, expand, fill, padding
+
+	# Presets:
+	my $presets_combo = main::gtk_combo();
+	$presets_combo->set_tooltip_text ( 'Presets' );
+	my $t = 0;
+	$presets_combo->insert_text ( $t, $t++ . '. ' . $_  ) for $self->presets();
+	$presets_combo->signal_connect ( 'changed' => \&presets_combo_change, $self );
+	$hbox->pack_start ( $presets_combo, 0, 0, 0 ); # child, expand, fill, padding
+
+	# Label
+	my $fsthost = $self->{'fsthost'};
+	my $L = $fsthost->{'host'} . ':' . $fsthost->{'port'} . ':' . $self->{'name'};
+	my $label = ($Gtk.'::Label')->new( $L );
+	$hbox->pack_start ( $label, 0, 0, 0 ); # child, expand, fill, padding
 
 	$hbox->show_all();
 
@@ -473,7 +473,7 @@ sub new {
 
 sub presets {
 	my $self = shift;
-	my @presets = map { s/^\w+:\d+:// and $_ } $self->call ( 'list_programs' );
+	my @presets = map { s/^[\w-]+:\d+:// and $_ } $self->call ( 'list_programs' );
 	return @presets;
 }
 
