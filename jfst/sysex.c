@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <ctype.h>
 #include "log/log.h"
 #include "jfst.h"
 

@@ -26,7 +26,6 @@
 
 #include "log/log.h"
 #include "jfst/node.h"
-#include "serv/serv.h"
 #include "xmldb/info.h"
 
 #ifndef NO_GTK
