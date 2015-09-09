@@ -12,6 +12,15 @@ static inline void eq_index_next ( uint8_t* index ) {
 }
 
 static inline void event_queue_send ( EventQueue* eq, Event* ev ) {
+	// Is last event the same as current ( e.g. problem with many GRAPH events )
+	if ( eq->front != eq->rear ) {
+		Event* last = &(eq->events[eq->front]);
+		if ( memcmp(ev,last,sizeof(Event)) == 0 ) {
+			log_debug ( "Event Queue - skip duplicate" );
+			return;
+		}
+	}
+
 	eq_index_next( &eq->front );
 
 	if ( eq->front == eq->rear ) {
