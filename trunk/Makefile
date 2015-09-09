@@ -179,11 +179,13 @@ define compile
 	sed -i -e 's|-n "$$appdir"|-r "$$appdir/$$appname"|' \
 		-e 's|.exe.so|.so|' \
 		-e '3i export WINEPATH="$(LIB$(1)_INST_PATH)"' \
+		-e '3i export WINE_SRV_RT=$${WINE_SRV_RT:-15}' \
 		-e '3i export WINE_RT=$${WINE_RT:-10}' \
+		-e '3i export STAGING_RT_PRIORITY_SERVER=$${STAGING_RT_PRIORITY_SERVER:-15}' \
+		-e '3i export STAGING_RT_PRIORITY_BASE=$${STAGING_RT_PRIORITY_BASE:-10}' \
 		-e '3i export L_ENABLE_PIPE_SYNC_FOR_APP="$@"' \
 		-e '3i export L_RT_POLICY="$${L_RT_POLICY:-FF}"' \
-		-e '3i export L_RT_PRIO=$${L_RT_PRIO:-10}' \
-		-e '3i export WINE_SRV_RT=$${WINE_SRV_RT:-15}' $@
+		-e '3i export L_RT_PRIO=$${L_RT_PRIO:-10}' $@
 endef
 
 fsthost%: $(C_SRCS:.c=_%.o) fsthost_list
