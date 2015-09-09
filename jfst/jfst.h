@@ -69,7 +69,6 @@ typedef struct {
 	bool bypassed;
 	const char* dbinfo_file;
 	enum WithEditor with_editor;
-	const char* client_name; /* XXX: shared */
 	uint8_t channel; /* XXX: shared */
 	int32_t maxIns;
 	int32_t maxOuts;
@@ -78,7 +77,6 @@ typedef struct {
 	enum MidiPC midi_pc;
 	bool sysex_want_notify;
 	short want_state_cc;
-	char* uuid; /* XXX: shared */
 	uint8_t sysex_uuid; /* XXX: shared */
 	bool no_volume;
 } JFST_DEFAULTS;
