@@ -27,14 +27,12 @@ static JFST_DEFAULTS def = {
 .want_auto_midi_physical = true, // By default autoconnect MIDI In port to all physical
 .bypassed = false,
 .dbinfo_file = NULL,
-.client_name = NULL, /* XXX: shared */
 .channel = 0, /* XXX: shared */
 .maxIns = -1,
 .maxOuts = -1,
 .want_auto_midi_physical = true,
 .sysex_want_notify = false,
 .want_state_cc = 0,
-.uuid = NULL, /* XXX: shared */
 .sysex_uuid = 0, /* XXX: shared */
 .connect_to = NULL,
 .no_volume = false,
@@ -58,12 +56,10 @@ JFST* jfst_new( const char* appname ) {
 	jfst->bypassed = def.bypassed;
 	jfst->dbinfo_file = (char*) def.dbinfo_file;
 	jfst->with_editor = def.with_editor;
-	jfst->client_name = (char*) def.client_name;
 	jfst->want_auto_midi_physical = def.want_auto_midi_physical;
 	jfst->midi_pc = def.midi_pc;
 	jfst->sysex_want_notify = def.sysex_want_notify;
 	jfst->want_state_cc = def.want_state_cc;
-	jfst->uuid = def.uuid;
 	jfst->volume = ( def.no_volume ) ? -1 : 1; // 63 here mean zero (?!?)
 	jfst_sysex_set_uuid(jfst, def.sysex_uuid);
 

@@ -64,6 +64,8 @@ volatile bool sigusr1_save_state = false;
 struct plugin {
 	const char* path;
 	const char* state;
+	const char* uuid;
+	const char* client_name;
 };
 
 void fsthost_quit() {
@@ -267,10 +269,12 @@ main_loop() {
 }
 
 static bool
-plugin_new( const char* path, const char* state ) {
+plugin_new( const char* path, const char* state, const char* uuid, const char* client_name ) {
 	JFST_NODE* jn = jfst_node_new(APPNAME);
 	JFST* jfst = jn->jfst;
 	jfst->default_state_file = state;
+	jfst->uuid = (char*) uuid;
+	jfst->client_name = (char*) client_name;
 
 	/* Load plugin - in this thread or dedicated */
 	bool loaded;
@@ -305,7 +309,9 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	bool		opt_list_plugins = false;
 	bool		have_serv = false;
 	uint16_t	ctrl_port_number = 0;
-	int		pc = 0;
+	int		pc = 0; // plugins count
+	int		uc = 0; // uuid count
+	int		cnc = 0; // client name count
 	LogLevel	log_level = LOG_INFO;
 
 	JFST_DEFAULTS* def = jfst_get_defaults();
@@ -334,7 +340,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 			case 'L': opt_list_plugins = true; break;
 			case 's': plugins[pc++].state = optarg; break;
 			case 'S': have_serv=true; ctrl_port_number = strtol(optarg,NULL,10); break;
-			case 'c': def->client_name = optarg; break;
+			case 'c': plugins[cnc++].client_name = optarg; break;
 			case 'k': def->channel = strtol(optarg, NULL, 10); break;
 			case 'i': def->maxIns = strtol(optarg, NULL, 10); break;
 			case 'j': def->connect_to = optarg; break;
@@ -346,7 +352,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 			case 'N': def->sysex_want_notify = true; break;
 			case 'm': def->want_state_cc = strtol(optarg, NULL, 10); break;
 			case 'T': separate_threads = true;
-			case 'u': def->uuid = optarg; break;
+			case 'u': plugins[uc++].uuid = optarg; break;
 			case 'U': def->sysex_uuid = strtol(optarg, NULL, 10); break;
 			case 'v': log_level = LOG_DEBUG; break;
 			case 'V': def->no_volume = true; break;
@@ -355,8 +361,27 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	}
 
 	/* We have more arguments than getops options */
-	for ( pc = 0; optind < argc; optind++, pc++ )
-		plugins[pc].path = argv[optind];
+	// spec = path:uuid:client_name
+	for ( pc = 0; optind < argc; optind++, pc++ ) {
+		char* spec = strdup ( argv[optind] );
+		char* path = strtok (spec, ":");
+		if ( ! path ) {
+			plugins[pc].path = argv[optind];
+			goto spec_next;
+		}
+
+		plugins[pc].path = strdup(path);
+		char* uuid = strtok(NULL,":");
+		if ( ! uuid ) goto spec_next;
+
+		plugins[pc].uuid = strdup(uuid);
+		char* client_name = strtok(NULL,":");
+		if ( ! client_name ) goto spec_next;
+
+		plugins[pc].client_name = strdup(client_name);
+
+spec_next:	free(spec);
+	}
 
 	log_init ( log_level, NULL, NULL );
 	log_info( "FSTHost Version: %s (%s)", VERSION, ARCH "bit" );
@@ -381,7 +406,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 		if ( ! plugins[pc].path && ! plugins[pc].state )
 			break;
 
-		if ( ! plugin_new( plugins[pc].path, plugins[pc].state ) )
+		if ( ! plugin_new( plugins[pc].path, plugins[pc].state, plugins[pc].uuid, plugins[pc].client_name ) )
 			goto game_over;
 	}
 	if ( pc == 0 ) goto game_over; // no any plugin loaded
