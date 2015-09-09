@@ -373,12 +373,12 @@ sub channels_combo_change {
 	$self->set_channel ( $c->get_active );
 }
 
-sub close_button_clicked {
-	my ( $b, $self ) = @_;
-	my $window = $self->{'hbox'}->get_toplevel();
-	$self->{'hbox'}->destroy();
-	$window->resize(1,1);
-}
+#sub close_button_clicked {
+#	my ( $b, $self ) = @_;
+#	my $window = $self->{'hbox'}->get_toplevel();
+#	$self->{'hbox'}->destroy();
+#	$window->resize(1,1);
+#}
 
 sub show {
 	my $self = shift;
@@ -429,10 +429,10 @@ sub show {
 	$hbox->pack_start ( $volume_button, 0, 0, 0 ); # child, expand, fill, padding
 
 	# Close
-	my $close_button = ($Gtk.'::ToolButton')->new_from_stock('gtk-close');
-	$close_button->set_tooltip_text ( 'Close' );
-	$close_button->signal_connect ( 'clicked' => \&close_button_clicked, $self );
-	$hbox->pack_start ( $close_button, 0, 0, 0 ); # child, expand, fill, padding
+#	my $close_button = ($Gtk.'::ToolButton')->new_from_stock('gtk-close');
+#	$close_button->set_tooltip_text ( 'Close' );
+#	$close_button->signal_connect ( 'clicked' => \&close_button_clicked, $self );
+#	$hbox->pack_start ( $close_button, 0, 0, 0 ); # child, expand, fill, padding
 
 	# Presets:
 	my $presets_combo = main::gtk_combo();
