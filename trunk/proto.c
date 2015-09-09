@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <stdarg.h>
-#include <string.h>
+#include <strings.h>
 
 #include "jfst/node.h"
 #include "log/log.h"
