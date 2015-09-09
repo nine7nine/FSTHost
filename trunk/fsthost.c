@@ -44,6 +44,8 @@ GMainLoop* g_main_loop;
 #define APPNAME "fsthost"
 #define APPNAME_ARCH APPNAME ARCH
 
+#define MAX_PLUGS 32
+
 /* lash.c */
 #ifdef HAVE_LASH
 extern void jfst_lash_init(JFST *jfst, int* argc, char** argv[]);
@@ -309,7 +311,8 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 
 	JFST_DEFAULTS* def = jfst_get_defaults();
 
-	struct plugin	plugins[32] = {0};
+	struct plugin	plugins[MAX_PLUGS];
+	memset( plugins, 0, sizeof(struct plugin) * MAX_PLUGS );
 
 	// Handle FSTHOST_GUI environment
 	char* menv = getenv("FSTHOST_GUI");
@@ -375,7 +378,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 		return ret;
 	}
 
-	for ( pc = 0; pc < 32; pc++ ) { 
+	for ( pc = 0; pc < MAX_PLUGS; pc++ ) { 
 		if ( ! plugins[pc].path && ! plugins[pc].state )
 			break;
 
