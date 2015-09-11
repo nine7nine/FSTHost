@@ -205,7 +205,8 @@ static void usage(char* appname) {
 	fprintf(stderr, format, "-j <connect_to>", "Connect Audio Out to <connect_to>. " JFST_STR_NO_CONNECT " for no connect");
 	fprintf(stderr, format, "-l", "save state to state_file on SIGUSR1 (require -s)");
 	fprintf(stderr, format, "-m mode_midi_cc", "Bypass/Resume MIDI CC (default: 122)");
-	fprintf(stderr, format, "-p", "Disable connecting MIDI In port to all physical");
+	fprintf(stderr, format, "-p", "Plugin path ( same as <plugin> )");
+	fprintf(stderr, format, "-M", "Disable connecting MIDI In port to all physical");
 	fprintf(stderr, format, "-P", "Self MIDI Program Change handling");
 	fprintf(stderr, format, "-o num_out", "Jack number Out ports");
 	fprintf(stderr, format, "-T", "Separate threads");
@@ -268,29 +269,6 @@ main_loop() {
 	}
 }
 
-// spec = path:uuid:client_name
-static void arg2plugin ( struct plugin* plug, const char* arg ) {
-	size_t arglen = strlen(arg) + 1;
-
-	char spec[arglen];
-	strcpy( spec, arg );
-
-	char* path = strtok (spec, ":");
-	if ( ! path ) {
-		plug->path = arg;
-		return;
-	}
-	plug->path = strdup(path);
-
-	char* uuid = strtok(NULL,":");
-	if ( ! uuid ) return;
-	plug->uuid = strdup(uuid);
-
-	char* client_name = strtok(NULL,":");
-	if ( ! client_name ) return;
-	plug->client_name = strdup(client_name);
-}
-
 static bool
 plugin_new( const char* path, const char* state, const char* uuid, const char* client_name ) {
 	JFST_NODE* jn = jfst_node_new(APPNAME);
@@ -333,8 +311,6 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	bool		have_serv = false;
 	uint16_t	ctrl_port_number = 0;
 	int		pc = 0; // plugins count
-	int		uc = 0; // uuid count
-	int		cnc = 0; // client name count
 	LogLevel	log_level = LOG_INFO;
 
 	JFST_DEFAULTS* def = jfst_get_defaults();
@@ -353,7 +329,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
         // Parse command line options
 	cmdline2arg(&argc, &argv, cmdline);
 	short c;
-	while ( (c = getopt (argc, argv, "Abd:egs:S:c:k:i:j:lLnNm:pPo:Tu:U:vV")) != -1) {
+	while ( (c = getopt (argc, argv, "Abd:egs:S:c:k:i:j:lLnNMm:p:Po:Tu:U:vV")) != -1) {
 		switch (c) {
 			case 'A': def->want_port_aliases = true; break;
 			case 'b': def->bypassed = true; break;
@@ -361,21 +337,22 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 			case 'e': def->with_editor = WITH_EDITOR_HIDE; break;
 			case 'g': opt_generate_dbinfo = true; break;
 			case 'L': opt_list_plugins = true; break;
-			case 's': plugins[pc++].state = optarg; break;
+			case 's': plugins[pc].state = optarg; break;
 			case 'S': have_serv=true; ctrl_port_number = strtol(optarg,NULL,10); break;
-			case 'c': plugins[cnc++].client_name = optarg; break;
+			case 'c': plugins[pc].client_name = optarg; break;
 			case 'k': def->channel = strtol(optarg, NULL, 10); break;
 			case 'i': def->maxIns = strtol(optarg, NULL, 10); break;
 			case 'j': def->connect_to = optarg; break;
 			case 'l': sigusr1_save_state = true; break;
-			case 'p': def->want_auto_midi_physical = false; break;
+			case 'p': plugins[pc++].path = optarg; break;
+			case 'M': def->want_auto_midi_physical = false; break;
 			case 'P': def->midi_pc = MIDI_PC_SELF; break; /* used but not enabled */
 			case 'o': def->maxOuts = strtol(optarg, NULL, 10); break;
 			case 'n': def->with_editor = WITH_EDITOR_NO; break;
 			case 'N': def->sysex_want_notify = true; break;
 			case 'm': def->want_state_cc = strtol(optarg, NULL, 10); break;
 			case 'T': separate_threads = true;
-			case 'u': plugins[uc++].uuid = optarg; break;
+			case 'u': plugins[pc].uuid = optarg; break;
 			case 'U': def->sysex_uuid = strtol(optarg, NULL, 10); break;
 			case 'v': log_level = LOG_DEBUG; break;
 			case 'V': def->no_volume = true; break;
@@ -385,7 +362,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 
 	/* We have more arguments than getops options */
 	for ( pc = 0; optind < argc; optind++, pc++ )
-		arg2plugin( &plugins[pc], argv[optind] );
+		plugins[pc].path = argv[optind];
 
 	log_init ( log_level, NULL, NULL );
 	log_info( "FSTHost Version: %s (%s)", VERSION, ARCH "bit" );
