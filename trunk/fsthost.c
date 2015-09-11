@@ -268,6 +268,29 @@ main_loop() {
 	}
 }
 
+// spec = path:uuid:client_name
+static void arg2plugin ( struct plugin* plug, const char* arg ) {
+	size_t arglen = strlen(arg) + 1;
+
+	char spec[arglen];
+	strcpy( spec, arg );
+
+	char* path = strtok (spec, ":");
+	if ( ! path ) {
+		plug->path = arg;
+		return;
+	}
+	plug->path = strdup(path);
+
+	char* uuid = strtok(NULL,":");
+	if ( ! uuid ) return;
+	plug->uuid = strdup(uuid);
+
+	char* client_name = strtok(NULL,":");
+	if ( ! client_name ) return;
+	plug->client_name = strdup(client_name);
+}
+
 static bool
 plugin_new( const char* path, const char* state, const char* uuid, const char* client_name ) {
 	JFST_NODE* jn = jfst_node_new(APPNAME);
@@ -361,27 +384,8 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	}
 
 	/* We have more arguments than getops options */
-	// spec = path:uuid:client_name
-	for ( pc = 0; optind < argc; optind++, pc++ ) {
-		char* spec = strdup ( argv[optind] );
-		char* path = strtok (spec, ":");
-		if ( ! path ) {
-			plugins[pc].path = argv[optind];
-			goto spec_next;
-		}
-
-		plugins[pc].path = strdup(path);
-		char* uuid = strtok(NULL,":");
-		if ( ! uuid ) goto spec_next;
-
-		plugins[pc].uuid = strdup(uuid);
-		char* client_name = strtok(NULL,":");
-		if ( ! client_name ) goto spec_next;
-
-		plugins[pc].client_name = strdup(client_name);
-
-spec_next:	free(spec);
-	}
+	for ( pc = 0; optind < argc; optind++, pc++ )
+		arg2plugin( &plugins[pc], argv[optind] );
 
 	log_init ( log_level, NULL, NULL );
 	log_info( "FSTHost Version: %s (%s)", VERSION, ARCH "bit" );
