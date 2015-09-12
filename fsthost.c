@@ -312,6 +312,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 { /* Parse options | init JFST NODES | Limit scope of some initial variables */
 	uint16_t	opt_port_number = 0;
 	int		pc = 0; // plugins count
+	int		sc = 0; // states count
 	LogLevel	log_level = LOG_INFO;
 
 	enum { NORMAL, LIST, GEN_DB } mode = NORMAL;
@@ -338,7 +339,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 			case 'e': def->with_editor = WITH_EDITOR_HIDE; break;
 			case 'g': mode = GEN_DB; break;
 			case 'L': mode = LIST; break;
-			case 's': plugins[pc].state = optarg; break;
+			case 's': plugins[sc++].state = optarg; break;
 			case 'S': opt_have_serv=true; opt_port_number = strtol(optarg,NULL,10); break;
 			case 'c': plugins[pc].client_name = optarg; break;
 			case 'k': def->channel = strtol(optarg, NULL, 10); break;

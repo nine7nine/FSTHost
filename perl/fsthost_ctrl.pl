@@ -3,9 +3,13 @@
 use v5.14;
 #use warnings;
 #use Data::Dumper;
+use POSIX ':sys_wait_h';
 use IO::Socket;
+use Time::HiRes qw/usleep/;
 
 our $Gtk;
+our $FPID;
+our $PORTDIR = '/tmp/fsthost';
 
 # Load GTK modules
 BEGIN {
@@ -29,6 +33,10 @@ BEGIN {
 	die "Can't find modules Gtk[23]" unless ( $Gtk );
 }
 
+END {
+	our $FPID;
+	kill('TERM',$FPID) if $FPID;
+}
 
 # Auxiliary methods for GTK2 / GTK3 support
 sub gtk_vbox { return ($Gtk eq 'Gtk3') ? Gtk3::Box->new ('vertical', 0) : Gtk2::VBox->new(); }
@@ -58,7 +66,7 @@ sub add_fsthost {
 sub _autodetect {
 	my $self = shift;
 
-	opendir ( my $D, '/tmp/fsthost' )
+	opendir ( my $D, $PORTDIR )
 		or return;
 
 	while ( my $F = readdir($D) ) {
@@ -355,12 +363,12 @@ sub volume_change {
 
 sub editor_button_toggle {
 	my ( $b, $self ) = @_;
-	$self->call ( $b->get_active() ? 'editor:open' : 'editor:close' );
+	$self->call ( 'editor', $b->get_active() ? 'open' : 'close' );
 }
 
 sub mle_button_toggle {
 	my ( $b, $self ) = @_;
-	$self->call ( $b->get_active() ? 'midi_learn:start' : 'midi_learn:stop' );
+	$self->call ( 'midi_learn', $b->get_active() ? 'start' : 'stop' );
 }
 
 sub presets_combo_change {
@@ -419,7 +427,7 @@ sub show {
 	# Channels:
 	my $channels_combo = main::gtk_combo();
 	$channels_combo->set_tooltip_text ( 'MIDI Channels' );
-	$channels_combo->insert_text( $_ , 'Ch ' . $_ ) for ( 0 .. 17 );
+	$channels_combo->insert_text( $_ , 'Ch ' . $_ ) foreach ( 0 .. 17 );
 	$channels_combo->signal_connect ( 'changed' => \&channels_combo_change, $self );
 	$hbox->pack_start ( $channels_combo, 0, 0, 0 ); # child, expand, fill, padding
 
@@ -500,9 +508,32 @@ sub call {
 ################### MAIN ######################################################
 package main;
 
+if ( @ARGV > 0 ) {
+	$FPID = fork;
+	die 'Cannot fork' unless defined $FPID;
+
+	if ( $FPID == 0 ) {
+#		close (STDOUT);
+#		close (STDERR);
+		exec('fsthost64', '-n', '-S 0', @ARGV);
+		die 'Cannot exec';
+	} else {
+		say 'Waiting for socket ...';
+		my $FP = "${PORTDIR}/${FPID}.[0-9]*.port";
+		while ( 1 ) {
+			my $F = glob $FP;
+			last if defined $F;
+
+			my $kid = waitpid( $FPID, WNOHANG );
+			die 'Kid died :-)' if $kid < 0;
+
+			usleep(100 * 1000); # 100 ms
+		}
+	}
+}
+
 $Gtk->init();
 
 MainForm->new();
 
 $Gtk->main();
-
