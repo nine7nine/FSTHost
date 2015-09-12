@@ -1,6 +1,5 @@
 /*
-    Copyright (C) 2004 Paul Davis <paul@linuxaudiosystems.com> 
-                       Torben Hohn <torbenh@informatik.uni-bremen.de>
+    Copyright (C) 2015 Pawel Piatek <xj@wp.pl>
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -52,7 +51,7 @@ extern bool jfst_lash_idle(JFST *jfst);
 #endif
 
 /* fsthost_proto */
-extern bool fsthost_proto_init( uint16_t ctrl_port_number );
+extern bool fsthost_proto_init( uint16_t port_number );
 extern void proto_poll();
 extern void proto_close();
 
@@ -177,7 +176,7 @@ static void cmdline2arg(int *argc, char ***pargv, LPSTR cmdline) {
 }
 
 static void usage(char* appname) {
-	const char* format = "%-20s%s\n";
+	const char* fmt = "%-20s%s\n";
 
 	fprintf(stderr, "\nUsage: %s [ options ] <plugin>\n", appname);
 	fprintf(stderr, "  or\n");
@@ -187,33 +186,33 @@ static void usage(char* appname) {
 	fprintf(stderr, "  or\n");
 	fprintf(stderr, "Usage: %s -s <FPS state file>\n\n", appname);
 	fprintf(stderr, "Options:\n");
-	fprintf(stderr, format, "-g", "Create/Update XML info DB.");
-	fprintf(stderr, format, "-L", "List plugins from XML info DB.");
-	fprintf(stderr, format, "-d xml_db_path", "Custom path to XML DB");
-	fprintf(stderr, format, "-b", "Start in bypass mode");
-	fprintf(stderr, format, "-n", "Disable Editor and GTK GUI");
-	fprintf(stderr, format, "-N", "Notify changes by SysEx");
+	fprintf(stderr, fmt, "-g", "Create/Update XML info DB.");
+	fprintf(stderr, fmt, "-L", "List plugins from XML info DB.");
+	fprintf(stderr, fmt, "-d xml_db_path", "Custom path to XML DB");
+	fprintf(stderr, fmt, "-b", "Start in bypass mode");
+	fprintf(stderr, fmt, "-n", "Disable Editor and GTK GUI");
+	fprintf(stderr, fmt, "-N", "Notify changes by SysEx");
 #ifndef NO_GTK
-	fprintf(stderr, format, "-e", "Hide Editor");
+	fprintf(stderr, fmt, "-e", "Hide Editor");
 #endif
-	fprintf(stderr, format, "-S <port>", "Start CTRL server on port <port>. Use 0 for random.");
-	fprintf(stderr, format, "-s <state_file>", "Load <state_file>");
-	fprintf(stderr, format, "-c <client_name>", "Jack Client name");
-	fprintf(stderr, format, "-A", "Set plugin port names as aliases");
-	fprintf(stderr, format, "-k channel", "MIDI Channel (0: all, 17: none)");
-	fprintf(stderr, format, "-i num_in", "Jack number In ports");
-	fprintf(stderr, format, "-j <connect_to>", "Connect Audio Out to <connect_to>. " JFST_STR_NO_CONNECT " for no connect");
-	fprintf(stderr, format, "-l", "save state to state_file on SIGUSR1 (require -s)");
-	fprintf(stderr, format, "-m mode_midi_cc", "Bypass/Resume MIDI CC (default: 122)");
-	fprintf(stderr, format, "-p", "Plugin path ( same as <plugin> )");
-	fprintf(stderr, format, "-M", "Disable connecting MIDI In port to all physical");
-	fprintf(stderr, format, "-P", "Self MIDI Program Change handling");
-	fprintf(stderr, format, "-o num_out", "Jack number Out ports");
-	fprintf(stderr, format, "-T", "Separate threads");
-	fprintf(stderr, format, "-u uuid", "JackSession UUID");
-	fprintf(stderr, format, "-U SysExID", "SysEx ID (1-127). 0 is default (do not use it)");
-	fprintf(stderr, format, "-v", "Verbose");
-	fprintf(stderr, format, "-V", "Disable Volume control / filtering CC7 messages");
+	fprintf(stderr, fmt, "-S <port>", "Start CTRL server on port <port>. Use 0 for random.");
+	fprintf(stderr, fmt, "-s <state_file>", "Load <state_file>");
+	fprintf(stderr, fmt, "-c <client_name>", "Jack Client name");
+	fprintf(stderr, fmt, "-A", "Set plugin port names as aliases");
+	fprintf(stderr, fmt, "-k channel", "MIDI Channel (0: all, 17: none)");
+	fprintf(stderr, fmt, "-i num_in", "Jack number In ports");
+	fprintf(stderr, fmt, "-j <connect_to>", "Connect Audio Out to <connect_to>. " JFST_STR_NO_CONNECT " for no connect");
+	fprintf(stderr, fmt, "-l", "save state to state_file on SIGUSR1 (require -s)");
+	fprintf(stderr, fmt, "-m mode_midi_cc", "Bypass/Resume MIDI CC (default: 122)");
+	fprintf(stderr, fmt, "-p", "Plugin path ( same as <plugin> )");
+	fprintf(stderr, fmt, "-M", "Disable connecting MIDI In port to all physical");
+	fprintf(stderr, fmt, "-P", "Self MIDI Program Change handling");
+	fprintf(stderr, fmt, "-o num_out", "Jack number Out ports");
+	fprintf(stderr, fmt, "-T", "Separate threads");
+	fprintf(stderr, fmt, "-u uuid", "JackSession UUID");
+	fprintf(stderr, fmt, "-U SysExID", "SysEx ID (1-127). 0 is default (do not use it)");
+	fprintf(stderr, fmt, "-v", "Verbose");
+	fprintf(stderr, fmt, "-V", "Disable Volume control / filtering CC7 messages");
 }
 
 struct SepThread {
@@ -270,19 +269,19 @@ main_loop() {
 }
 
 static bool
-plugin_new( const char* path, const char* state, const char* uuid, const char* client_name ) {
+new_plugin( struct plugin* plug ) {
 	JFST_NODE* jn = jfst_node_new(APPNAME);
 	JFST* jfst = jn->jfst;
-	jfst->default_state_file = state;
-	jfst->uuid = (char*) uuid;
-	jfst->client_name = (char*) client_name;
+	jfst->default_state_file = plug->state;
+	jfst->uuid = (char*) plug->uuid;
+	jfst->client_name = (char*) plug->client_name;
 
 	/* Load plugin - in this thread or dedicated */
 	bool loaded;
 	if ( separate_threads ) {
-		loaded = jfst_load_sep_th ( jfst, path, true, sigusr1_save_state );
+		loaded = jfst_load_sep_th ( jfst, plug->path, true, sigusr1_save_state );
 	} else {
-		loaded = jfst_load ( jfst, path, true, sigusr1_save_state );
+		loaded = jfst_load ( jfst, plug->path, true, sigusr1_save_state );
 	}
 
 	/* Well .. Are we loaded plugin ? */
@@ -306,14 +305,16 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	int		argc = -1;
 	char**		argv = NULL;
 	int		ret = 1;
-	bool		opt_generate_dbinfo = false;
-	bool		opt_list_plugins = false;
-	bool		have_serv = false;
-	uint16_t	ctrl_port_number = 0;
+	bool		opt_have_serv = false;
+
+	JFST_DEFAULTS* def = jfst_get_defaults();
+
+{ /* Parse options | init JFST NODES | Limit scope of some initial variables */
+	uint16_t	opt_port_number = 0;
 	int		pc = 0; // plugins count
 	LogLevel	log_level = LOG_INFO;
 
-	JFST_DEFAULTS* def = jfst_get_defaults();
+	enum { NORMAL, LIST, GEN_DB } mode = NORMAL;
 
 	struct plugin	plugins[MAX_PLUGS];
 	memset( plugins, 0, sizeof(struct plugin) * MAX_PLUGS );
@@ -335,10 +336,10 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 			case 'b': def->bypassed = true; break;
 			case 'd': def->dbinfo_file = optarg; break;
 			case 'e': def->with_editor = WITH_EDITOR_HIDE; break;
-			case 'g': opt_generate_dbinfo = true; break;
-			case 'L': opt_list_plugins = true; break;
+			case 'g': mode = GEN_DB; break;
+			case 'L': mode = LIST; break;
 			case 's': plugins[pc].state = optarg; break;
-			case 'S': have_serv=true; ctrl_port_number = strtol(optarg,NULL,10); break;
+			case 'S': opt_have_serv=true; opt_port_number = strtol(optarg,NULL,10); break;
 			case 'c': plugins[pc].client_name = optarg; break;
 			case 'k': def->channel = strtol(optarg, NULL, 10); break;
 			case 'i': def->maxIns = strtol(optarg, NULL, 10); break;
@@ -364,42 +365,47 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	for ( pc = 0; optind < argc; optind++, pc++ )
 		plugins[pc].path = argv[optind];
 
-	log_init ( log_level, NULL, NULL );
-	log_info( "FSTHost Version: %s (%s)", VERSION, ARCH "bit" );
-
 	/* Under Jack Session Manager Control "-p -j !" is forced */
 	if ( getenv("SESSION_DIR") ) {
 		def->want_auto_midi_physical = false;
 		def->connect_to = JFST_STR_NO_CONNECT;
 	}
 
-	/* If use want to list plugins then abandon other tasks */
-	if (opt_list_plugins) return fst_info_list ( def->dbinfo_file, ARCH );
+	log_init ( log_level, NULL, NULL );
+	log_info( "FSTHost Version: %s (%s)", VERSION, ARCH "bit" );
 
-	/* If NULL then Generate using VST_PATH */
-	if (opt_generate_dbinfo) {
-		int ret = fst_info_update ( def->dbinfo_file, plugins[0].path );
-		if (ret > 0) usage ( argv[0] );
-		return ret;
+	switch ( mode ) {
+		case LIST: /* List plugins then abandon other tasks */
+			return fst_info_list ( def->dbinfo_file, ARCH );
+		case GEN_DB: /* If path is NULL then Generate using VST_PATH */
+			ret = fst_info_update ( def->dbinfo_file, plugins[0].path );
+			if (ret > 0) usage ( argv[0] );
+			return ret;
+		case NORMAL:
+			break;
 	}
 
+	/* Init JFST Nodes aka plugins */
 	for ( pc = 0; pc < MAX_PLUGS; pc++ ) { 
 		if ( ! plugins[pc].path && ! plugins[pc].state )
 			break;
 
-		if ( ! plugin_new( plugins[pc].path, plugins[pc].state, plugins[pc].uuid, plugins[pc].client_name ) )
+		if ( ! new_plugin(&plugins[pc]) )
 			goto game_over;
 	}
 	if ( pc == 0 ) goto game_over; // no any plugin loaded
 
-/*
 #ifdef HAVE_LASH
-	jfst_lash_init(jfst, &argc, &argv);
+	JFST_NODE* jnf = jfst_node_get_first();
+	jfst_lash_init(jnf->jfst, &argc, &argv);
 #endif
-*/
+
 	// Socket stuff
-	if ( have_serv && ! fsthost_proto_init(ctrl_port_number) )
-		return 1;
+	if ( opt_have_serv ) {
+		if ( ! fsthost_proto_init(opt_port_number) )
+			return 1;
+	}
+} /* end of "parse" scope */
 
 	// Set Thread policy - usefull only with WineRT/LPA patch
 	//fst_set_thread_priority ( "Main", REALTIME_PRIORITY_CLASS, THREAD_PRIORITY_TIME_CRITICAL );
@@ -445,10 +451,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 
 game_over:
 	/* Close CTRL socket */
-	if ( have_serv ) {
-		log_info( "Stopping JFST control" );
-		proto_close();
-	}
+	if ( opt_have_serv ) proto_close();
 
 	if ( ret > 0 ) usage ( argv[0] );
 	jfst_node_free_all();

@@ -224,7 +224,7 @@ int fst_info_update(const char *dbpath, const char *fst_path) {
 
 		xmlDocFormatDump(f, xml_db, true);
 		fclose(f);
-		log_error ( "xml database updated: %s", xmlpath );
+		log_info ( "xml database updated: %s", xmlpath );
 	}
 
 	xmlFreeDoc(xml_db);
