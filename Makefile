@@ -40,6 +40,10 @@ ifeq ($(MWW),1)
 CEXTRA             += -DMOVING_WINDOWS_WORKAROUND
 endif
 
+ifeq ($(EE),1)
+CEXTRA             += -DEMBEDDED_EDITOR
+endif
+
 ifeq ($(GTK),0)
 CEXTRA             += -DNO_GTK
 endif

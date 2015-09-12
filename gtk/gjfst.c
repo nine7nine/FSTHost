@@ -34,9 +34,12 @@ static short mode_cc = 0;
 static bool no_cpu_usage = false;
 
 static	GtkWidget* window;
+static	GtkWidget* vpacker;
+
+#ifdef EMBEDDED_EDITOR
 static	GtkWidget* gtk_socket;
 static	GtkWidget* socket_align;
-static	GtkWidget* vpacker;
+#endif
 
 typedef struct {
 	JFST* jfst;
@@ -44,7 +47,9 @@ typedef struct {
 	GtkWidget* hpacker;
 	GtkWidget* bypass_button;
 	GtkWidget* editor_button;
+#ifdef EMBEDDED_EDITOR
 	GtkWidget* editor_checkbox;
+#endif
 	GtkWidget* channel_listbox;
 	GtkWidget* transposition_spin;
 	GtkWidget* preset_listbox;
@@ -599,6 +604,9 @@ editor_handler (GtkToggleButton *but, gpointer ptr) {
 	JFST* jfst = gjfst->jfst;
 
 	if (gtk_toggle_button_get_active (but)) {
+#ifndef EMBEDDED_EDITOR
+		fst_run_editor(jfst->fst, false); // popup = false
+#else
 		bool popup = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(gjfst->editor_checkbox));
 		if (! fst_run_editor(jfst->fst, popup)) return;
 		if (! popup) return;
@@ -618,13 +626,10 @@ editor_handler (GtkToggleButton *but, gpointer ptr) {
 #ifdef MOVING_WINDOWS_WORKAROUND
 		g_signal_connect (G_OBJECT(window), "configure-event", G_CALLBACK(configure_handler), jfst);
 #endif
-
 		fst_show_editor(jfst->fst);
 		gtk_widget_show(socket_align);
 		gtk_widget_show(gtk_socket);
-	} else if (! jfst->fst->editor_popup) {
-		fst_call ( jfst->fst, EDITOR_CLOSE );
-	} else {
+	} else if ( jfst->fst->editor_popup ) {
 		// For some reason window was closed before we reach this function
 		// That's mean GtkSocket is already destroyed
 		if ( jfst->fst->window ) {
@@ -635,6 +640,9 @@ editor_handler (GtkToggleButton *but, gpointer ptr) {
 		}
 		gtk_widget_destroy(socket_align);
 		gtk_window_resize(GTK_WINDOW(window), 1, 1);
+#endif /* EMBEDDED_EDITOR */
+	} else {
+		fst_call ( jfst->fst, EDITOR_CLOSE );
 	}
 }
 
@@ -759,12 +767,14 @@ idle_cb(GJFST *gjfst) {
 	return TRUE;
 }
 
+#ifdef EMBEDDED_EDITOR
 // Editor Window is embedded and want resize window
 static void gtk_gui_resize ( JFST* jfst ) {
 	FST* fst = jfst->fst;
 	if ( fst->editor_popup && fst->window )
 		gtk_widget_set_size_request(gtk_socket, fst->width, fst->height);
 }
+#endif
 
 // Really ugly auxiliary function for create buttons ;-)
 static GtkWidget*
@@ -803,10 +813,12 @@ static GJFST* gjfst_new ( JFST* jfst ) {
 	//------- EDITOR ------------------------------------------------------------------------------
 	gjfst->editor_button = make_img_button(GTK_STOCK_PROPERTIES, "Editor", TRUE, &editor_handler,
 		gjfst, FALSE, hpacker);
+#ifdef EMBEDDED_EDITOR
 	gjfst->editor_checkbox = gtk_check_button_new();
 	gtk_widget_set_tooltip_text(gjfst->editor_checkbox, "Embedded Editor");
 	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(gjfst->editor_checkbox), FALSE);
 	gtk_box_pack_start(GTK_BOX(hpacker), gjfst->editor_checkbox, FALSE, FALSE, 0);
+#endif
 	fst_set_window_close_callback( jfst->fst, gtk_edit_close_handler, gjfst );
 	//------- MIDI LEARN / SYSEX / MIDI SELF PROGRAM CHANGE / MIDI FILTER -------------------------
 	gjfst->midi_learn_toggle = make_img_button(GTK_STOCK_DND, "MIDI Learn", TRUE, &learn_handler,
@@ -871,7 +883,9 @@ static GJFST* gjfst_new ( JFST* jfst ) {
 	gtk_container_set_border_width (GTK_CONTAINER(hpacker), 3); 
 	g_signal_connect (G_OBJECT(window), "delete_event", G_CALLBACK(destroy_handler), gjfst);
 
+#ifdef EMBEDDED_EDITOR
 	jfst_set_gui_resize_cb( jfst, gtk_gui_resize );
+#endif
 
 	// Nasty hack - this also emit signal which do the rest ;-)
 	if (jfst->with_editor == WITH_EDITOR_SHOW)
