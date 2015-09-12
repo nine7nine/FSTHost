@@ -396,10 +396,10 @@ quit:
 
 /* Public functions */
 bool fsthost_proto_init ( uint16_t ctrl_port_number ) {
-	log_info ( "Starting JFST control server ..." );
+	log_info ( "Starting PROTO control server" );
 	serv = serv_init ( ctrl_port_number, handle_client_callback );
 	if ( ! serv ) {
-		log_error ( "Cannot create CTRL socket :(" );
+		log_error ( "Cannot create PROTO socket :(" );
 		return false;
 	}
 	return true;
@@ -412,5 +412,6 @@ void proto_poll() {
 
 void proto_close() {
 	if ( ! serv ) return;
+	log_info( "Stopping PROTO control server" );
 	serv_close (serv);
 }
