@@ -515,20 +515,22 @@ if ( @ARGV > 0 ) {
 	if ( $FPID == 0 ) {
 #		close (STDOUT);
 #		close (STDERR);
-		exec('fsthost64', '-n', '-S 0', @ARGV);
-		die 'Cannot exec';
-	} else {
-		say 'Waiting for socket ...';
-		my $FP = "${PORTDIR}/${FPID}.[0-9]*.port";
-		while ( 1 ) {
-			my $F = glob $FP;
-			last if defined $F;
+		# FIXME: detetect ARCH ( 32 , 64 )
+		my $A = $ENV{'A'} // 32;
+		exec('fsthost' . $A, '-n', '-S 0', @ARGV);
+		die 'Cannot exec: ' . $!;
+	}
 
-			my $kid = waitpid( $FPID, WNOHANG );
-			die 'Kid died :-)' if $kid < 0;
+	say 'Waiting for socket ...';
+	my $FP = ${PORTDIR} . '/' . ${FPID} . '.[0-9]*.port';
+	while ( 1 ) {
+		my $F = glob $FP;
+		last if defined $F;
 
-			usleep(100 * 1000); # 100 ms
-		}
+		my $kid = waitpid( $FPID, WNOHANG );
+		die 'Kid died :-)' if $kid < 0;
+
+		usleep(100 * 1000); # 100 ms
 	}
 }
 
@@ -537,3 +539,4 @@ $Gtk->init();
 MainForm->new();
 
 $Gtk->main();
+
