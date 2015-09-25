@@ -103,10 +103,11 @@ static void signal_handler (int signum) {
 }
 
 bool fsthost_idle () {
-	if ( ! jfst_node_get_first() ) return true;
+	if ( ! jfst_node_get_first() )
+		return true;
 
-	JFST_NODE* jn= jfst_node_get_first();
-	for ( ; jn; jn = jn->next ) {
+	JFST_NODE* jn;
+	for ( jn = jfst_node_get_first(); jn; jn = jn->next ) {
 		JFST* jfst = jn->jfst;;
 
 		Changes changes = jfst_idle ( jfst );
@@ -117,14 +118,14 @@ bool fsthost_idle () {
 		int i;
 		for ( i=0; i < SERV_POLL_SIZE; i++ )
 			jn->changes[i] |= changes;
-
-#ifdef HAVE_LASH
-		if ( ! jfst_lash_idle(jfst) )
-			quit = true;
-#endif
 	}
 
-quit:
+#ifdef HAVE_LASH
+	JFST_NODE* jnf = jfst_node_get_first();
+	if ( ! jfst_lash_idle(jnf->jfst) )
+		quit = true;
+#endif
+
 	if ( quit ) {
 		fsthost_quit();
 		return false;
@@ -138,11 +139,12 @@ quit:
 			fst_run_editor( jn->jfst->fst, false );
 	}
 
-	if ( ! separate_threads ) {
-		if ( ! fst_event_callback() ) {
-			quit = true;
-			goto quit;
-		}
+	if ( separate_threads )
+		return true;
+
+	if ( ! fst_event_callback() ) {
+		fsthost_quit();
+		return false;
 	}
 
 	return true;
