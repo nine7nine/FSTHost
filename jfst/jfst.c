@@ -78,11 +78,6 @@ JFST* jfst_new( const char* appname ) {
 	return jfst;
 }
 
-static void jfst_destroy (JFST* jfst) {
-	midi_filter_cleanup( &jfst->filters, true );
-	free(jfst);
-}
-
 static void jfst_set_aliases ( JFST* jfst, FSTPortType type ) {
 	int32_t count;
 	jack_port_t** ports;
@@ -153,9 +148,14 @@ bool jfst_init( JFST* jfst ) {
 }
 
 void jfst_close ( JFST* jfst ) {
-	if ( jfst->client )
+	// Close JACK
+	if ( jfst->client ) {
+		log_info( "Jack Close (%s)", jfst->client_name );
+		jack_deactivate ( jfst->client );
 		jack_client_close ( jfst->client );
+	}
 
+	// Close FST
 	if ( jfst->fst ) {
 		fst_close(jfst->fst);
 
@@ -163,7 +163,9 @@ void jfst_close ( JFST* jfst ) {
 		free ( jfst->outports );
 	}
 
-	jfst_destroy( jfst );
+	// Cleanup
+	midi_filter_cleanup( &jfst->filters, true );
+	free(jfst);
 }
 
 /* return false if want quit */
