@@ -35,9 +35,6 @@ void jfst_node_free_all() {
 		JFST_NODE* t = n;
 		n = n->next;
 
-		log_info( "Jack Deactivate (%s)", t->jfst->client_name );
-		jack_deactivate ( t->jfst->client );
-
 		jfst_close(t->jfst);
 		free(t);
 	}
