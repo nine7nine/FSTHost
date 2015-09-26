@@ -59,6 +59,7 @@ volatile bool quit = false;
 volatile bool open_editor = false;
 volatile bool separate_threads = false;
 volatile bool sigusr1_save_state = false;
+volatile bool gtk_gui = true;
 
 struct plugin {
 	const char* path;
@@ -70,8 +71,7 @@ struct plugin {
 void fsthost_quit() {
 	quit = true;
 #ifndef NO_GTK
-	JFST_DEFAULTS* def = jfst_get_defaults();
-	if (def->with_editor != WITH_EDITOR_NO) {
+	if (gtk_gui) {
 		gjfst_quit();
 	} else {
 		g_main_loop_quit(g_main_loop);
@@ -150,11 +150,9 @@ bool fsthost_idle () {
 	return true;
 }
 
-#ifdef NO_GTK
 static void edit_close_handler ( void* arg ) {
 	quit = true;
 }
-#endif
 
 static void cmdline2arg(int *argc, char ***pargv, LPSTR cmdline) {
 	LPWSTR* szArgList = CommandLineToArgvW(GetCommandLineW(), argc);
@@ -192,11 +190,11 @@ static void usage(char* appname) {
 	fprintf(stderr, fmt, "-L", "List plugins from XML info DB.");
 	fprintf(stderr, fmt, "-d xml_db_path", "Custom path to XML DB");
 	fprintf(stderr, fmt, "-b", "Start in bypass mode");
-	fprintf(stderr, fmt, "-n", "Disable Editor and GTK GUI");
-	fprintf(stderr, fmt, "-N", "Notify changes by SysEx");
 #ifndef NO_GTK
-	fprintf(stderr, fmt, "-e", "Hide Editor");
+	fprintf(stderr, fmt, "-n", "Disable GTK GUI");
 #endif
+	fprintf(stderr, fmt, "-N", "Notify changes by SysEx");
+	fprintf(stderr, fmt, "-e", "Hide Editor");
 	fprintf(stderr, fmt, "-S <port>", "Start CTRL server on port <port>. Use 0 for random.");
 	fprintf(stderr, fmt, "-s <state_file>", "Load <state_file>");
 	fprintf(stderr, fmt, "-c <client_name>", "Jack Client name");
@@ -292,13 +290,6 @@ new_plugin( struct plugin* plug ) {
 	// Init Jack
 	if ( ! jfst_init(jfst) )
 		return false;
-
-#ifdef NO_GTK
-	if (jfst->with_editor != WITH_EDITOR_NO) {
-		fst_set_window_close_callback( jfst->fst, edit_close_handler, jfst );
-		open_editor = true;
-	}
-#endif
 	return true;
 }
 
@@ -308,6 +299,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	char**		argv = NULL;
 	int		ret = 1;
 	bool		opt_have_serv = false;
+	bool		show_fst_editor = true;
 
 	JFST_DEFAULTS* def = jfst_get_defaults();
 
@@ -324,7 +316,14 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 
 	// Handle FSTHOST_GUI environment
 	char* menv = getenv("FSTHOST_GUI");
-	if ( menv ) def->with_editor = strtol(menv, NULL, 10);
+	if ( menv ) {
+		int gui = strtol(menv, NULL, 10);
+		switch ( gui ) {
+			case 0: show_fst_editor = gtk_gui = false; break;
+			case 1: show_fst_editor = false; break;
+			/* 2 or more is normal mode */
+		}
+	}
 
 	// Handle FSTHOST_THREADS environment
 	menv = getenv("FSTHOST_THREADS");
@@ -338,7 +337,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 			case 'A': def->want_port_aliases = true; break;
 			case 'b': def->bypassed = true; break;
 			case 'd': def->dbinfo_file = optarg; break;
-			case 'e': def->with_editor = WITH_EDITOR_HIDE; break;
+			case 'e': show_fst_editor = false; break;
 			case 'g': mode = GEN_DB; break;
 			case 'L': mode = LIST; break;
 			case 's': plugins[sc++].state = optarg; break;
@@ -352,7 +351,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 			case 'M': def->want_auto_midi_physical = false; break;
 			case 'P': def->midi_pc = MIDI_PC_SELF; break; /* used but not enabled */
 			case 'o': def->maxOuts = strtol(optarg, NULL, 10); break;
-			case 'n': def->with_editor = WITH_EDITOR_NO; break;
+			case 'n': gtk_gui = false; break;
 			case 'N': def->sysex_want_notify = true; break;
 			case 'm': def->want_state_cc = strtol(optarg, NULL, 10); break;
 			case 'T': separate_threads = true;
@@ -363,6 +362,10 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 			default: usage (argv[0]); return 1;
 		}
 	}
+
+#ifdef NO_GTK
+	gtk_gui = false;
+#endif
 
 	/* We have more arguments than getops options */
 	for ( pc = 0; optind < argc; optind++, pc++ )
@@ -428,17 +431,25 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	if ( sigusr1_save_state )
 		sigaction(SIGUSR1, &sa, NULL);
 
+	if ( show_fst_editor && ! gtk_gui ) {
+		open_editor = true;
+
+		JFST_NODE* jn;
+		for ( jn = jfst_node_get_first() ; jn; jn = jn->next )
+			fst_set_window_close_callback( jn->jfst->fst, edit_close_handler, jn->jfst );
+	}
+
 #ifdef NO_GTK
 	main_loop();
 #else
 	g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 100, (GSourceFunc) fsthost_idle, NULL, NULL);
-	if (def->with_editor != WITH_EDITOR_NO) {
+	if (gtk_gui) {
 		log_info( "Start GUI" );
 		gjfst_init(&argc, &argv);
 
 		JFST_NODE* jn = jfst_node_get_first();
 		for ( ; jn; jn = jn->next )
-			gjfst_add( jn->jfst );
+			gjfst_add( jn->jfst, show_fst_editor );
 
 		gjfst_start();
 

@@ -799,6 +799,7 @@ make_img_button(const gchar *stock_id, const gchar *tooltip, bool toggle,
 static GJFST* gjfst_new ( JFST* jfst ) {
 	GJFST* gjfst = malloc ( sizeof(GJFST) );
 	gjfst->jfst = jfst;
+	jfst->user_ptr = gjfst;
 
 	GtkWidget* hpacker = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 7);
 	gjfst->hpacker = hpacker;
@@ -887,10 +888,6 @@ static GJFST* gjfst_new ( JFST* jfst ) {
 	jfst_set_gui_resize_cb( jfst, gtk_gui_resize );
 #endif
 
-	// Nasty hack - this also emit signal which do the rest ;-)
-	if (jfst->with_editor == WITH_EDITOR_SHOW)
-		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(gjfst->editor_button), TRUE);
-
 	return gjfst;
 }
 
@@ -910,10 +907,11 @@ static int gjfst_xerror_handler( Display *disp, XErrorEvent *ev ) {
 }
 
 /* ------------------------------- PUBLIC ---------------------------------------------- */
-void gjfst_add (JFST* jfst) {
+void gjfst_add (JFST* jfst, bool editor) {
 //	g_info("GTK Thread WineID: %d | LWP: %d", GetCurrentThreadId (), (int) syscall (SYS_gettid));
 
 	GJFST* gjfst = gjfst_new ( jfst );
+
 	gtk_box_pack_start(GTK_BOX(vpacker), gjfst->hpacker, FALSE, FALSE, 0);
 
 	// GTK GUI idle
@@ -922,7 +920,8 @@ void gjfst_add (JFST* jfst) {
 	// TODO: wrong place
 	gtk_window_set_title (GTK_WINDOW(window), jfst->client_name);
 
-	jfst->user_ptr = gjfst;
+	// Nasty hack - this also emit signal which do the rest ;-)
+	if (editor) gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(gjfst->editor_button), TRUE);
 }
 
 void gjfst_init(int *argc, char **argv[]) {
