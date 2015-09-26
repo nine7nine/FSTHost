@@ -25,12 +25,6 @@ enum WantState {
 	WANT_STATE_BYPASS
 };
 
-enum WithEditor {
-	WITH_EDITOR_NO   = 0,
-	WITH_EDITOR_HIDE = 1,
-	WITH_EDITOR_SHOW = 2
-};
-
 /* Structures & Prototypes for midi output and associated queue */
 struct MidiMessage {
 	jack_nframes_t		time;
@@ -68,7 +62,6 @@ typedef struct {
 	bool want_port_aliases;
 	bool bypassed;
 	const char* dbinfo_file;
-	enum WithEditor with_editor;
 	uint8_t channel; /* XXX: shared */
 	int32_t maxIns;
 	int32_t maxOuts;
@@ -102,7 +95,6 @@ typedef struct _JFST {
 	bool		want_port_aliases;
 	bool		want_auto_midi_physical;
 	short		want_state_cc;
-	enum WithEditor	with_editor;
 	float		volume;		/* where 0.0 mean silence */
 	uint8_t		out_level;	/* for VU-meter */
 	char*		uuid;		/* Jack Session support */

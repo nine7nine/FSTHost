@@ -21,7 +21,6 @@ extern void jfst_sysex_gen_random_id ( JFST* jfst );
 
 static JFST_DEFAULTS def = {
 .want_port_aliases = false,
-.with_editor = WITH_EDITOR_SHOW,
 .want_state_cc = 122, /* Local Keyboard MIDI CC message (122) is probably not used by any VST */
 .midi_pc = MIDI_PC_PLUG, // plugin take care of Program Change
 .want_auto_midi_physical = true, // By default autoconnect MIDI In port to all physical
@@ -55,7 +54,6 @@ JFST* jfst_new( const char* appname ) {
 	jfst->want_port_aliases = def.want_port_aliases;
 	jfst->bypassed = def.bypassed;
 	jfst->dbinfo_file = (char*) def.dbinfo_file;
-	jfst->with_editor = def.with_editor;
 	jfst->want_auto_midi_physical = def.want_auto_midi_physical;
 	jfst->midi_pc = def.midi_pc;
 	jfst->sysex_want_notify = def.sysex_want_notify;
