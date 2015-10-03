@@ -13,7 +13,6 @@
 #define DEBUG log_debug
 #define ERR log_error
 
-static FST* fst_first = NULL;
 static bool WindowClassRegistered = FALSE;
 
 static void fst_event_handler(FST* fst);
@@ -59,36 +58,67 @@ static void valid_program_name ( char* text, size_t size ) {
 	if (m) *m = 0; else *c = 0;
 }
 
-/*************************** Multi-plugin support routines *****************************************/
+/*************************** Thread support routines *****************************************/
+
+static DWORD WINAPI fst_event_thread ( LPVOID lpParam );
+
+static FST_THREAD*
+fst_thread_new(void) {
+	FST_THREAD* th = malloc( sizeof(FST_THREAD) );
+	if ( ! th ) return NULL;
+
+	pthread_mutex_init (&th->lock, NULL);
+	th->first = NULL;
+	th->handle = CreateThread( NULL, 0, fst_event_thread, th, 0, &(th->id) );
+	if ( ! th->handle ) {
+		free(th);
+		return NULL;
+	}
+	return th;
+}
+
 static void
-fst_event_loop_remove_plugin (FST* fst) {
+fst_thread_remove (FST* fst) {
+	FST_THREAD* th = fst->thread;
 	FST* p;
 	FST* prev;
 
-	for (p = fst_first, prev = NULL; p->next; prev = p, p = p->next) {
+	pthread_mutex_lock (&th->lock);
+	fst->thread = NULL;
+	for (p = th->first, prev = NULL; p->next; prev = p, p = p->next) {
 		if (p == fst && prev)
 			prev->next = p->next;
 	}
 
-	if (fst_first == fst) {
-		if (fst_first->next) {
-			fst_first = fst_first->next;
+	if (th->first == fst) {
+		if (th->first->next) {
+			th->first = th->first->next;
 		} else {
-			fst_first = NULL;
+			th->first = NULL;
 			PostQuitMessage(0);
+			INF ( "Waiting for end of thread" );
+			WaitForSingleObject( th->handle, 0 );
+			pthread_mutex_unlock (&th->lock);
+			free(th);
+			return;
 		}
 	}
+	pthread_mutex_unlock (&th->lock);
 }
 
-static void
-fst_event_loop_add_plugin (FST* fst) {
-	if (!fst_first) {
-		fst_first = fst;
+static bool
+fst_thread_add (FST_THREAD* th, FST* fst) {
+	pthread_mutex_lock (&th->lock);
+	fst->thread = th;
+	if ( th->first == NULL ) {
+		th->first = fst;
 	} else {
-		FST* p = fst_first;
+		FST* p = th->first;
 		while (p->next) p = p->next;
 		p->next = fst;
 	}
+	pthread_mutex_unlock (&th->lock);
+	return true;
 }
 
 /*************************** Editor window routines *****************************************/
@@ -188,7 +218,10 @@ bool fst_show_editor (FST *fst) {
 static void fst_event_call (FST *fst, FSTEventTypes type) {
 	FSTEventCall* ec = &( fst->event_call );
 	ec->type = type;
-	if (GetCurrentThreadId() == fst->MainThreadId) {
+
+	/* hurry thread */
+	PostThreadMessage( fst->thread->id, WM_USER, 0, 0 );
+	if (GetCurrentThreadId() == fst->thread->id) {
 		fst_event_handler ( fst );
 	} else {
 		pthread_mutex_lock (&fst->lock);
@@ -242,6 +275,7 @@ fst_call_dispatcher (FST *fst, int32_t opcode, int32_t index,
 	dp.opt = opt;
 
 	pthread_mutex_lock ( &ec->lock );
+	DEBUG("Dispatcher %d",  dp.opcode );
 	ec->dispatcher = &dp;
 	fst_event_call ( fst, DISPATCHER );
 	pthread_mutex_unlock ( &ec->lock );
@@ -430,14 +464,17 @@ FST* fst_open (FSTHandle* fhandle) {
 		return NULL;
 	}
 
+	FST_THREAD* th = fst_thread_new();
+	if ( ! th ) return NULL;
+
 	FST* fst = fst_new ();
 	fst->plugin = plugin;
 	fst->handle = fhandle;
 	fst->plugin->resvd1 = (intptr_t*) &( fst->amc );
 
 	// Open Plugin
-	plugin->dispatcher (plugin, effOpen, 0, 0, NULL, 0.0f);
-	fst->vst_version = (int) plugin->dispatcher (plugin, effGetVstVersion, 0, 0, NULL, 0.0f);
+	fst_thread_add( th, fst );
+	fst_call( fst, OPEN );
 
 	if (fst->vst_version >= 2) {
 		fst->canReceiveVstEvents = fst_canDo(fst, "receiveVstEvents");
@@ -459,11 +496,6 @@ FST* fst_open (FSTHandle* fhandle) {
 
 	// We always need some name ;-)
 	if (! fst->name) fst->name = strdup ( fst->handle->name );
-
-	// Bind to plugin list
-	fst_event_loop_add_plugin(fst);
-
-	fst->MainThreadId = GetCurrentThreadId();
 
 	return fst;
 }
@@ -487,6 +519,7 @@ FST* fst_load_open ( const char* path ) {
 
 void fst_close (FST* fst) {
 	fst_call ( fst, CLOSE );	
+	fst_thread_remove(fst);
 
 	fst_unload(fst->handle);
 	free(fst->name);
@@ -595,6 +628,7 @@ static inline void fst_plugin_idle ( FST* fst ) {
 static inline void fst_event_handler (FST* fst) {
 	FSTEventCall* ec = &( fst->event_call );
 	if ( ec->type == RESET ) return;
+	INF("Event: %d", ec->type);
 
 	AEffect* plugin = fst->plugin;
 	AMC* amc = &fst->amc;
@@ -602,12 +636,15 @@ static inline void fst_event_handler (FST* fst) {
 
 	pthread_mutex_lock (&fst->lock);
 	switch ( ec->type ) {
+	case OPEN:
+		plugin->dispatcher(plugin, effOpen, 0, 0, NULL, 0.0f);
+		fst->vst_version = (int) plugin->dispatcher (plugin, effGetVstVersion, 0, 0, NULL, 0.0f);
+		break;
 	case CLOSE:
 		INF("Closing plugin: %s", fst->name);
 		fst_suspend(fst);
 		fst_destroy_editor (fst);
 		plugin->dispatcher(plugin, effClose, 0, 0, NULL, 0.0f);
-		fst_event_loop_remove_plugin(fst);
 		INF("Plugin closed");
 		break;
 	case SUSPEND:
@@ -661,29 +698,15 @@ static inline void fst_event_handler (FST* fst) {
 	pthread_cond_signal (&ec->called);
 }
 
-static void fst_event_dispatcher() {
+static void fst_event_dispatcher(FST_THREAD* th) {
+	pthread_mutex_lock (&th->lock);
 	FST* fst;
-	for (fst = fst_first; fst; fst = fst->next) {
+	for (fst = th->first; fst; fst = fst->next) {
 		fst_plugin_idle ( fst );
-
 		fst_update_current_program ( fst );
-
 		fst_event_handler(fst);
 	}
-}
-
-bool fst_event_callback() {
-	MSG msg;
-	while (PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE) != 0) {
-		TranslateMessage(&msg);
-		DispatchMessageA(&msg);
-		if (msg.message == WM_QUIT)
-			return FALSE;
-	}
-	
-	fst_event_dispatcher();
-
-	return TRUE;
+	pthread_mutex_unlock (&th->lock);
 }
 
 void fst_show_thread_info ( const char* th_name ) {
@@ -704,24 +727,46 @@ void fst_set_thread_priority ( const char* th_name, int class, int priority ) {
 	fst_show_thread_info ( th_name );
 }
 
-void fst_event_loop () {
+static DWORD WINAPI
+fst_event_thread ( LPVOID lpParam ) {
+	FST_THREAD* th = (FST_THREAD*) lpParam;
 
 	register_window_class();
 
 	if (!SetTimer (NULL, 1000, 100, NULL)) {
 		ERR ("cannot set timer on dummy window");
-		return;
+		return 1;
 	}
 
  	MSG msg;
 	while (GetMessageA (&msg, NULL, 0,0) != 0) {
  		TranslateMessage(&msg);
  		DispatchMessageA(&msg);
-		if ( msg.message != WM_TIMER )
-			continue;
+		if ( msg.message != WM_TIMER
+		  && msg.message != WM_USER
+		) continue;
 
-		fst_event_dispatcher();
+		fst_event_dispatcher(th);
 	}
 
-	INF( "GUI EVENT LOOP: THE END" );
+	INF( "FST THREAD: THE END" );
+
+	return 0;
 }
+
+/************************** Unused ***************************************/
+#if 0
+bool fst_event_callback() {
+	MSG msg;
+	while (PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE) != 0) {
+		TranslateMessage(&msg);
+		DispatchMessageA(&msg);
+		if (msg.message == WM_QUIT)
+			return false;
+	}
+	
+	fst_event_dispatcher(); /* FIXME: thread ?? */
+
+	return true;
+}
+#endif
