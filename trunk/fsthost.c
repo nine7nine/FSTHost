@@ -139,14 +139,6 @@ bool fsthost_idle () {
 			fst_run_editor( jn->jfst->fst, false );
 	}
 
-	if ( separate_threads )
-		return true;
-
-	if ( ! fst_event_callback() ) {
-		fsthost_quit();
-		return false;
-	}
-
 	return true;
 }
 
@@ -215,48 +207,6 @@ static void usage(char* appname) {
 	fprintf(stderr, fmt, "-V", "Disable Volume control / filtering CC7 messages");
 }
 
-struct SepThread {
-	JFST* jfst;
-	const char* plug_spec;
-	sem_t sem;
-	bool loaded;
-	bool state_can_fail;
-};
-
-static DWORD WINAPI
-sep_thread ( LPVOID arg ) {
-	struct SepThread* st = (struct SepThread*) arg;
-
-	fst_set_thread_priority ( "SepThread", ABOVE_NORMAL_PRIORITY_CLASS, THREAD_PRIORITY_ABOVE_NORMAL );
-
-	bool loaded = st->loaded = jfst_load ( st->jfst, st->plug_spec, true, st->state_can_fail );
-
-	sem_post( &st->sem );
-
-	if ( ! loaded ) return 0;
-
-	while ( fst_event_callback() )
-		usleep ( 30000 );
-
-	quit = true;
-
-	return 0;
-}
-
-bool jfst_load_sep_th (JFST* jfst, const char* plug_spec, bool want_state_and_amc, bool state_can_fail) {
-	struct SepThread st;
-	st.jfst = jfst;
-	st.plug_spec = plug_spec;
-	st.state_can_fail = state_can_fail;
-	sem_init( &st.sem, 0, 0 );
-	CreateThread( NULL, 0, sep_thread, &st, 0, 0 );
-
-	sem_wait ( &st.sem );
-	sem_destroy ( &st.sem );
-
-	return st.loaded;
-}
-
 static inline void
 main_loop() {
 	log_info("GUI Disabled - start MainLoop");
@@ -277,12 +227,7 @@ new_plugin( struct plugin* plug ) {
 	jfst->client_name = (char*) plug->client_name;
 
 	/* Load plugin - in this thread or dedicated */
-	bool loaded;
-	if ( separate_threads ) {
-		loaded = jfst_load_sep_th ( jfst, plug->path, true, sigusr1_save_state );
-	} else {
-		loaded = jfst_load ( jfst, plug->path, true, sigusr1_save_state );
-	}
+	bool loaded = jfst_load ( jfst, plug->path, true, sigusr1_save_state );
 
 	/* Well .. Are we loaded plugin ? */
 	if (! loaded) return false;
@@ -391,6 +336,9 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 			break;
 	}
 
+	/* TODO: Separate thread mode */
+//	if ( separate_threads )
+
 	/* Init JFST Nodes aka plugins */
 	for ( pc = 0; pc < MAX_PLUGS; pc++ ) { 
 		if ( ! plugins[pc].path && ! plugins[pc].state )
@@ -464,8 +412,8 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	log_info( "Game Over" );
 
 game_over:
-	/* Close CTRL socket */
-	if ( opt_have_serv ) proto_close();
+	if ( opt_have_serv )
+		proto_close();
 
 	if ( ret > 0 ) usage ( argv[0] );
 	jfst_node_free_all();

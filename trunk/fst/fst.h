@@ -74,6 +74,7 @@ typedef struct {
 
 typedef enum {
 	RESET,
+	OPEN,
 	CLOSE,
 	SUSPEND,
 	RESUME,
@@ -97,8 +98,16 @@ typedef struct {
 
 typedef void (*FSTWindowCloseCallback)(void* arg);
 
-typedef struct _FST {
-	struct _FST*		next;
+typedef struct _FST FST;
+typedef struct {
+	HANDLE handle;
+	DWORD id;
+	pthread_mutex_t	lock;
+	FST* first;
+} FST_THREAD;
+
+struct _FST {
+	FST*		next;
 
 	AEffect*		plugin;
 	FSTHandle*		handle;
@@ -109,7 +118,7 @@ typedef struct _FST {
 	pthread_mutex_t		lock;
 	pthread_mutex_t		process_lock;
 	bool			wantIdle;
-	int			MainThreadId;
+	FST_THREAD*		thread;
 
 	/* GUI */
 	bool			editor_popup;
@@ -119,7 +128,7 @@ typedef struct _FST {
 	int			height;
 
 	/* Window Close Callback */
-	void			(*window_close)(void* arg);
+	FSTWindowCloseCallback	window_close;
 	void*			window_close_user_ptr;
 
 	int32_t			current_program;
@@ -131,7 +140,7 @@ typedef struct _FST {
 	bool			canReceiveVstMidiEvent;
 	bool			canSendVstEvents;
 	bool			canSendVstMidiEvent;
-} FST;
+};
 
 typedef enum {
 	FST_PORT_IN,
@@ -155,7 +164,7 @@ static inline bool fst_want_midi_out ( FST* fst ) {
 	return (fst->canSendVstEvents || fst->canSendVstMidiEvent);
 }
 
-static inline void fst_set_window_close_callback ( FST* fst, void(*f), void* ptr ) {
+static inline void fst_set_window_close_callback ( FST* fst, FSTWindowCloseCallback f, void* ptr ) {
 	fst->window_close = f;
 	fst->window_close_user_ptr = ptr;
 }
