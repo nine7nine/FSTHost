@@ -15,9 +15,6 @@
 
 #include "gjfst.h"
 
-/* fsthost.c */
-extern void fsthost_idle();
-
 /* cpuusage.c */
 extern void CPUusage_init();
 extern double CPUusage_getCurrentValue();
@@ -757,6 +754,7 @@ idle_cb(GJFST *gjfst) {
 	if (jfst->bypassed != gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(gjfst->bypass_button))) {
 		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(gjfst->bypass_button), jfst->bypassed);
 	}
+
 	if (jfst->want_state_cc != mode_cc) {
 		mode_cc = jfst->want_state_cc;
 		gchar tmpstr[24];
