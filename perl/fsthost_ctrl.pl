@@ -248,7 +248,7 @@ sub dispatch_news {
 	);
 
 	foreach ( $self->call($cmd) ) {
-		my ( $plug, $action, $value ) = m/([\w-]+):([\w-]+):(\d+)/;
+		my ( $plug, $action, $value ) = m/([\w-+]+):([\w-]+):(\d+)/;
 		next unless exists $ACTION{$action};
 
 		# TODO: if new plug .. 
@@ -481,7 +481,7 @@ sub new {
 
 sub presets {
 	my $self = shift;
-	my @presets = map { s/^[\w-]+:\d+:// and $_ } $self->call ( 'list_programs' );
+	my @presets = map { s/^[\w-+]+:\d+:// and $_ } $self->call ( 'list_programs' );
 	return @presets;
 }
 

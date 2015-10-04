@@ -43,6 +43,7 @@ GMainLoop* g_main_loop;
 #define APPNAME_ARCH APPNAME ARCH
 
 #define MAX_PLUGS 32
+#define LOOP_INT 100 // 100ms
 
 /* lash.c */
 #ifdef HAVE_LASH
@@ -108,7 +109,7 @@ bool fsthost_idle () {
 
 	JFST_NODE* jn;
 	for ( jn = jfst_node_get_first(); jn; jn = jn->next ) {
-		JFST* jfst = jn->jfst;;
+		JFST* jfst = jn->jfst;
 
 		Changes changes = jfst_idle ( jfst );
 		if ( changes & CHANGE_QUIT )
@@ -214,7 +215,7 @@ main_loop() {
 		if ( ! fsthost_idle() )
 			break;
 
-		usleep ( 100000 );
+		usleep ( LOOP_INT * 1000 );
 	}
 }
 
@@ -390,7 +391,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 #ifdef NO_GTK
 	main_loop();
 #else
-	g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 100, (GSourceFunc) fsthost_idle, NULL, NULL);
+	g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, LOOP_INT, (GSourceFunc) fsthost_idle, NULL, NULL);
 	if (gtk_gui) {
 		log_info( "Start GUI" );
 		gjfst_init(&argc, &argv);

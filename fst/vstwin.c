@@ -737,7 +737,7 @@ fst_event_thread ( LPVOID lpParam ) {
 
 	register_window_class();
 
-	if (!SetTimer (NULL, 1000, 100, NULL)) {
+	if (!SetTimer (NULL, 1000, 30, NULL)) {
 		ERR ("cannot set timer on dummy window");
 		return 1;
 	}
