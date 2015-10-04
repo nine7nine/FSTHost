@@ -219,12 +219,16 @@ static void fst_event_call (FST *fst, FSTEventTypes type) {
 	FSTEventCall* ec = &( fst->event_call );
 	ec->type = type;
 
-	/* hurry thread */
-	PostThreadMessage( fst->thread->id, WM_USER, 0, 0 );
 	if (GetCurrentThreadId() == fst->thread->id) {
 		fst_event_handler ( fst );
 	} else {
 		pthread_mutex_lock (&fst->lock);
+
+		/* hurry thread - some plugins don't like fast PC */
+		if ( ec->type != PROGRAM_CHANGE ) {
+			PostThreadMessage( fst->thread->id, WM_USER, 0, 0 );
+		}
+
 		pthread_cond_wait (&ec->called, &fst->lock);
 		pthread_mutex_unlock (&fst->lock);
 	}
@@ -275,7 +279,6 @@ fst_call_dispatcher (FST *fst, int32_t opcode, int32_t index,
 	dp.opt = opt;
 
 	pthread_mutex_lock ( &ec->lock );
-	DEBUG("Dispatcher %d",  dp.opcode );
 	ec->dispatcher = &dp;
 	fst_event_call ( fst, DISPATCHER );
 	pthread_mutex_unlock ( &ec->lock );
@@ -628,7 +631,7 @@ static inline void fst_plugin_idle ( FST* fst ) {
 static inline void fst_event_handler (FST* fst) {
 	FSTEventCall* ec = &( fst->event_call );
 	if ( ec->type == RESET ) return;
-	INF("Event: %d", ec->type);
+	DEBUG("FST Event: %d", ec->type);
 
 	AEffect* plugin = fst->plugin;
 	AMC* amc = &fst->amc;
@@ -687,6 +690,7 @@ static inline void fst_event_handler (FST* fst) {
 		fst_update_current_program ( fst );
 		break;
 	case DISPATCHER:
+		DEBUG("Dispatcher %d",  dp->opcode );
 		dp->retval = plugin->dispatcher( plugin, dp->opcode, dp->index, dp->val, dp->ptr, dp->opt );
 		break;
 	case RESET:

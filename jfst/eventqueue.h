@@ -1,7 +1,7 @@
 #ifndef __eventqueue_h__
 #define __eventqueue_h__
 
-#define MAX_EVENTS 16
+#define MAX_EVENTS 64
 
 typedef enum {
 	EVENT_PC,
