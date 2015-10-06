@@ -8,14 +8,8 @@ JFST_NODE* jfst_node_get_first() {
 }
 
 JFST_NODE* jfst_node_new( const char* appname ) {
-	JFST_NODE* n = malloc ( sizeof(JFST_NODE) );
+	JFST_NODE* n = calloc ( 1, sizeof(JFST_NODE) );
 	n->jfst = jfst_new( appname );
-	n->next = NULL;
-
-	// Reset changes
-	int i;
-	for ( i=0; i < SERV_POLL_SIZE; i++ )
-		n->changes[i] = 0;
 
 	/* Link to list */
 	if ( jfst_node_first ) {

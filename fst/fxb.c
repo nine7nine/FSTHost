@@ -105,7 +105,7 @@ static void fx_load_current_program( FST *fst, FILE *fxfile)
 	if (br != 1) return;
 
 	currentProgram = endian_swap( currentProgram );
-	fst_program_change(fst, currentProgram);
+	fst_set_program(fst, currentProgram);
 }
 
 // NOTE: Program numbers -1 and -2 mean we are not in Bank
@@ -124,7 +124,7 @@ static void fx_load_program ( FST *fst, FILE *fxfile, short programNumber )
 		fxHeader.numPrograms = endian_swap( fxHeader.numPrograms );
 		fxHeader.fxMagic = endian_swap( fxHeader.fxMagic );
 
-		fst_program_change (fst, programNumber);
+		fst_set_program (fst, programNumber);
 
 		if (fxHeader.fxMagic == chunkPresetMagic) {
 			isChunk=TRUE;
@@ -328,7 +328,7 @@ int fst_save_fxfile ( FST *fst, const char *filename, enum FxFileType fileType )
 
 		int32_t p;
 		for (p = 0; p < fst_num_presets(fst); p++) {
-			fst_program_change (fst, p);
+			fst_set_program (fst, p);
 			fst_get_program_name(fst, fst->current_program, prgName, sizeof prgName);
 
 			fwrite(&fxHeader, sizeof(FXHeader), 1, fxfile);
@@ -337,7 +337,7 @@ int fst_save_fxfile ( FST *fst, const char *filename, enum FxFileType fileType )
 			fx_save_params( fst, fxfile );
 		}
 
-		fst_program_change (fst, currentProgram);
+		fst_set_program (fst, currentProgram);
 	} else {
 		// Regular program file
 		fx_save_params( fst, fxfile );

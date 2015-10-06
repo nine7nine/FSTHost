@@ -110,15 +110,7 @@ bool fsthost_idle () {
 	JFST_NODE* jn;
 	for ( jn = jfst_node_get_first(); jn; jn = jn->next ) {
 		JFST* jfst = jn->jfst;
-
-		Changes changes = jfst_idle ( jfst );
-		if ( changes & CHANGE_QUIT )
-			quit = true;
-
-		// Update client changes
-		int i;
-		for ( i=0; i < SERV_POLL_SIZE; i++ )
-			jn->changes[i] |= changes;
+		quit = ! jfst_idle(jfst);
 	}
 
 #ifdef HAVE_LASH

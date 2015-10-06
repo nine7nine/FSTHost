@@ -94,42 +94,37 @@ static void cpu_usage ( ServClient* serv_client ) {
 	serv_client_send_data ( serv_client, msg );
 }
 
-static void jfst_news ( JFST* jfst, ServClient* serv_client, Changes* changes ) {
-	if ( *changes & CHANGE_BYPASS )
+static void jfst_news ( JFST* jfst, ServClient* serv_client, Changes changes ) {
+	if ( changes & CHANGE_BYPASS )
 		jfst_send_fmt( jfst, serv_client, "BYPASS:%d", jfst->bypassed );
 
-	if ( *changes & CHANGE_EDITOR )
+	if ( changes & CHANGE_EDITOR )
 		jfst_send_fmt( jfst, serv_client, "EDITOR:%d", (bool) jfst->fst->window );
 
-	if ( *changes & CHANGE_CHANNEL )
+	if ( changes & CHANGE_CHANNEL )
 		get_channel(jfst, serv_client);
 
-	if ( *changes & CHANGE_VOLUME )
+	if ( changes & CHANGE_VOLUME )
 		get_volume(jfst, serv_client);
 
-	if ( *changes & CHANGE_MIDILE ) {
+	if ( changes & CHANGE_MIDILE ) {
 		MidiLearn* ml = &jfst->midi_learn;
 		jfst_send_fmt( jfst, serv_client, "MIDI_LEARN:%d", ml->wait );
 	}
 
-	if ( *changes & CHANGE_PROGRAM )
+	if ( changes & CHANGE_PROGRAM )
 		get_program( jfst, serv_client );
-
-	*changes = 0;
 }
 
 static void news ( ServClient* serv_client, bool all ) {
-	JFST_NODE* jn = jfst_node_get_first();
-	for ( ; jn; jn = jn->next ) {
+	JFST_NODE* jn;
+	for ( jn = jfst_node_get_first(); jn; jn = jn->next ) {
 		/* Change for that client/jfst pair */
-		Changes* jfst_changes = &( jn->changes[serv_client->number] );
+		Changes C = jfst_detect_changes( jn->jfst, &(jn->changes_last[serv_client->number]) );
 
-		if ( all ) {
-			Changes all_changes = (unsigned int) -1;
-			*jfst_changes = all_changes;
-		}
+		if ( all ) C = (unsigned int) -1;
 
-		jfst_news ( jn->jfst, serv_client, jfst_changes );
+		jfst_news ( jn->jfst, serv_client, C );
 	}
 }
 
@@ -276,7 +271,7 @@ void jfst_proto_dispatch( ServClient* serv_client, CMD* cmd ) {
 		get_program ( jfst, serv_client );
 		break;
 	case CMD_SET_PROGRAM:
-		fst_program_change ( jfst->fst, strtol(value, NULL, 10) );
+		fst_set_program ( jfst->fst, strtol(value, NULL, 10) );
 		break;
 	case CMD_GET_CHANNEL:
 		get_channel ( jfst, serv_client );

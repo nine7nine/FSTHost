@@ -184,7 +184,7 @@ fps_process_node(JFST* jfst, xmlNode *a_node) {
        // Current Program
        } else if (xmlStrcmp(cur_node->name, BAD_CAST "program") == 0) {
           short currentProgram = strtol((const char*) xmlGetProp(cur_node, BAD_CAST "number"), NULL, 10);
-          fst_program_change(fst, currentProgram);
+          fst_set_program(fst, currentProgram);
        // Chunk
        } else if (xmlStrcmp(cur_node->name, BAD_CAST "chunk") == 0) {
           if ( ! fst_has_chunks(fst) ) {

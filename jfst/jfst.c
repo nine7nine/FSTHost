@@ -241,12 +241,7 @@ void jfst_midi_learn( JFST* jfst, bool learn ) {
 	ml->wait = learn;
 }
 
-Changes jfst_detect_changes( JFST* jfst ) {
-        // Wait until program change
-        if (jfst->fst->event_call.type == PROGRAM_CHANGE)
-		return 0;
-
-	DetectChangesLast* L = &jfst->last;
+Changes jfst_detect_changes( JFST* jfst, ChangesLast* L ) {
 	Changes ret = 0;
 
 	if ( L->bypassed != jfst->bypassed ) {
@@ -254,8 +249,8 @@ Changes jfst_detect_changes( JFST* jfst ) {
 		ret |= CHANGE_BYPASS;
 	}
 
-	if ( L->program != jfst->fst->current_program ) {
-		L->program = jfst->fst->current_program;
+	if ( L->program != fst_get_program(jfst->fst) ) {
+		L->program = fst_get_program(jfst->fst);
 		ret |= CHANGE_PROGRAM;
 	}
 
@@ -284,7 +279,7 @@ Changes jfst_detect_changes( JFST* jfst ) {
 }
 
 /* Return false if want quit */
-Changes jfst_idle(JFST* jfst ) {
+bool jfst_idle( JFST* jfst ) {
 	// Handle SysEx Input
 	jfst_sysex_handler(jfst);
 
@@ -297,7 +292,7 @@ Changes jfst_idle(JFST* jfst ) {
 		case EVENT_PC:
 			// Self Program change support
 			if (jfst->midi_pc == MIDI_PC_SELF)
-				fst_program_change(jfst->fst, ev->value);
+				fst_set_program(jfst->fst, ev->value);
 			break;
 		case EVENT_GRAPH:
 			// Attempt to connect MIDI ports to control app if Graph order change
@@ -308,7 +303,7 @@ Changes jfst_idle(JFST* jfst ) {
 			break;
 		case EVENT_SESSION:
 			if ( ! jfst_session_handler(jfst, ev->ptr) )
-				return CHANGE_QUIT;
+				return false;
 			break;
 		}
 	}
@@ -324,14 +319,14 @@ Changes jfst_idle(JFST* jfst ) {
 		log_info("MIDIMAP CC: %d => %s", ml->cc, name);
 	}
 
-	Changes changes = jfst_detect_changes( jfst );
 	Changes changes_sysex_mask = CHANGE_BYPASS|CHANGE_CHANNEL|CHANGE_VOLUME|CHANGE_PROGRAM;
+	Changes changes = jfst_detect_changes( jfst, &(jfst->sysex_last) );
 	if ( changes & changes_sysex_mask ) {
 		// Send notify if we want notify and something change
 		if (jfst->sysex_want_notify) jfst_sysex_notify(jfst);
 	}
 
-	return changes;
+	return true;
 }
 
 typedef enum {

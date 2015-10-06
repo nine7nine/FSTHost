@@ -163,7 +163,7 @@ static void jfst_sync2sysex( JFST* jfst ) {
 	SysExDumpV1* sd = (SysExDumpV1*) &jfst->sysex_dump;
 
 	jfst_bypass(jfst, (sd->state == SYSEX_STATE_ACTIVE) ? FALSE : TRUE);
-	fst_program_change(jfst->fst, sd->program);
+	fst_set_program(jfst->fst, sd->program);
 	midi_filter_one_channel_set(&jfst->channel, sd->channel);
 	jfst_set_volume(jfst, sd->volume);
 }

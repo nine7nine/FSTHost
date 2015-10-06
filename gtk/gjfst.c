@@ -40,6 +40,7 @@ static	GtkWidget* socket_align;
 
 typedef struct {
 	JFST* jfst;
+	ChangesLast changes_last;
 	GtkWidget* fvpacker;
 	GtkWidget* hpacker;
 	GtkWidget* bypass_button;
@@ -659,7 +660,7 @@ destroy_handler (GtkWidget* widget, GdkEventAny* ev, gpointer ptr) {
 static void
 program_change (GtkComboBox *combo, FST* fst) {
 	short program = gtk_combo_box_get_active (combo);
-	fst_program_change( fst, program );
+	fst_set_program( fst, program );
 }
 
 static void
@@ -686,21 +687,26 @@ static gboolean
 idle_cb(GJFST *gjfst) {
 	JFST* jfst = gjfst->jfst;
 	FST* fst = jfst->fst;
+	Changes changes = jfst_detect_changes( jfst, &(gjfst->changes_last) );
 
-	// If program was changed via plugin or MIDI
-	if ( fst->event_call.type != PROGRAM_CHANGE &&
-	    gtk_combo_box_get_active( GTK_COMBO_BOX( gjfst->preset_listbox ) ) != fst->current_program )
-	{
+	// Changes - program
+	if ( changes & CHANGE_PROGRAM ) {
 		g_signal_handler_block (gjfst->preset_listbox, gjfst->preset_listbox_signal);
 		gtk_combo_box_set_active( GTK_COMBO_BOX( gjfst->preset_listbox ), fst->current_program );
         	g_signal_handler_unblock (gjfst->preset_listbox, gjfst->preset_listbox_signal);
 	}
 
-	// MIDI learn support
-	MidiLearn* ml = &jfst->midi_learn;
-	if ( gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(gjfst->midi_learn_toggle) )
-		&& ! ml->wait
-	) {
+	// Changes - channel
+	if ( changes & CHANGE_CHANNEL )
+		channel_check(GTK_COMBO_BOX(gjfst->channel_listbox), jfst);
+
+	// Changes - Bypass/Resume
+	if (changes & CHANGE_BYPASS)
+		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(gjfst->bypass_button), jfst->bypassed);
+
+	// Changes - MIDI learn
+	if ( changes & CHANGE_MIDILE ) {
+		MidiLearn* ml = &jfst->midi_learn;
 		bool show_tooltip = false;
 		char tooltip[96 * 128];
 		tooltip[0] = '\0';
@@ -727,8 +733,8 @@ idle_cb(GJFST *gjfst) {
 		gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON( gjfst->midi_learn_toggle ), FALSE );
 	}
 
-	// If volume was changed by MIDI CC7 message
-	if (jfst->volume != -1) {
+	// Changes - volume
+	if (jfst->volume != -1 && (changes & CHANGE_VOLUME) ) {
 		g_signal_handler_block(gjfst->volume_slider, gjfst->volume_signal);
 		gtk_range_set_value(GTK_RANGE(gjfst->volume_slider), jfst_get_volume(jfst));
 		g_signal_handler_unblock(gjfst->volume_slider, gjfst->volume_signal);
@@ -740,19 +746,11 @@ idle_cb(GJFST *gjfst) {
 	gtk_widget_queue_draw ( gjfst->vumeter );
 #endif
 
-	// Channel combo
-	channel_check(GTK_COMBO_BOX(gjfst->channel_listbox), jfst);
-
 	// CPU Usage
 	if ( gjfst->have_cpu_usage ) {
 		gchar tmpstr[24];
 		sprintf(tmpstr, "%06.2f", CPUusage_getCurrentValue());
 		gtk_label_set_text(GTK_LABEL(gjfst->cpu_usage), tmpstr);
-	}
-
-	// All about Bypass/Resume
-	if (jfst->bypassed != gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(gjfst->bypass_button))) {
-		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(gjfst->bypass_button), jfst->bypassed);
 	}
 
 	if (jfst->want_state_cc != mode_cc) {
