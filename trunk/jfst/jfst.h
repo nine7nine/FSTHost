@@ -39,7 +39,7 @@ typedef struct {
 	unsigned short volume;
 	int32_t program;
 	bool midi_learn;
-} DetectChangesLast;
+} ChangesLast;
 
 typedef enum {
 	CHANGE_QUIT	= 1 << 0,
@@ -100,7 +100,6 @@ typedef struct _JFST {
 	char*		uuid;		/* Jack Session support */
 
 	MidiLearn	midi_learn;
-	DetectChangesLast last;
 
 	enum MidiPC	midi_pc;
 	MIDIFILTER*	filters;
@@ -114,6 +113,7 @@ typedef struct _JFST {
 	bool		sysex_want_notify;
 	SysExDumpV1	sysex_dump;
 	SysExIdentReply	sysex_ident_reply;
+	ChangesLast	sysex_last;
 
 	/* SysEx receive support */
 	jack_ringbuffer_t* sysex_ringbuffer;
@@ -143,7 +143,8 @@ bool jfst_session_callback( JFST* jfst, const char* appname );
 void jfst_close ( JFST* jfst );
 void jfst_bypass(JFST* jfst, bool bypass);
 void jfst_midi_learn( JFST* jfst, bool learn );
-Changes jfst_idle(JFST* jfst);
+bool jfst_idle(JFST* jfst);
+Changes jfst_detect_changes( JFST* jfst, ChangesLast* L );
 
 /* jack.c */
 bool jfst_jack_init( JFST* jfst, bool want_midi_out );

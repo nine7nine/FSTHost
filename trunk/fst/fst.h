@@ -217,7 +217,8 @@ bool fst_event_callback();
 
 void fst_call (FST *fst, FSTEventTypes type);
 intptr_t fst_call_dispatcher (FST *fst, int32_t opcode, int32_t index, intptr_t val, void *ptr, float opt );
-void fst_program_change (FST *fst, int32_t program);
+void fst_set_program (FST *fst, int32_t program);
+int32_t fst_get_program (FST *fst);
 void fst_configure (FST *fst, float sample_rate, intptr_t block_size);
 void fst_get_program_name (FST *fst, int32_t program, char* name, size_t size);
 bool fst_set_program_name (FST *fst, const char* name);

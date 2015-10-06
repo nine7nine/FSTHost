@@ -241,7 +241,16 @@ void fst_call (FST *fst, FSTEventTypes type) {
 	pthread_mutex_unlock ( &ec->lock );
 }
 
-void fst_program_change (FST *fst, int32_t program) {
+int32_t fst_get_program (FST *fst) {
+	FSTEventCall* ec = &( fst->event_call );
+	/* Wait for change */
+	pthread_mutex_lock (&ec->lock);
+	int32_t program = fst->current_program;
+	pthread_mutex_unlock (&ec->lock);
+	return program;
+}
+
+void fst_set_program (FST *fst, int32_t program) {
 	FSTEventCall* ec = &( fst->event_call );
 	pthread_mutex_lock (&ec->lock);
 	if (fst->current_program != program) {
