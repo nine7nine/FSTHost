@@ -113,11 +113,12 @@ void jfst_send_sysex(JFST* jfst, SysExType type) {
 	case SYSEX_TYPE_DUMP:;
 		SysExDumpV1* sxd = &jfst->sysex_dump;
 
+		sxd->program = fst_get_program(jfst->fst);
+
 		char progName[FST_MAX_PROG_NAME];
-		fst_get_program_name(jfst->fst, jfst->fst->current_program, progName, sizeof(progName));
+		fst_get_program_name(jfst->fst, sxd->program, progName, sizeof(progName));
 
 //		sxd->uuid = ; /* Set once on start */
-		sxd->program = jfst->fst->current_program;
 		sxd->channel = midi_filter_one_channel_get( &jfst->channel );
 		midi_filter_one_channel_set( &jfst->channel, sxd->channel );
 		sxd->volume = jfst_get_volume(jfst);

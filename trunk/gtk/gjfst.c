@@ -466,6 +466,7 @@ create_preset_store( GtkListStore* store, FST *fst ) {
 	char progName[FST_MAX_PROG_NAME];
 	int32_t i;
 
+	gtk_list_store_clear(store);
 	for( i = 0; i < fst_num_presets(fst); i++ ) {
 		GtkTreeIter new_row_iter;
 
@@ -509,8 +510,8 @@ change_name_handler ( GtkToggleButton *but, gpointer ptr ) {
 		// update preset combo
 		g_signal_handler_block (gjfst->preset_listbox, gjfst->preset_listbox_signal);
 		GtkListStore *store = GTK_LIST_STORE(gtk_combo_box_get_model(GTK_COMBO_BOX(gjfst->preset_listbox)));
-		gtk_list_store_clear(store);
 		create_preset_store(store, jfst->fst );
+		gtk_combo_box_set_active( GTK_COMBO_BOX( gjfst->preset_listbox ), fst_get_program(jfst->fst) );
         	g_signal_handler_unblock (gjfst->preset_listbox, gjfst->preset_listbox_signal);
 	}
 	gtk_widget_destroy (entry);
@@ -572,8 +573,8 @@ load_handler (GtkToggleButton *but, gpointer ptr) {
 	// update preset combo
 	g_signal_handler_block (gjfst->preset_listbox, gjfst->preset_listbox_signal);
 	GtkListStore *store = GTK_LIST_STORE(gtk_combo_box_get_model(GTK_COMBO_BOX(gjfst->preset_listbox)));
-	gtk_list_store_clear(store);
 	create_preset_store(store, jfst->fst );
+	gtk_combo_box_set_active( GTK_COMBO_BOX( gjfst->preset_listbox ), fst_get_program(jfst->fst) );
         g_signal_handler_unblock (gjfst->preset_listbox, gjfst->preset_listbox_signal);
 
 	// Update MIDI PC button
@@ -692,7 +693,7 @@ idle_cb(GJFST *gjfst) {
 	// Changes - program
 	if ( changes & CHANGE_PROGRAM ) {
 		g_signal_handler_block (gjfst->preset_listbox, gjfst->preset_listbox_signal);
-		gtk_combo_box_set_active( GTK_COMBO_BOX( gjfst->preset_listbox ), fst->current_program );
+		gtk_combo_box_set_active( GTK_COMBO_BOX( gjfst->preset_listbox ), fst_get_program(fst) );
         	g_signal_handler_unblock (gjfst->preset_listbox, gjfst->preset_listbox_signal);
 	}
 

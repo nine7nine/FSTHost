@@ -596,6 +596,7 @@ static void fst_event_handler (FST* fst, FSTCall* call) {
 		fst_suspend(fst);
 		fst_destroy_editor (fst);
 		plugin->dispatcher(plugin, effClose, 0, 0, NULL, 0.0f);
+		fst->opened = false;
 		INF("Plugin closed");
 		break;
 	case SUSPEND:
