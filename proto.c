@@ -77,7 +77,7 @@ static void list_midi_map ( JFST* jfst, ServClient* serv_client ) {
 }
 
 static void get_program ( JFST* jfst, ServClient* serv_client ) {
-	jfst_send_fmt( jfst, serv_client, "PROGRAM:%d", jfst->fst->current_program );
+	jfst_send_fmt( jfst, serv_client, "PROGRAM:%d", fst_get_program(jfst->fst) );
 }
 
 static void get_channel ( JFST* jfst, ServClient* serv_client ) {

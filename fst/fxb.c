@@ -283,7 +283,7 @@ int fst_save_fxfile ( FST *fst, const char *filename, enum FxFileType fileType )
 	size_t headerSize = ( sizeof(FXHeader) - sizeof(fxHeader.chunkMagic) - sizeof(fxHeader.byteSize) );
 	size_t paramSize = fst_num_params(fst) * sizeof(float);
 	size_t programSize = headerSize + sizeof(prgName) + paramSize;
-	int32_t currentProgram = fst->current_program; // used by Banks
+	int32_t currentProgram = fst_get_program(fst); // used by Banks
 
 	fxHeader.byteSize = headerSize;
 
@@ -311,7 +311,7 @@ int fst_save_fxfile ( FST *fst, const char *filename, enum FxFileType fileType )
 		fseek ( fxfile , FXB_BLANK_HOLE, SEEK_SET );
 	} else { /* isProgram */
 //		prgName = endian_swap(prgName);
-		fst_get_program_name ( fst, fst->current_program, prgName, sizeof prgName );
+		fst_get_program_name ( fst, currentProgram, prgName, sizeof prgName );
 		fwrite(&prgName, sizeof prgName, 1, fxfile);
 	}
 
@@ -329,7 +329,7 @@ int fst_save_fxfile ( FST *fst, const char *filename, enum FxFileType fileType )
 		int32_t p;
 		for (p = 0; p < fst_num_presets(fst); p++) {
 			fst_set_program (fst, p);
-			fst_get_program_name(fst, fst->current_program, prgName, sizeof prgName);
+			fst_get_program_name(fst, fst_get_program(fst), prgName, sizeof prgName);
 
 			fwrite(&fxHeader, sizeof(FXHeader), 1, fxfile);
 			fwrite(&prgName, sizeof prgName, 1, fxfile);
