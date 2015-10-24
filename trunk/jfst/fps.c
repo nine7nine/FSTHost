@@ -6,6 +6,7 @@
 #include "base64.h"
 
 #include "log/log.h"
+#include "xmldb/info.h"
 #include "jfst.h"
 
 // Concept from: http://stackoverflow.com/questions/122616/how-do-i-trim-leading-trailing-whitespace-in-a-standard-way
@@ -237,7 +238,8 @@ bool fps_load(JFST* jfst, const char* filename) {
    /* If plugin is not already loaded  - try load it now */
    if (! jfst->fst) {
        char* plug_path = fps_get_plugin_file( plugin_state_node );
-       if (! jfst_load( jfst, plug_path, false, false ) ) return false;
+       jfst->fst = fst_info_load_open ( jfst->dbinfo_file, plug_path, jfst->fst_thread );
+       if (! jfst->fst ) return false;
    }
 
    /* Cleanup midi filters */

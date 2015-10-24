@@ -63,17 +63,7 @@ typedef struct {
     main_entry_t	main_entry;
 } FSTHandle;
 
-typedef struct {
-	int32_t		opcode;
-	int32_t		index;
-	intptr_t	val;
-	void*		ptr;
-	float		opt;
-	intptr_t	retval;
-} FSTDispatcher;
-
 typedef enum {
-	RESET,
 	OPEN,
 	CLOSE,
 	SUSPEND,
@@ -86,39 +76,63 @@ typedef enum {
 	PROGRAM_CHANGE
 } FSTEventTypes;
 
-typedef struct {
+typedef struct  {
 	FSTEventTypes	type;
+
+	/* Call Data */
+	union {
+		int32_t program;	/* PROGRAM_CHANGE */
+		int32_t	opcode;		/* DISPATCHER */
+	};
+
+	union {
+		float opt;		/* DISPATCHER */
+		float sample_rate;	/* CONFIGURE */
+	};
+
+	union {
+		intptr_t val;		/* DISPATCHER */
+		intptr_t block_size;	/* CONFIGURE */
+	};
+
+	int32_t		index;		/* DISPATCHER */
+	void*		ptr;		/* DISPATCHER */
+	intptr_t	retval;		/* DISPATCHER */
+} FSTCall;
+
+typedef struct {
 	pthread_mutex_t	lock;
 	pthread_cond_t	called;
-	union { /* Data */
-		FSTDispatcher* dispatcher;	/* DISPATCHER */
-		int32_t program;		/* PROGRAM_CHANGE */
-	};
+	FSTCall* call;
 } FSTEventCall;
 
 typedef void (*FSTWindowCloseCallback)(void* arg);
+typedef void (*FSTIdleCallback)(void* arg);
 
 typedef struct _FST FST;
 typedef struct {
+	char name[24];
 	HANDLE handle;
 	DWORD id;
+	bool fake;
 	pthread_mutex_t	lock;
 	FST* first;
 } FST_THREAD;
 
 struct _FST {
-	FST*		next;
+	FST*			next;
 
 	AEffect*		plugin;
 	FSTHandle*		handle;
 	AMC			amc;
 	FSTEventCall		event_call;
+	FST_THREAD*		thread;
 
 	char*			name;
+	bool			opened;
 	pthread_mutex_t		lock;
 	pthread_mutex_t		process_lock;
 	bool			wantIdle;
-	FST_THREAD*		thread;
 
 	/* GUI */
 	bool			editor_popup;
@@ -128,8 +142,12 @@ struct _FST {
 	int			height;
 
 	/* Window Close Callback */
-	FSTWindowCloseCallback	window_close;
-	void*			window_close_user_ptr;
+	FSTWindowCloseCallback	window_close_cb;
+	void*			window_close_cb_data;
+
+	/* Idle Callback */
+	FSTIdleCallback		idle_cb;
+	void*			idle_cb_data;
 
 	int32_t			current_program;
 
@@ -165,8 +183,13 @@ static inline bool fst_want_midi_out ( FST* fst ) {
 }
 
 static inline void fst_set_window_close_callback ( FST* fst, FSTWindowCloseCallback f, void* ptr ) {
-	fst->window_close = f;
-	fst->window_close_user_ptr = ptr;
+	fst->window_close_cb = f;
+	fst->window_close_cb_data = ptr;
+}
+
+static inline void fst_set_idle_callback ( FST* fst, FSTIdleCallback f, void* ptr ) {
+	fst->idle_cb = f;
+	fst->idle_cb_data = ptr;
 }
 
 static inline void fst_process ( FST* fst, float** ins, float** outs, int32_t frames ) {
@@ -205,11 +228,12 @@ void fst_error (const char *fmt, ...);
 
 void fst_set_thread_priority ( const char* th_name, int class, int priority );
 void fst_show_thread_info ( const char* th_name );
+FST_THREAD* fst_thread_new( const char* name, bool fake );
 
 FSTHandle* fst_load (const char * path );
 bool fst_unload (FSTHandle*);
-FST* fst_open (FSTHandle*);
-FST* fst_load_open (const char* path);
+FST* fst_open (FSTHandle* fhandle, FST_THREAD* th);
+FST* fst_load_open ( const char* path, FST_THREAD* th );
 void fst_close (FST*);
 
 void fst_event_loop();

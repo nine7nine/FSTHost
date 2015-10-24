@@ -78,6 +78,7 @@ typedef struct _JFST {
 	const char*	appname;
 	jack_client_t*	client;
 	FST*		fst;
+	FST_THREAD*	fst_thread;
 	EventQueue	event_queue;
 	char*		client_name;
 	const char*	default_state_file;
@@ -136,14 +137,13 @@ static inline void jfst_set_gui_resize_cb ( JFST* jfst, void (*f) ) {
 JFST_DEFAULTS* jfst_get_defaults();
 JFST* jfst_new( const char* appname );
 bool jfst_init( JFST* jfst );
-bool jfst_load(JFST* jfst, const char* plug_spec, bool want_state_and_amc, bool state_can_fail);
+bool jfst_load(JFST* jfst, const char* plug_spec, bool state_can_fail, FST_THREAD* fst_th);
 bool jfst_load_state(JFST* jfst, const char * filename);
 bool jfst_save_state(JFST* jfst, const char * filename);
 bool jfst_session_callback( JFST* jfst, const char* appname );
 void jfst_close ( JFST* jfst );
 void jfst_bypass(JFST* jfst, bool bypass);
 void jfst_midi_learn( JFST* jfst, bool learn );
-bool jfst_idle(JFST* jfst);
 Changes jfst_detect_changes( JFST* jfst, ChangesLast* L );
 
 /* jack.c */

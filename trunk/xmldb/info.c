@@ -80,7 +80,7 @@ static void fst_get_info(char* path, xmlNode *xml_rn) {
 	if (fst_exists(path, xml_rn)) return;
 
 	// Load and open plugin
-	FST* fst = fst_load_open(path);
+	FST* fst = fst_load_open(path, NULL);
 	if (! fst) return;
 
 	fst_add2db(fst, xml_rn);
@@ -170,16 +170,16 @@ free_p_cont:	xmlFree ( p );
 	return path;
 }
 
-FST* fst_info_load_open ( const char* dbpath, const char* plug_spec ) {
+FST* fst_info_load_open ( const char* dbpath, const char* plug_spec, FST_THREAD* fst_th ) {
 	log_info ( "Try load directly" );
-	FST* fst = fst_load_open ( plug_spec );
+	FST* fst = fst_load_open ( plug_spec, fst_th );
 	if ( fst ) return fst;
 
 	log_info ( "Try load using XML DB (%s)", dbpath );
 	char *p = fst_info_get_plugin_path ( dbpath, plug_spec );
 	if (!p) return NULL;
 
-	fst = fst_load_open (p);
+	fst = fst_load_open(p, fst_th);
 	free(p);
 
 	return fst; /* Could be NULL */

@@ -107,11 +107,7 @@ bool fsthost_idle () {
 	if ( ! jfst_node_get_first() )
 		return true;
 
-	JFST_NODE* jn;
-	for ( jn = jfst_node_get_first(); jn; jn = jn->next ) {
-		JFST* jfst = jn->jfst;
-		quit = ! jfst_idle(jfst);
-	}
+	/* TODO: jfst ask for quit suppoert */
 
 #ifdef HAVE_LASH
 	JFST_NODE* jnf = jfst_node_get_first();
@@ -128,6 +124,7 @@ bool fsthost_idle () {
 
 	if ( open_editor ) {
 		open_editor = false;
+		JFST_NODE* jn;
 		for ( jn = jfst_node_get_first(); jn; jn = jn->next )
 			fst_run_editor( jn->jfst->fst, false );
 	}
@@ -212,15 +209,17 @@ main_loop() {
 }
 
 static bool
-new_plugin( struct plugin* plug ) {
+new_plugin( struct plugin* plug, FST_THREAD* fst_one_th ) {
 	JFST_NODE* jn = jfst_node_new(APPNAME);
 	JFST* jfst = jn->jfst;
 	jfst->default_state_file = plug->state;
 	jfst->uuid = (char*) plug->uuid;
 	jfst->client_name = (char*) plug->client_name;
 
+	FST_THREAD* fst_th = (fst_one_th) ? fst_one_th : fst_thread_new("GUI/Event (Sep)", false);
+
 	/* Load plugin - in this thread or dedicated */
-	bool loaded = jfst_load ( jfst, plug->path, true, sigusr1_save_state );
+	bool loaded = jfst_load ( jfst, plug->path, sigusr1_save_state, fst_th );
 
 	/* Well .. Are we loaded plugin ? */
 	if (! loaded) return false;
@@ -330,14 +329,18 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	}
 
 	/* TODO: Separate thread mode */
-//	if ( separate_threads )
+	FST_THREAD* fst_one_thread = NULL;
+	if ( ! separate_threads ) {
+		fst_one_thread = fst_thread_new("GUI/Event", false);
+		if ( ! fst_one_thread ) goto game_over;
+	}
 
 	/* Init JFST Nodes aka plugins */
 	for ( pc = 0; pc < MAX_PLUGS; pc++ ) { 
 		if ( ! plugins[pc].path && ! plugins[pc].state )
 			break;
 
-		if ( ! new_plugin(&plugins[pc]) )
+		if ( ! new_plugin(&plugins[pc],fst_one_thread) )
 			goto game_over;
 	}
 	if ( pc == 0 ) goto game_over; // no any plugin loaded

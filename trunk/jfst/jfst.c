@@ -101,6 +101,58 @@ static void jfst_set_aliases ( JFST* jfst, FSTPortType type ) {
 			jack_port_set_alias ( ports[i], name );
 }
 
+/* Return false if want quit */
+static void jfst_idle( void* data ) {
+	JFST* jfst = (JFST*) data;
+
+	// Handle SysEx Input
+	jfst_sysex_handler(jfst);
+
+	Event* ev;
+	while ( (ev = event_queue_get ( &jfst->event_queue )) ) {
+		switch ( ev->type ) {
+		case EVENT_BYPASS:
+			jfst_bypass( jfst, ev->value );
+			break;
+		case EVENT_PC:
+			// Self Program change support
+			if (jfst->midi_pc == MIDI_PC_SELF)
+				fst_set_program(jfst->fst, ev->value);
+			break;
+		case EVENT_GRAPH:
+			// Attempt to connect MIDI ports to control app if Graph order change
+			jfst_connect_to_ctrl_app(jfst);
+			// Autoconnect MIDI IN to all physical ports
+			if (jfst->want_auto_midi_physical)
+				jfst_connect_midi_to_physical(jfst);
+			break;
+		case EVENT_SESSION:
+			//if ( ! jfst_session_handler(jfst, ev->ptr) )
+			//	return false;
+				/* TODO: close from callback ? */
+			break;
+		}
+	}
+
+	// MIDI learn support
+	MidiLearn* ml = &jfst->midi_learn;
+	if ( ml->wait && ml->cc >= 0 && ml->param >= 0 ) {
+		ml->map[ml->cc] = ml->param;
+		ml->wait = false;
+
+		char name[FST_MAX_PARAM_NAME];
+		fst_call_dispatcher ( jfst->fst, effGetParamName, ml->param, 0, name, 0 );
+		log_info("MIDIMAP CC: %d => %s", ml->cc, name);
+	}
+
+	Changes changes_sysex_mask = CHANGE_BYPASS|CHANGE_CHANNEL|CHANGE_VOLUME|CHANGE_PROGRAM;
+	Changes changes = jfst_detect_changes( jfst, &(jfst->sysex_last) );
+	if ( changes & changes_sysex_mask ) {
+		// Send notify if we want notify and something change
+		if (jfst->sysex_want_notify) jfst_sysex_notify(jfst);
+	}
+}
+
 bool jfst_init( JFST* jfst ) {
 	FST* fst = jfst->fst;
 	int32_t max_in = def.maxIns;
@@ -143,6 +195,9 @@ bool jfst_init( JFST* jfst ) {
 
 	// Autoconnect AUDIO on start
 	jfst_connect_audio(jfst, def.connect_to);
+
+	/* Set jfst_idle to call from plugin thread */
+	fst_set_idle_callback( jfst->fst, jfst_idle, jfst );
 
 	return true;
 }
@@ -196,31 +251,6 @@ bool jfst_session_handler( JFST* jfst, jack_session_event_t* event ) {
 		return false;
 	}
 	return true;
-}
-
-/* plug_spec could be path, dll name or eff/plug name */
-bool jfst_load (JFST* jfst, const char* plug_spec, bool want_state_and_amc, bool state_can_fail) {
-	log_info( "yo... lets see..." );
-
-	/* Try load directly */
-	bool loaded = false;
-	if ( plug_spec ) {
-		jfst->fst = fst_info_load_open ( jfst->dbinfo_file, plug_spec );
-		loaded = ( jfst->fst != NULL );
-	}
-
-	/* load state if requested - state file may contain plugin path
-	   NOTE: it can call jfst_load */
-	if ( want_state_and_amc && jfst->default_state_file) {
-		bool state_loaded = jfst_load_state (jfst, NULL);
-		if ( ! state_can_fail ) loaded = state_loaded;
-	}
-
-	/* bind Jack to Audio Master Callback */
-	if ( loaded && want_state_and_amc )
-		jfstamc_init ( jfst, &( jfst->fst->amc ) );
-
-	return loaded;
 }
 
 void jfst_bypass(JFST* jfst, bool bypass) {
@@ -278,53 +308,27 @@ Changes jfst_detect_changes( JFST* jfst, ChangesLast* L ) {
 	return ret;
 }
 
-/* Return false if want quit */
-bool jfst_idle( JFST* jfst ) {
-	// Handle SysEx Input
-	jfst_sysex_handler(jfst);
+/* plug_spec could be path, dll name or eff/plug name */
+bool jfst_load (JFST* jfst, const char* plug_spec, bool state_can_fail, FST_THREAD* fst_th) {
+	log_info( "yo... lets see..." );
 
-	Event* ev;
-	while ( (ev = event_queue_get ( &jfst->event_queue )) ) {
-		switch ( ev->type ) {
-		case EVENT_BYPASS:
-			jfst_bypass( jfst, ev->value );
-			break;
-		case EVENT_PC:
-			// Self Program change support
-			if (jfst->midi_pc == MIDI_PC_SELF)
-				fst_set_program(jfst->fst, ev->value);
-			break;
-		case EVENT_GRAPH:
-			// Attempt to connect MIDI ports to control app if Graph order change
-			jfst_connect_to_ctrl_app(jfst);
-			// Autoconnect MIDI IN to all physical ports
-			if (jfst->want_auto_midi_physical)
-				jfst_connect_midi_to_physical(jfst);
-			break;
-		case EVENT_SESSION:
-			if ( ! jfst_session_handler(jfst, ev->ptr) )
-				return false;
-			break;
-		}
+	jfst->fst_thread = fst_th;
+
+	/* Try load directly */
+	if ( plug_spec )
+		jfst->fst = fst_info_load_open( jfst->dbinfo_file, plug_spec, jfst->fst_thread );
+
+	/* load state if requested - state file may contain plugin path
+	   NOTE: it can call jfst_load */
+	if ( jfst->default_state_file) {
+		bool state_loaded = jfst_load_state(jfst, NULL);
+		if ( ! state_can_fail && ! state_loaded )
+			return false;
 	}
+	if ( ! jfst->fst ) return false;
 
-	// MIDI learn support
-	MidiLearn* ml = &jfst->midi_learn;
-	if ( ml->wait && ml->cc >= 0 && ml->param >= 0 ) {
-		ml->map[ml->cc] = ml->param;
-		ml->wait = false;
-
-		char name[FST_MAX_PARAM_NAME];
-		fst_call_dispatcher ( jfst->fst, effGetParamName, ml->param, 0, name, 0 );
-		log_info("MIDIMAP CC: %d => %s", ml->cc, name);
-	}
-
-	Changes changes_sysex_mask = CHANGE_BYPASS|CHANGE_CHANNEL|CHANGE_VOLUME|CHANGE_PROGRAM;
-	Changes changes = jfst_detect_changes( jfst, &(jfst->sysex_last) );
-	if ( changes & changes_sysex_mask ) {
-		// Send notify if we want notify and something change
-		if (jfst->sysex_want_notify) jfst_sysex_notify(jfst);
-	}
+	/* bind Jack to Audio Master Callback */
+	jfstamc_init ( jfst, &( jfst->fst->amc ) );
 
 	return true;
 }
