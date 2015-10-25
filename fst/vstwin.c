@@ -734,7 +734,6 @@ FST_THREAD* fst_thread_new( const char* name, bool fake ) {
 	pthread_mutex_init (&th->lock, NULL);
 	th->fake = fake;
 	th->first = NULL;
-	INF("NAME:%s", name);
 	snprintf( th->name, sizeof(th->name), "%s", name );
 
 	if ( fake ) {
