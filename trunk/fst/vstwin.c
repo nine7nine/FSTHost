@@ -665,6 +665,14 @@ void fst_set_thread_priority ( const char* th_name, int class, int priority ) {
 	fst_show_thread_info ( th_name );
 }
 
+void fst_set_idle_callback ( FST* fst, FSTIdleCallback f, void* ptr ) {
+	// Lock thread for sure
+	pthread_mutex_lock (&fst->thread->lock);
+	fst->idle_cb = f;
+	fst->idle_cb_data = ptr;
+	pthread_mutex_unlock (&fst->thread->lock);
+}
+
 static void fst_event_dispatcher(FST_THREAD* th) {
 	pthread_mutex_lock (&th->lock);
 	FST* fst;
