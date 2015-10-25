@@ -203,17 +203,15 @@ bool jfst_init( JFST* jfst ) {
 }
 
 void jfst_close ( JFST* jfst ) {
-	// Close JACK
+	log_info( "Jack Close (%s)", jfst->client_name );
 	if ( jfst->client ) {
-		log_info( "Jack Close (%s)", jfst->client_name );
+		fst_set_idle_callback( jfst->fst, NULL, NULL );
 		jack_deactivate ( jfst->client );
 		jack_client_close ( jfst->client );
 	}
 
-	// Close FST
 	if ( jfst->fst ) {
 		fst_close(jfst->fst);
-
 		free ( jfst->inports );
 		free ( jfst->outports );
 	}

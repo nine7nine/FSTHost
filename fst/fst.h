@@ -187,11 +187,6 @@ static inline void fst_set_window_close_callback ( FST* fst, FSTWindowCloseCallb
 	fst->window_close_cb_data = ptr;
 }
 
-static inline void fst_set_idle_callback ( FST* fst, FSTIdleCallback f, void* ptr ) {
-	fst->idle_cb = f;
-	fst->idle_cb_data = ptr;
-}
-
 static inline void fst_process ( FST* fst, float** ins, float** outs, int32_t frames ) {
 	if ( fst->plugin->flags & effFlagsCanReplacing ) {
 		fst->plugin->processReplacing (fst->plugin, ins, outs, frames);
@@ -238,6 +233,7 @@ void fst_close (FST*);
 
 void fst_event_loop();
 bool fst_event_callback();
+void fst_set_idle_callback ( FST* fst, FSTIdleCallback f, void* ptr );
 
 void fst_call (FST *fst, FSTEventTypes type);
 intptr_t fst_call_dispatcher (FST *fst, int32_t opcode, int32_t index, intptr_t val, void *ptr, float opt );
