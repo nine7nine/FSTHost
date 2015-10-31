@@ -328,7 +328,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 			break;
 	}
 
-	/* TODO: Separate thread mode */
+	/* Create FST thread ( if not separate mode ) */
 	FST_THREAD* fst_one_thread = NULL;
 	if ( ! separate_threads ) {
 		fst_one_thread = fst_thread_new("GUI/Event", false);

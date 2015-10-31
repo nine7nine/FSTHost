@@ -251,7 +251,7 @@ sub dispatch_news {
 		my ( $plug, $action, $value ) = m/([\w-+]+):([\w-]+):(\d+)/;
 		next unless exists $ACTION{$action};
 
-		# TODO: if new plug .. 
+		# TODO: if new plug then create instance
 		next unless exists $self->{'fst'}->{$plug};
 		my $box = $self->{'fst'}->{$plug};
 
