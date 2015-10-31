@@ -70,6 +70,7 @@ typedef int (*error_handler_t)( Display *, XErrorEvent *);
 static Display *the_gtk_display;
 error_handler_t wine_error_handler;
 error_handler_t gtk_error_handler;
+bool window_title_by_fst = true; /* Set window title to plugin name ? */
 
 /* ------------------------------- HELPERS ---------------------------------------------- */
 static void
@@ -914,10 +915,15 @@ void gjfst_add (JFST* jfst, bool editor) {
 	// GTK GUI idle
 	g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, 500, (GSourceFunc) idle_cb, gjfst, NULL);
 
-	// TODO: wrong place
-	gtk_window_set_title (GTK_WINDOW(window), jfst->client_name);
+	// Set main window title
+	if ( window_title_by_fst ) {
+		gtk_window_set_title (GTK_WINDOW(window), jfst->client_name);
+		window_title_by_fst = false; // For second plugin we need more generic name
+	} else {
+		gtk_window_set_title (GTK_WINDOW(window), "FSTHost");
+	}
 
-	// Nasty hack - this also emit signal which do the rest ;-)
+	// This also emit signal which do the rest ;-)
 	if (editor) gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(gjfst->editor_button), TRUE);
 }
 
