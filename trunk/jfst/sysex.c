@@ -247,14 +247,14 @@ jfst_parse_sysex_input(JFST* jfst, jack_midi_data_t* data, size_t size) {
 		break;
 	case SYSEX_NON_REALTIME:
 		// Identity request
-		if (size >= sizeof(SysExIdentRqst)) {
-			// TODO: for now we just always answer ;-)
-			SysExIdentRqst sxir = SYSEX_IDENT_REQUEST;
-			data[2] = 0x7F; // veil
-			if ( memcmp(data, &sxir, sizeof(SysExIdentRqst) ) == 0) {
-				log_info("Got Identity request");
-				jfst_send_sysex(jfst, SYSEX_TYPE_REPLY);
-			}
+		if (size < sizeof(SysExIdentRqst)) break;
+
+		// TODO: for now we just always answer ;-)
+		SysExIdentRqst sxir = SYSEX_IDENT_REQUEST;
+		data[2] = 0x7F; // veil
+		if ( memcmp(data, &sxir, sizeof(SysExIdentRqst) ) == 0) {
+			log_info("Got Identity request");
+			jfst_send_sysex(jfst, SYSEX_TYPE_REPLY);
 		}
 		break;
 	}
