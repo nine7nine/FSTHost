@@ -53,7 +53,7 @@ LDFLAGS            := -mwindows
 LIBRARIES          := -lpthread -lX11 $(shell pkg-config --libs $(PKG_CONFIG_MODULES))
 
 # Shared include / install paths
-INCLUDE_PATH        = -I. -I/usr/include -I/usr/include/wine -I/usr/include/wine/windows
+INCLUDE_PATH        = -I. -I/usr/include -I/usr/include/wine -I/usr/include/wine/windows -I/usr/include/x86_64-linux-gnu
 DESTDIR             =
 PREFIX              = /usr
 MANDIR              = $(PREFIX)/man/man1
