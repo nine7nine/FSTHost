@@ -186,7 +186,7 @@ static void usage(char* appname) {
 	fprintf(stderr, fmt, "-j <connect_to>", "Connect Audio Out to <connect_to>. " JFST_STR_NO_CONNECT " for no connect");
 	fprintf(stderr, fmt, "-l", "save state to state_file on SIGUSR1 (require -s)");
 	fprintf(stderr, fmt, "-m mode_midi_cc", "Bypass/Resume MIDI CC (default: 122)");
-	fprintf(stderr, fmt, "-p", "Plugin path ( same as <plugin> )");
+	fprintf(stderr, fmt, "-p", "Plugin path ( same as <plugin>, - for skip )");
 	fprintf(stderr, fmt, "-M", "Disable connecting MIDI In port to all physical");
 	fprintf(stderr, fmt, "-P", "Self MIDI Program Change handling");
 	fprintf(stderr, fmt, "-o num_out", "Jack number Out ports");
@@ -217,6 +217,9 @@ new_plugin( struct plugin* plug, FST_THREAD* fst_one_th ) {
 	jfst->client_name = (char*) plug->client_name;
 
 	FST_THREAD* fst_th = (fst_one_th) ? fst_one_th : fst_thread_new("GUI/Event (Sep)", false);
+
+	if ( plug->path != NULL && !strcmp(plug->path,"-") )
+		plug->path = NULL;
 
 	/* Load plugin - in this thread or dedicated */
 	bool loaded = jfst_load ( jfst, plug->path, sigusr1_save_state, fst_th );
@@ -336,7 +339,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	}
 
 	/* Init JFST Nodes aka plugins */
-	for ( pc = 0; pc < MAX_PLUGS; pc++ ) { 
+	for ( pc = 0; pc < MAX_PLUGS; pc++ ) {
 		if ( ! plugins[pc].path && ! plugins[pc].state )
 			break;
 
