@@ -1,3 +1,25 @@
+FSTHost 1.6.0
+- Remove zeroize option (-z) - we'll always zeroize buffers
+- Control via TCP port ( e.g. via telnet )
+- Save TCP port number in /tmp/fsthost directory
+- Support for GTK2 or GTK3 or 0 for not GTK
+- SIGUSR2 to open vst editor
+- fsthost_ctrl - for remote control
+- Multiplugin support
+- Set port aliases as real plug "pin" names ( -A option )
+- Remove tempo ( -t ) command line option.
+- Remove BBT sync option ( -B ). Always use Jack BBT sync if available but leave old code as failback.
+- Connect MIDI to physical ports as default. Use -j ! for no connect
+- By default connect MIDI IN to all physical ports on each graph change
+- Rename -p to -M but which opposite meaning
+- Option -L display plugins only which the same arch like binnary. fsthost_list still display all plugins
+- Add -v option for verbose log
+- Add wine-staging support, though not tested
+- Compile embedded editor feature only on demand (EE=1)
+- Each plugin processing can be separated from each other (-T mode)
+- Allow using "-p -" as separator while parse command line options
+- Bugfixes, syntax improvements etc.
+
 FSTHost 1.5.4
 - Bugfix release
 
