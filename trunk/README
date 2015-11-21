@@ -14,7 +14,7 @@ Supports:
 - Jack MIDI
 - Jack autoconnection
 - LADIsh - L1 or L2 (JackSession)
-- Dump settings via SysEx
+- Control via MIDI SysEx e.g. dump some settings ( but not all )
 - MIDI CC automation (MIDI learn)
 - bypass/resume state (also via MIDI CC or SysEx)
 - simple midi filters
@@ -25,9 +25,9 @@ Supports:
 - control using TCP socket ( e.g. via telnet )
 
 There are also:
-- fsthost_menu.pl - Perl GTK[23] menu to startup plugins
-- fsthost_ctrl.pl - Perl GTK[23] app for control via TCP socket
-- fsthost_menu.sh (obsolete) - zenity script for help to start plugins
+- fsthost_menu - Perl GTK[23] menu to startup plugins
+- fsthost_ctrl - Perl GTK[23] app for control via TCP socket
+- fsthost_list - simple application to show known plugins ( read about XML DB )
 
 Getting Started
 ---------------
@@ -68,8 +68,7 @@ Obviouslly you need 32 bit versions for build fsthost32 on AMD64.
    or
       ./fsthost64 /path/to/someplugin.dll
 
-   and set up the inputs and outputs, eg. using qjackctl's
-   'Connections' window.
+you can also use multiple plugins or load plugins with some "state".
 
 7) To install type 'make install'
 
@@ -94,6 +93,18 @@ You can also export VST_PATH and scan it recursivelly like:
 
 You can force GTK version (2/3) for "fsthost_menu.pl" by:
    % export FSTMENU_GTK=2 # or 3
+
+TCP control protocol
+-----
+If you start fsthost with option -S <port> you can control it remotely.
+It will listen on that port on all interfaces. For random port use -S 0.
+You can check later with port you got in /tmp/fsthost directory.
+To connect use telnet like:
+telent <host> <port>
+Then check available commands by typing "help".
+There is also fsthost_ctrl application with similar GUI to fsthost.
+Eventually you can compile fsthost without gtk gui at all by make GTK=0,
+and then control it via fsthost_ctrl or telnet.
 
 JackSession / LASH
 -----
