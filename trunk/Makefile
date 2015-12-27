@@ -186,7 +186,8 @@ define compile
 		-e '3i export WINE_SRV_RT=$${WINE_SRV_RT:-15}' \
 		-e '3i export WINE_RT=$${WINE_RT:-10}' \
 		-e '3i export STAGING_RT_PRIORITY_SERVER=$${STAGING_RT_PRIORITY_SERVER:-15}' \
-		-e '3i export STAGING_RT_PRIORITY_BASE=$${STAGING_RT_PRIORITY_BASE:-10}' \
+		-e '3i export STAGING_RT_PRIORITY_BASE=$${STAGING_RT_PRIORITY_BASE:-0}' \
+		-e '3i export STAGING_SHARED_MEMORY=$${STAGING_SHARED_MEMORY:-1}' \
 		-e '3i export L_ENABLE_PIPE_SYNC_FOR_APP="$@"' \
 		-e '3i export L_RT_POLICY="$${L_RT_POLICY:-FF}"' \
 		-e '3i export L_RT_PRIO=$${L_RT_PRIO:-10}' $@
