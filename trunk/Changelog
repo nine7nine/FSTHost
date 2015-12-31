@@ -14,7 +14,7 @@ FSTHost 1.6.0
 - Rename -p to -M but which opposite meaning
 - Option -L display plugins only which the same arch like binnary. fsthost_list still display all plugins
 - Add -v option for verbose log
-- Add wine-staging support, though not tested
+- Add wine-staging support
 - Compile embedded editor feature only on demand (EE=1)
 - Each plugin processing can be separated from each other (-T mode)
 - Allow using "-p -" as separator while parse command line options

@@ -36,7 +36,7 @@ Getting Started
 Obviouslly you need 32 bit versions for build fsthost32 on AMD64.
 
   REQUIRED:
-     wine
+     wine ( wine-staging recommended )
      jack
      libxml-2.0
 
