@@ -27,6 +27,12 @@ extern double CPUusage_getCurrentValue();
 #define GDK_POINTER_TO_XID GDK_GPOINTER_TO_NATIVE_WINDOW
 #endif /* (GTK_MAJOR_VERSION < 3) */
 
+/* FIXME: Temporary fix for Slackware 14.1 which using glibc v2.17 */
+#if ! GLIB_CHECK_VERSION(2,40,0)
+#warning "Using glibc < 2.40"
+#define g_info printf
+#endif
+
 static short mode_cc = 0;
 static bool no_cpu_usage = false;
 
