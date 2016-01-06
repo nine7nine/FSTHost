@@ -1,0 +1,127 @@
+FSTHost 1.6.0
+- Remove zeroize option (-z) - we'll always zeroize buffers
+- Control via TCP port ( e.g. via telnet )
+- Save TCP port number in /tmp/fsthost directory
+- Support for GTK2 or GTK3 or 0 for not GTK
+- SIGUSR2 to open vst editor
+- fsthost_ctrl - for remote control
+- Multiplugin support
+- Set port aliases as real plug "pin" names ( -A option )
+- Remove tempo ( -t ) command line option.
+- Remove BBT sync option ( -B ). Always use Jack BBT sync if available but leave old code as failback.
+- Connect MIDI to physical ports as default. Use -j ! for no connect
+- By default connect MIDI IN to all physical ports on each graph change
+- Rename -p to -M but which opposite meaning
+- Option -L display plugins only which the same arch like binnary. fsthost_list still display all plugins
+- Add -v option for verbose log
+- Add wine-staging support
+- Compile embedded editor feature only on demand (EE=1)
+- Each plugin processing can be separated from each other (-T mode)
+- Allow using "-p -" as separator while parse command line options
+- Bugfixes, syntax improvements etc.
+
+FSTHost 1.5.4
+- Bugfix release
+
+FSTHost 1.5.3
+- Support for GTK3 ( GTK2 is still supported )
+- Propose path of file opened at start as default while save state
+- fsthost menu - perl version with GTK2/GTK3 support ( and with tray/status icon ;-)
+- aggregator - app for merge all fsthost windows into one ( not installed by default )
+- use wine ( win32 ) code when moving window ( instead of X tricks )
+- disable support for bbt_offset , because seems that some VST plugins does not like fractal values in barStartPos
+- do not zeroize outputs by default ( -z option )
+- XML DB - use shared file for 32/64 versions ( ~/.fsthost.xml )
+- Scan all dirs in VST_PATH recursively when building XML DB ( -g option )
+- Allow build 32 and 64 version independently
+- a lot of code refactoring
+- .... and a lot of other changes
+
+FSTHost 1.5.2
+- Change environment variable FSTHOST_NOGUI to FSTHOST_GUI (support all 3 modes)
+- BuiltIn MIDI filter type
+- migration MIDI channel filter combo to MIDI filters
+- Add transposition spin button (shortcut for tranpose midi filter)
+- fsthost_list - tool to replace xmlint
+- Two ways (-B option) for JackTransport sync - tempo/sample position or BBT
+- JackTransport - respect bbt_offset
+- Simple script for repair Ubuntu lib32 symlinks
+- FPS files - Authenticate plugins using standard VST way uniqueID instead of string match
+- fixes, code improvements - as usual ;-)
+
+FSTHost 1.5.1
+- store plugin path, SysExID in FPS files
+- fix for make install (LIB64 path - thanks to speps, AUR packager)
+- JackSession - no more need to hardcode path to plugin in session command
+- Midifilter window - fix ordering filters (first on top)
+- get plugin path from XML DB database, also default paths to this db.
+- Improve fsthost_menu
+- manual page (prepared by Jof Thibaut, "Tango Studio" distribution maintainer)
+- update README / fsthost usage
+- add control MIDI ports for send/receive SysEx messages
+- Work on a copy of Jack MIDI data (fix)
+.. and some other minor improvements/fixes
+
+FSTHost 1.5
+- Support Wine-LPA
+- Support for window resize
+- Handling case when Jack changed our client_name
+- Support for "self MIDI Program Change message handling" (-P option)
+- Do not process MIDI data if ports are disconnected
+- Editor window is centered
+- Buffering SysEx input messages and process them in non-RT thread
+- MIDI channel filter redirect messages to first channel
+- MIDI Filters - really simple window for build own filter chain
+- JackTransport improvements (tested with T-C-M VST and Hydrogen as master)
+- Support for 64 bit VST plugs
+
+FSTHost 1.4
+- Reorganize GTK GUI - replace texts by icons/tooltips and change widgets layout
+- Recursively scan directories and add results to FSTHost XML DB (-d option). I must admit that some parts/ideas of this code was available in fst, but was not used.
+- FSTHost Menu utility (fsthost_menu) for choose plugin. It can use zenity or dialog for generate list of available plugins. Use VST_PATH or FSTHost XML DB as data source.
+- Use Glib event loop instead of DummyWindow/SetTimer solution .. and one thread less now ;-)
+- Fix case when DISPLAY variable is empty (NonGUI mode) - just becuase we now doesn't create any window ;-)
+- Faster Bypass/Resume, Program Change - side effect of merge MainThread and EventThread *(from GUI or SysEx - MIDI CC is still delayed)
+- Autoconnect to all MIDI Out physical ports (e.g. testing plugins)
+- Disable GUI by FSTHOST_NOGUI environment variable
+- JackSession - improve error handling (set JackSessionSaveError flag)
+- Checkbox for choose between embedded or popup editor.
+- Add application icon (this is temporary icon)
+- A lot of small fixes/optimizations/cleanups etc.
+
+FSTHost 1.3
+- Makefile improvment for easier packaging (moslty for Arch) - it now use DESTDIR
+- Add option -N for auto-send SysEx when something change
+- Threads refactoring
+- Response for Sysex Dump Request only if it is addressed to us (i.e. UUID match)
+- Support for VSTPluginMain entry (mostly for Antialias VST)
+- ... like always .. fixes, improvments etc
+
+FSTHost 1.2
+- Always handle SIGINT for clean quit
+- Handle SIGUSR1 signal for save (ladish L1) - thanks to FalkXT (4concept) and jordan (4help)
+- SysEx dump
+- MIDI Identity request/reply messages support
+- JackSession - support for SaveAndQuit mode
+- simple "make install"
+- change state (Bypass/Resume) by MIDI CC (default 122)
+- MIDI IN / OUT ports are always available
+- simple CPU usage in GTK
+- remove non-ascii characters from program name - problem with GTK (Pro53 plugin).
+- nicer usage info
+- updates in vestige and lash code
+- bug fixes, optimizations, cleaning etc ..
+
+FSTHost 1.1
+- Support for FXB v2 files and other changes, mostly for VarietyOfSound plugins and RubbyTube, also fix Makefile
+- Volume control
+- Change binary name to fsthost.exe (request by FalkXT) for festige compatibility
+- Fix posible bug in bypass state
+- Load/Save MIDI channel in FPS
+- fix in tempo handling (when jack report 0BPM) (for GTG MX2008 support) (thanks to Chris Walton from KVR forum for help).
+- add come command line options (tempo, volume etc.)
+- handling SIGINT to clean close (in noGUI mode)
+- rewrite code for load libraries (correct support for VST_PATH)
+- default values for WINE_RT
+- and a lot other unvisible changes ;-)
+
