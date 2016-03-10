@@ -21,6 +21,7 @@ static FST*
 fst_new () {
 	FST* fst = calloc (1, sizeof (FST));
 
+	fst->initialized = false;
 	fst->opened = false;
 	pthread_mutex_init (&fst->lock, NULL);
 	pthread_mutex_init (&fst->process_lock, NULL);
@@ -267,8 +268,28 @@ static void fst_event_call (FST *fst, FSTCall* call) {
 	}
 }
 
-void fst_open_int (FST* fst) {
+static bool fst_init ( FST* fst ) {
+	AEffect* plugin = fst->handle->main_entry ( amc_callback );
+	if (plugin == NULL)  {
+		ERR ("%s could not be instantiated", fst->handle->name);
+		return false;
+	}
+
+	if (plugin->magic != kEffectMagic) {
+		ERR ("%s is not a VST plugin", fst->handle->name);
+		return false;
+	}
+
+	fst->plugin = plugin;
+	fst->plugin->resvd1 = (intptr_t*) &( fst->amc );
+
+	return true;
+}
+
+static void fst_open_int (FST* fst) {
 	AEffect* plugin = fst->plugin;
+	fst->plugin = plugin;
+	fst->plugin->resvd1 = (intptr_t*) &( fst->amc );
 
 	plugin->dispatcher(plugin, effOpen, 0, 0, NULL, 0.0f);
 
@@ -293,7 +314,6 @@ void fst_open_int (FST* fst) {
 
 	// Always need some name ;-)
 	if (! fst->name) fst->name = strdup ( fst->handle->name );
-	fst->opened = true;
 }
 
 /*************************** Public (thread-safe) routines *****************************************/
@@ -424,23 +444,18 @@ static void fst_thread_remove (FST* fst);
 FST* fst_open (FSTHandle* fhandle, FST_THREAD* th) {
 	INF("Revive plugin: %s", fhandle->name);
 
-	AEffect* plugin = fhandle->main_entry ( amc_callback );
-	if (plugin == NULL)  {
-		ERR ("%s could not be instantiated", fhandle->name);
-		return NULL;
-	}
-
-	if (plugin->magic != kEffectMagic) {
-		ERR ("%s is not a VST plugin", fhandle->name);
-		return NULL;
-	}
-
 	FST* fst = fst_new ();
-	fst->plugin = plugin;
 	fst->handle = fhandle;
-	fst->plugin->resvd1 = (intptr_t*) &( fst->amc );
-
 	fst_thread_add( th, fst );
+	fst_call(fst, INIT);
+
+	if ( ! fst->initialized ) {
+		fst_thread_remove(fst);
+		fst_unload(fst->handle);
+		free(fst);
+		return NULL;
+	}
+
 	fst_call( fst, OPEN );
 
 	return fst;
@@ -576,20 +591,31 @@ static inline void fst_plugin_idle ( FST* fst ) {
 }
 
 static void fst_event_handler (FST* fst, FSTCall* call) {
-	if ( call->type != OPEN && ! fst->opened ) {
-		ERR("Not opened yet ! Event: %d", call->type );
-		return;
-	}
-
 	DEBUG("FST Event: %d", call->type);
 
 	AEffect* plugin = fst->plugin;
 	AMC* amc = &fst->amc;
 
+	
+	if ( fst->initialized ) {
+		if ( ! fst->opened && call->type != OPEN ) {
+			ERR("Not opened yet !");
+			return;
+		}
+	} else if ( call->type != INIT ) {
+		ERR("Not initialized yet !");
+		return;
+	}
+
 	pthread_mutex_lock (&fst->lock);
 	switch ( call->type ) {
+	case INIT:
+		call->retval = fst_init(fst);
+		fst->initialized = true;
+		break;
 	case OPEN:
 		fst_open_int(fst);
+		fst->opened = true;
 		break;
 	case CLOSE:
 		INF("Closing plugin: %s", fst->name);
