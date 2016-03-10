@@ -64,6 +64,7 @@ typedef struct {
 } FSTHandle;
 
 typedef enum {
+	INIT,
 	OPEN,
 	CLOSE,
 	SUSPEND,
@@ -129,6 +130,7 @@ struct _FST {
 	FST_THREAD*		thread;
 
 	char*			name;
+	bool			initialized;
 	bool			opened;
 	pthread_mutex_t		lock;
 	pthread_mutex_t		process_lock;
