@@ -1,3 +1,7 @@
+FSTHost 1.6.1
+- Fix lash
+- Fix threading
+
 FSTHost 1.6.0
 - Remove zeroize option (-z) - we'll always zeroize buffers
 - Control via TCP port ( e.g. via telnet )
