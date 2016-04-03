@@ -3,6 +3,7 @@
 #include "jfst/jfst.h"
 
 static lash_args_t* lash_args;
+static lash_client_t* lash_client;
 
 void jfst_lash_init(int* argc, char** argv[]) {
 	lash_args = lash_extract_args(argc, argv);
@@ -10,7 +11,7 @@ void jfst_lash_init(int* argc, char** argv[]) {
 
 void jfst_lash_add ( JFST* jfst ) {
 	int flags = LASH_Config_Data_Set;
-	lash_client_t* lash_client = lash_init(lash_args, jfst->client_name, flags, LASH_PROTOCOL(2, 0));
+	lash_client = lash_init(lash_args, jfst->client_name, flags, LASH_PROTOCOL(2, 0));
 
 	if (!lash_client) {
 		fprintf(stderr, "%s: could not initialise lash\n", __FUNCTION__);
