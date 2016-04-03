@@ -47,8 +47,9 @@ GMainLoop* g_main_loop;
 
 /* lash.c */
 #ifdef HAVE_LASH
-extern void jfst_lash_init(JFST *jfst, int* argc, char** argv[]);
+extern void jfst_lash_init(int* argc, char** argv[]);
 extern bool jfst_lash_idle(JFST *jfst);
+extern void jfst_lash_add (JFST* jfst);
 #endif
 
 /* fsthost_proto */
@@ -104,13 +105,12 @@ static void signal_handler (int signum) {
 }
 
 bool fsthost_idle () {
-	if ( ! jfst_node_get_first() )
-		return true;
+	JFST_NODE* jnf = jfst_node_get_first();
+	if ( ! jnf ) return true;
 
 	/* TODO: jfst ask for quit suppoert */
 
 #ifdef HAVE_LASH
-	JFST_NODE* jnf = jfst_node_get_first();
 	if ( ! jfst_lash_idle(jnf->jfst) )
 		quit = true;
 #endif
@@ -350,7 +350,8 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 
 #ifdef HAVE_LASH
 	JFST_NODE* jnf = jfst_node_get_first();
-	jfst_lash_init(jnf->jfst, &argc, &argv);
+	jfst_lash_init(&argc, &argv);
+	jfst_lash_add (jnf->jfst);
 #endif
 
 	// Socket stuff
