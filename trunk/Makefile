@@ -26,7 +26,7 @@ endif
 
 # Shared GCC flags
 CEXTRA             := $(shell pkg-config --cflags $(PKG_CONFIG_MODULES))
-CEXTRA             += -g -O2 -Wall -Wno-deprecated-declarations -Wno-multichar -march=native -mfpmath=sse
+CEXTRA             += -g -O2 -Wall -fPIC -Wno-deprecated-declarations -Wno-multichar -march=native -mfpmath=sse
 
 ifeq ($(VUMETER),1)
 CEXTRA             += -DVUMETER
@@ -63,9 +63,8 @@ LIB64_INST_PATH     = $(PREFIX)/lib/x86_64-linux-gnu/wine
 BIN_INST_PATH       = $(PREFIX)/bin
 
 # Platform specific GCC flags
-#CEXTRA32           := -m32 $(CEXTRA) -fno-pic -fno-PIC
-CEXTRA32           := -m32 $(CEXTRA) -fPIC
-CEXTRA64           := -m64 $(CEXTRA) -fPIC
+CEXTRA32           := -m32 $(CEXTRA)
+CEXTRA64           := -m64 $(CEXTRA)
 
 # Platform specific LDFLAGS
 LDFLAGS32          := -m32 $(LDFLAGS) -L/usr/lib/i386-linux-gnu/wine
