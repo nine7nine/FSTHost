@@ -1,3 +1,6 @@
+FSTHost 1.6.2
+- Fix MIDI Filter read from *.fps files
+
 FSTHost 1.6.1
 - Fix lash
 - Fix threading

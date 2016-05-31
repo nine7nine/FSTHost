@@ -33,7 +33,7 @@
 GMainLoop* g_main_loop;
 #endif
 
-#define VERSION "1.6.1"
+#define VERSION "1.6.2"
 #ifdef __x86_64__
 #define ARCH "64"
 #else
