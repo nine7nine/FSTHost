@@ -141,7 +141,7 @@ fps_process_node(JFST* jfst, xmlNode *a_node) {
          const char* prop = NULL;
          MIDIFILTER mf = {0};
          mf.enabled = ( xmlStrcmp(xmlGetProp(cur_node, BAD_CAST "enabled"), BAD_CAST "yes") == 0 ) ? true : false;
-	 const xmlChar* type = xmlGetProp(cur_node, BAD_CAST "rule");
+	 const xmlChar* type = xmlGetProp(cur_node, BAD_CAST "type");
          mf.type =  midi_filter_name2key ( (const char*) type );
          if ( mf.type == -1 ) { log_error("Wrong filter type"); continue; }
 
