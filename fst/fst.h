@@ -87,6 +87,7 @@ int32_t	fst_version		(FST* fst);
 int32_t	fst_max_port_name	(FST* fst);
 bool	fst_has_chunks		(FST* fst);
 bool	fst_has_window		(FST* fst);
+bool	fst_has_editor		(FST* fst);
 int	fst_width		(FST* fst);
 int	fst_height		(FST* fst);
 AMC*	fst_amc			(FST* fst);
@@ -97,6 +98,9 @@ const char* fst_path (FST* fst);
 void fst_get_param_name ( FST* fst, int32_t param, char* name );
 
 void fst_error (const char *fmt, ...);
+
+void fst_lock ( FST* fst );
+void fst_unlock ( FST* fst );
 
 void fst_set_thread_priority ( const char* th_name, int class, int priority );
 void fst_show_thread_info ( const char* th_name );
@@ -123,6 +127,9 @@ void fst_editor_resize ( FST* fst, int32_t width, int32_t height );
 
 bool fst_run_editor (FST*, bool popup);
 bool fst_show_editor (FST *fst);
+
+void fst_set_chunk(FST* fst, enum FxFileType type, int size, void* chunk);
+int32_t fst_get_chunk(FST* fst, enum FxFileType type, void* chunk);
 
 /* Support for FXB/FXP files (fxb.c) */
 int fst_load_fxfile (FST *fst, const char *filename);
