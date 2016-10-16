@@ -19,13 +19,13 @@ static bool need_save = false;
 
 static inline xmlChar *
 int2str(xmlChar *str, int buf_len, int integer) {
-   xmlStrPrintf(str, buf_len, BAD_CAST "%d", integer);
+   xmlStrPrintf(str, buf_len, "%d", integer);
    return str;
 }
 
 static inline xmlChar *
 bool2str(xmlChar *str, int buf_len, bool boolean) {
-   xmlStrPrintf(str, buf_len, BAD_CAST ( (boolean) ? "TRUE" : "FALSE" ));
+   xmlStrPrintf(str, buf_len, (boolean) ? "TRUE" : "FALSE");
    return str;
 }
 
