@@ -137,7 +137,10 @@ amc_callback ( AEffect* effect, int32_t opcode, int32_t index, intptr_t value, v
 	case audioMasterNeedIdle:
 		DEBUG ("amc: audioMasterNeedIdle\n");
 		// plug needs idle calls (outside its editor window)
-		if ( amc && amc->NeedIdle ) amc->NeedIdle( amc );
+		if ( amc ) {
+			amc->need_idle = true;
+			if (amc->NeedIdle) amc->NeedIdle(amc);
+		}
 		return 1;
 	case audioMasterSizeWindow:
 		DEBUG ("amc: audioMasterSizeWindow %d %d\n", index, value);

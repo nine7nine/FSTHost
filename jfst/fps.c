@@ -9,6 +9,8 @@
 #include "xmldb/info.h"
 #include "jfst.h"
 
+#include "fst/fst_int.h"
+
 // Concept from: http://stackoverflow.com/questions/122616/how-do-i-trim-leading-trailing-whitespace-in-a-standard-way
 // With small modifications
 static char*
@@ -283,7 +285,7 @@ bool fps_save (JFST* jfst, const char* filename) {
       int32_t paramIndex = jfst->midi_learn.map[cc];
       if ( paramIndex < 0 || paramIndex >= fst_num_params(fst) ) continue;
 
-      fst_call_dispatcher( fst, effGetParamName, paramIndex, 0, tString, 0 );
+      fst_get_param_name(fst, paramIndex, (char*) tString);
 
       cur_node = xmlNewChild(plugin_state_node, NULL, BAD_CAST "map", NULL);
       xmlNewProp(cur_node, BAD_CAST "name", tString);

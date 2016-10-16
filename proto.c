@@ -55,7 +55,7 @@ static void list_params ( JFST* jfst, ServClient* serv_client ) {
 	FST* fst = jfst->fst;
 	int32_t i;
 	for ( i = 0; i < fst_num_params(fst); i++ ) {
-		fst_call_dispatcher ( fst, effGetParamName, i, 0, paramName, 0 );
+		fst_get_param_name ( fst, i, paramName );
 		jfst_send_fmt(jfst, serv_client, "%d:%s", i, paramName);
         }
 }
@@ -71,7 +71,7 @@ static void list_midi_map ( JFST* jfst, ServClient* serv_client ) {
 		if ( paramIndex < 0 || paramIndex >= fst_num_params(fst) )
 			continue;
 
-		fst_call_dispatcher( fst, effGetParamName, paramIndex, 0, name, 0 );
+		fst_get_param_name(fst, paramIndex, name);
 		jfst_send_fmt(jfst, serv_client, "%d:%s", cc, name);
 	}
 }
@@ -99,7 +99,7 @@ static void jfst_news ( JFST* jfst, ServClient* serv_client, Changes changes ) {
 		jfst_send_fmt( jfst, serv_client, "BYPASS:%d", jfst->bypassed );
 
 	if ( changes & CHANGE_EDITOR )
-		jfst_send_fmt( jfst, serv_client, "EDITOR:%d", (bool) jfst->fst->window );
+		jfst_send_fmt( jfst, serv_client, "EDITOR:%d", fst_has_window(jfst->fst) );
 
 	if ( changes & CHANGE_CHANNEL )
 		get_channel(jfst, serv_client);

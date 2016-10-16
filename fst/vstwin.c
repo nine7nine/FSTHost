@@ -7,7 +7,7 @@
 #include <windows.h>
 
 #include "log/log.h"
-#include "fst.h"
+#include "fst_int.h"
 
 #define INF log_info
 #define DEBUG log_debug
@@ -322,6 +322,16 @@ void fst_call (FST *fst, FSTEventTypes type) {
 	fst_event_call ( fst, &call );
 }
 
+void fst_editor_resize ( FST* fst, int32_t width, int32_t height ) {
+	FSTCall call = {
+		.type = EDITOR_RESIZE,
+		.width = width,
+		.height = height
+	};
+
+	fst_event_call ( fst, &call );
+}
+
 int32_t fst_get_program (FST *fst) {
 	/* Wait for change */
 	pthread_mutex_lock (&fst->lock);
@@ -583,10 +593,10 @@ fst_update_current_program(FST* fst) {
 }
 
 static inline void fst_plugin_idle ( FST* fst ) {
-	if (fst->wantIdle)
+	if ( fst->amc.need_idle )
 		fst->plugin->dispatcher (fst->plugin, effIdle, 0, 0, NULL, 0);  
 
-	if (fst->window)
+	if ( fst_has_window(fst) )
 		fst->plugin->dispatcher (fst->plugin, effEditIdle, 0, 0, NULL, 0);
 }
 
@@ -596,7 +606,6 @@ static void fst_event_handler (FST* fst, FSTCall* call) {
 	AEffect* plugin = fst->plugin;
 	AMC* amc = &fst->amc;
 
-	
 	if ( fst->initialized ) {
 		if ( ! fst->opened && call->type != OPEN ) {
 			ERR("Not opened yet !");
@@ -649,6 +658,8 @@ static void fst_event_handler (FST* fst, FSTCall* call) {
 		fst_destroy_editor (fst);
 		break;
 	case EDITOR_RESIZE:
+		fst->width = call->width;
+		fst->height = call->height;
 		fst_resize_editor(fst);
 		break;
 	case PROGRAM_CHANGE:

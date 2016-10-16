@@ -4,19 +4,20 @@
 #include <stdbool.h>
 #include "vestige/aeffectx.h"
 
-typedef struct _AMC {
+typedef struct AMC {
 	/* This is needed only audioMasterGetTime - but we don't know how long plugin want to use it */
 	struct VstTimeInfo	timeInfo;
 	float sample_rate;
 	intptr_t block_size;
 
-	void		(*Automate)	( struct _AMC*, int32_t param );
-	void		(*GetTime)	( struct _AMC*, int32_t mask );
-	bool		(*ProcessEvents)( struct _AMC*, VstEvents* events );
-	intptr_t	(*TempoAt)	( struct _AMC*, int32_t location );
-	void		(*NeedIdle)	( struct _AMC* );
-	void		(*SizeWindow)	( struct _AMC*, int32_t width, int32_t height );
-	bool		(*UpdateDisplay)( struct _AMC* );
+	void		(*Automate)	( struct AMC*, int32_t param );
+	void		(*GetTime)	( struct AMC*, int32_t mask );
+	bool		(*ProcessEvents)( struct AMC*, VstEvents* events );
+	intptr_t	(*TempoAt)	( struct AMC*, int32_t location );
+	void		(*NeedIdle)	( struct AMC* );
+	void		(*SizeWindow)	( struct AMC*, int32_t width, int32_t height );
+	bool		(*UpdateDisplay)( struct AMC* );
+	bool		need_idle;
 	void*		user_ptr;
 } AMC;
 

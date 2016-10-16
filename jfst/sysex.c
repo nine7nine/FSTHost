@@ -6,7 +6,7 @@
 
 #define SYSEX_RINGBUFFER_SIZE 16 * SYSEX_MAX_SIZE
 
-static void sysex_makeASCII(uint8_t* ascii_midi_dest, char* name, size_t size_dest) {
+static void sysex_makeASCII(uint8_t* ascii_midi_dest, const char* name, size_t size_dest) {
 	size_t i;
 	for (i=0; i < strlen(name) && i < size_dest - 1; i++)
 		if ( isprint( toascii( name[i]) ) )
@@ -164,7 +164,7 @@ void jfst_queue_sysex(JFST* jfst, jack_midi_data_t* data, size_t size) {
 static void jfst_sync2sysex( JFST* jfst ) {
 	SysExDumpV1* sd = (SysExDumpV1*) &jfst->sysex_dump;
 
-	jfst_bypass(jfst, (sd->state == SYSEX_STATE_ACTIVE) ? FALSE : TRUE);
+	jfst_bypass(jfst, (sd->state == SYSEX_STATE_ACTIVE) ? false : true);
 	fst_set_program(jfst->fst, sd->program);
 	midi_filter_one_channel_set(&jfst->channel, sd->channel);
 	jfst_set_volume(jfst, sd->volume);

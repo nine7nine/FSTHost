@@ -2,7 +2,7 @@
 #include <stdio.h>
 
 #include "log/log.h"
-#include "fst.h"
+#include "fst_int.h"
 
 #define INF log_info
 #define DEBUG log_debug
