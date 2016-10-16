@@ -69,8 +69,7 @@ static void fst_add2db(FST* fst, xmlNode *xml_rn) {
 	xmlNewChild(fst_node, NULL,BAD_CAST "numInputs", int2str(tmpstr,sizeof tmpstr,fst->plugin->numInputs));
 	xmlNewChild(fst_node, NULL,BAD_CAST "numOutputs", int2str(tmpstr,sizeof tmpstr,fst->plugin->numOutputs));
 	xmlNewChild(fst_node, NULL,BAD_CAST "numParams", int2str(tmpstr,sizeof tmpstr,fst->plugin->numParams));
-	xmlNewChild(fst_node, NULL,BAD_CAST "hasEditor", 
-		bool2str(tmpstr,sizeof tmpstr, fst->plugin->flags & effFlagsHasEditor ? true : false));
+	xmlNewChild(fst_node, NULL,BAD_CAST "hasEditor", bool2str(tmpstr,sizeof tmpstr,fst_has_editor(fst)));
 
 	/* TODO: Category need some changes in vestige (additional enum)
 	if( (info->Category = read_string( fp )) == NULL ) goto error;

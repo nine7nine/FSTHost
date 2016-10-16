@@ -1,5 +1,16 @@
 #include "fst_int.h"
 
+void fst_lock   ( FST* fst ) { pthread_mutex_lock  ( &fst->lock ); }
+void fst_unlock ( FST* fst ) { pthread_mutex_unlock( &fst->lock ); }
+
+void fst_set_chunk(FST* fst, enum FxFileType type, int size, void* chunk) {
+	fst_call_dispatcher(fst, effSetChunk, type, size, chunk, 0);
+}
+
+int fst_get_chunk(FST* fst, enum FxFileType type, void* chunk) {
+	return fst_call_dispatcher( fst, effGetChunk, type, 0, chunk, 0 );
+}
+
 bool fst_want_midi_in ( FST* fst ) {
 	/* No MIDI at all - very old/rare v1 plugins */
 	if (fst->vst_version < 2) return false;
@@ -59,4 +70,8 @@ const char* fst_path (FST* fst) { return fst->handle->path; }
 
 void fst_get_param_name ( FST* fst, int32_t param, char* name ) {
 	fst_call_dispatcher ( fst, effGetParamName, param, 0, (void*) name, 0 );
+}
+
+bool fst_has_editor ( FST* fst ) {
+	return fst->plugin->flags & effFlagsHasEditor;
 }

@@ -50,9 +50,9 @@ jfst_lash_save(JFST *jfst) {
 
 	    config = lash_config_new_with_key( buf );
 
-	    pthread_mutex_lock( &jfst->fst->lock );
+	    fst_lock(jfst->fst);
 	    param = jfst->fst->plugin->getParameter( jfst->fst->plugin, i ); 
-	    pthread_mutex_unlock( &jfst->fst->lock );
+	    fst_unlock(jfst->fst);
 
 	    lash_config_set_value_double(config, param);
 	    lash_send_config(lash_client, config);
@@ -74,10 +74,10 @@ jfst_lash_save(JFST *jfst) {
 	    //       is should move it to fst gui thread.
 	    printf( "getting chunk...\n" );
 
-	    // XXX: alternative. call using the fst->lock
-	    //pthread_mutex_lock( &(fst->lock) );
+	    // XXX: alternative. call using the lock
+	    // fst_lock(jfst->fst);
 	    //bytelen = jfst->fst->plugin->dispatcher( jfst->fst->plugin, 23, 0, 0, &chunk, 0 );
-	    //pthread_mutex_unlock( &(fst->lock) );
+	    // fst_unlock(jfst->fst);
 
 	    bytelen = fst_call_dispatcher( jfst->fst, effGetChunk, 0, 0, &chunk, 0 );
 	    printf( "got tha chunk..\n" );
@@ -117,10 +117,10 @@ jfst_lash_restore(lash_config_t *config, JFST *jfst ) {
 		return;
 	    } 
 	} else {
-	    pthread_mutex_lock( &jfst->fst->lock );
+	    fst_lock(jfst->fst);
 	    jfst->fst->plugin->setParameter( jfst->fst->plugin, atoi( key ), 
 		lash_config_get_value_double( config ) );
-	    pthread_mutex_unlock( &jfst->fst->lock );
+	    fst_unlock(jfst->fst);
 	}
 }
 

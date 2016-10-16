@@ -254,7 +254,7 @@ static void fst_event_call (FST *fst, FSTCall* call) {
 	} else { /* Call from Event thread */
 		FSTEventCall* ec = &( fst->event_call );
 		pthread_mutex_lock (&ec->lock);
-		pthread_mutex_lock (&fst->lock);
+		fst_lock(fst);
 
 		ec->call = call;
 
@@ -263,7 +263,7 @@ static void fst_event_call (FST *fst, FSTCall* call) {
 			PostThreadMessage( fst->thread->id, WM_USER, 0, 0 );
 
 		pthread_cond_wait (&ec->called, &fst->lock);
-		pthread_mutex_unlock (&fst->lock);
+		fst_unlock(fst);
 		pthread_mutex_unlock ( &ec->lock );
 	}
 }
@@ -334,9 +334,9 @@ void fst_editor_resize ( FST* fst, int32_t width, int32_t height ) {
 
 int32_t fst_get_program (FST *fst) {
 	/* Wait for change */
-	pthread_mutex_lock (&fst->lock);
+	fst_lock(fst);
 	int32_t program = fst->current_program;
-	pthread_mutex_unlock (&fst->lock);
+	fst_unlock(fst);
 	return program;
 }
 
@@ -616,7 +616,7 @@ static void fst_event_handler (FST* fst, FSTCall* call) {
 		return;
 	}
 
-	pthread_mutex_lock (&fst->lock);
+	fst_lock(fst);
 	switch ( call->type ) {
 	case INIT:
 		call->retval = fst_init(fst);
@@ -680,7 +680,7 @@ static void fst_event_handler (FST* fst, FSTCall* call) {
 		call->retval = plugin->dispatcher( plugin, call->opcode, call->index, call->val, call->ptr, call->opt );
 		break;
 	}
-	pthread_mutex_unlock (&fst->lock);
+	fst_unlock(fst);
 }
 
 /*************************** Thread support routines *****************************************/

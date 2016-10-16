@@ -9,7 +9,7 @@
 #include "xmldb/info.h"
 #include "jfst.h"
 
-#include "fst/fst_int.h"
+#include "fst/fst.h"
 
 // Concept from: http://stackoverflow.com/questions/122616/how-do-i-trim-leading-trailing-whitespace-in-a-standard-way
 // With small modifications
@@ -67,12 +67,12 @@ fps_check_this(FST *fst, char *field, char *value) {
          return false;
       }
    // NOTE: All below is for compatibility and shall be removed someday
-   } else if ( strcmp(  field, "productString" ) == 0 ) {
-      success = fst_call_dispatcher( fst, effGetProductString, 0, 0, testString, 0 );
-   } else if ( strcmp( field, "effectName" ) == 0 ) {
-      success = fst_call_dispatcher( fst, effGetEffectName, 0, 0, testString, 0 );
-   } else if ( strcmp( field, "vendorString" ) == 0 ) {
-      success = fst_call_dispatcher( fst, effGetVendorString, 0, 0, testString, 0 );
+//   } else if ( strcmp( field, "productString" ) == 0 ) {
+//      success = fst_call_dispatcher( fst, effGetProductString, 0, 0, testString, 0 );
+//   } else if ( strcmp( field, "effectName" ) == 0 ) {
+//      success = fst_call_dispatcher( fst, effGetEffectName, 0, 0, testString, 0 );
+//   } else if ( strcmp( field, "vendorString" ) == 0 ) {
+//      success = fst_call_dispatcher( fst, effGetVendorString, 0, 0, testString, 0 );
    }
 
    if (success) {
@@ -125,9 +125,9 @@ fps_process_node(JFST* jfst, xmlNode *a_node) {
           int index = strtol((const char*) xmlGetProp(cur_node, BAD_CAST "index"), NULL, 10);
 	  float val = strtof((const char*) xmlGetProp(cur_node, BAD_CAST "value"), NULL);
 
-	  pthread_mutex_lock( &fst->lock );
+	  fst_lock(fst);
 	  fst_set_param ( fst, index, val );
-	  pthread_mutex_unlock( &fst->lock );
+	  fst_unlock(fst);
        // MIDI Channel
        } else if (xmlStrcmp(cur_node->name, BAD_CAST "channel") == 0) {
 	  int channel = strtol((const char*) xmlGetProp(cur_node, BAD_CAST "number"), NULL, 10);
@@ -213,7 +213,7 @@ fps_process_node(JFST* jfst, xmlNode *a_node) {
              return false;
           }
 
-          fst_call_dispatcher( fst, effSetChunk, 0, chunk_size, chunk_data, 0 );
+	  fst_set_chunk( fst, FXBANK, chunk_size, chunk_data );
 	  free( chunk_data );
 
           log_info("Chunk loaded");
@@ -273,7 +273,7 @@ bool fps_save (JFST* jfst, const char* filename) {
 
    // File path
    cur_node = xmlNewChild(plugin_state_node, NULL, BAD_CAST "file", NULL);
-   xmlNewProp(cur_node, BAD_CAST "path", BAD_CAST fst->handle->path);
+   xmlNewProp(cur_node, BAD_CAST "path", BAD_CAST fst_path(fst));
 
    // Check - UniqueID
    cur_node = xmlNewChild(plugin_state_node, NULL, BAD_CAST "check", NULL);
@@ -345,13 +345,13 @@ bool fps_save (JFST* jfst, const char* filename) {
 
    // Current Program
    cur_node = xmlNewChild(plugin_state_node, NULL, BAD_CAST "program", NULL);
-   xmlNewProp(cur_node, BAD_CAST "number", int2str(tString, sizeof tString, (int) jfst->fst->current_program));
+   xmlNewProp(cur_node, BAD_CAST "number", int2str(tString, sizeof tString, fst_get_program(jfst->fst)));
 
    // Chunk
    if ( fst_has_chunks(fst) ) {
       log_info( "getting chunk ... " );
-      void * chunk_data;
-      intptr_t chunk_size = fst_call_dispatcher( fst, effGetChunk, 0, 0, &chunk_data, 0 );
+      void* chunk_data;
+      int chunk_size = fst_get_chunk( fst, FXBANK, &chunk_data );
 
       if ( chunk_size <= 0 ) {
          log_error( "Chunke len =< 0 !!! Not saving chunk." );

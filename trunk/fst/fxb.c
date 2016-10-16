@@ -91,7 +91,7 @@ static void fx_load_chunk ( FST *fst, FILE *fxfile, enum FxFileType chunkType )
 	br = fread (chunk, 1, chunkSize, fxfile);
 	if (br == chunkSize) {
 		INF("SetChunk type : %d", chunkType);
-		fst_call_dispatcher(fst, effSetChunk, chunkType, chunkSize, chunk, 0);
+		fst_set_chunk(fst, chunkType, chunkSize, chunk);
 	} else {
 		ERR("Error while read chunk (got: %zu, want: %zu)", br, chunkSize);
 	}
@@ -154,13 +154,13 @@ static void fx_load_program ( FST *fst, FILE *fxfile, short programNumber )
 		float Params[fxHeader.numPrograms];
 		br = fread(&Params, sizeof(float), fxHeader.numPrograms, fxfile);
 
-		pthread_mutex_lock (&fst->lock);
+		fst_lock(fst);
 		int32_t i;
 		for (i = 0; i < fxHeader.numPrograms; i++ ) {
 			float v = endian_swap_float ( Params[i] );
 			fst_set_param( fst, i, v );
 		}
-		pthread_mutex_unlock (&fst->lock);
+		fst_unlock(fst);
 	}
 }
 
@@ -247,12 +247,12 @@ static void fx_save_params ( FST *fst, FILE *fxfile )
 {
 	float Params[ fst_num_params(fst) ];
 
-	pthread_mutex_lock (&fst->lock);
+	fst_lock(fst);
 	int32_t i;
 	for (i = 0; i < fst_num_params(fst); i++ )
 		Params[i] = endian_swap_float ( fst_get_param(fst, i) );
 
-	pthread_mutex_unlock (&fst->lock);
+	fst_unlock(fst);
 
 	fwrite(&Params, sizeof(float), fst_num_params(fst), fxfile);
 }
@@ -287,10 +287,10 @@ int fst_save_fxfile ( FST *fst, const char *filename, enum FxFileType fileType )
 
 	fxHeader.byteSize = headerSize;
 
-        void * chunk = NULL;
-	int32_t chunkSize;
+        void* chunk = NULL;
+	int chunkSize;
 	if (isChunk) {
-		chunkSize = fst_call_dispatcher( fst, effGetChunk, chunkType, 0, &chunk, 0 );
+		chunkSize = fst_get_chunk(fst, chunkType, &chunk);
 		INF("Got chunk %zu B", (size_t) chunkSize);
 		fxHeader.byteSize += chunkSize + sizeof(chunkSize);
 	} else {
