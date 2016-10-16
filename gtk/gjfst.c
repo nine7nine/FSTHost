@@ -861,7 +861,7 @@ static GJFST* gjfst_new ( JFST* jfst ) {
 	//------- PRESETS -----------------------------------------------------------------------------
 	GtkListStore* preset_store = gtk_list_store_new( 2, G_TYPE_STRING, G_TYPE_INT );
 	create_preset_store( preset_store, jfst->fst );
-	gjfst->preset_listbox = add_combo_nosig(hpacker, preset_store, jfst->fst->current_program, "Plugin Presets");
+	gjfst->preset_listbox = add_combo_nosig(hpacker, preset_store, fst_get_program(jfst->fst), "Plugin Presets");
 	gjfst->preset_listbox_signal = g_signal_connect( G_OBJECT(gjfst->preset_listbox), "changed", 
 		G_CALLBACK( program_change ), jfst->fst ); 
 	//------- CHANGE PROGRAM NAME ------------------------------------------------------------------
