@@ -29,13 +29,13 @@ trim(xmlChar* s) {
 
 static xmlChar *
 int2str(xmlChar *str, int buf_len, int integer) {
-   xmlStrPrintf(str, buf_len, BAD_CAST "%d", integer);
+   xmlStrPrintf(str, buf_len, "%d", integer);
    return str;
 }
 
 static xmlChar *
 float2str(xmlChar *str, int buf_len, float floating) {
-   xmlStrPrintf(str, buf_len, BAD_CAST "%f", floating);
+   xmlStrPrintf(str, buf_len, "%f", floating);
    return str;
 }
 
@@ -322,7 +322,7 @@ bool fps_save (JFST* jfst, const char* filename) {
 
    // MIDI Program Change handling type
    cur_node = xmlNewChild(plugin_state_node, NULL, BAD_CAST "midi_pc", NULL);
-   xmlStrPrintf(tString, sizeof tString, BAD_CAST ((jfst->midi_pc == MIDI_PC_SELF) ? "self" : "plugin"));
+   xmlStrPrintf(tString, sizeof tString, (jfst->midi_pc == MIDI_PC_SELF) ? "self" : "plugin");
    xmlNewProp(cur_node, BAD_CAST "type", tString);
 
    // Volume
