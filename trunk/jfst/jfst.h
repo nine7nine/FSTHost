@@ -80,7 +80,7 @@ typedef struct _JFST {
 	FST*		fst;
 	FST_THREAD*	fst_thread;
 	EventQueue	event_queue;
-	char*		client_name;
+	const char*	client_name;
 	const char*	default_state_file;
 	char*		dbinfo_file;
 	int32_t		numIns;

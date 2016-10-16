@@ -726,7 +726,7 @@ idle_cb(GJFST *gjfst) {
 			if ( paramIndex < 0 || paramIndex >= fst_num_params(fst) )
 				continue;
 
-			fst_call_dispatcher ( fst, effGetParamName, paramIndex, 0, ParamName, 0 );
+			fst_get_param_name(fst, paramIndex, ParamName);
 
 			snprintf(tString, sizeof tString, "CC %03d => %s",cc, ParamName);
 

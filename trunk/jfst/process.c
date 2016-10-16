@@ -1,6 +1,7 @@
 #include <math.h>
 #include "log/log.h"
 #include "jfst.h"
+#include "fst/fst_int.h"
 
 //#define PTD
 #ifdef PTD

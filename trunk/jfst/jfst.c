@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <limits.h>
 
 #include "jfst.h"
 #include "xmldb/info.h"
@@ -11,7 +12,7 @@ extern bool fps_save(JFST* jfst, const char* filename);
 extern bool fps_load(JFST* jfst, const char* filename);
 
 /* jackamc.c */
-extern void jfstamc_init ( JFST* jfst, AMC* amc );
+extern void jfstamc_init ( JFST* jfst );
 
 /* sysex.c */
 extern void jfst_sysex_init ( JFST* jfst );
@@ -94,7 +95,7 @@ static void jfst_set_aliases ( JFST* jfst, FSTPortType type ) {
 	}
 
 	// Set port alias
-	char name[kVstMaxLabelLen];
+	char name[ fst_max_port_name(jfst->fst) ];
 	int32_t i;
 	for ( i=0; i < count; i++ )
 		if ( fst_get_port_name ( jfst->fst, i, type, name ) )
@@ -141,7 +142,7 @@ static void jfst_idle( void* data ) {
 		ml->wait = false;
 
 		char name[FST_MAX_PARAM_NAME];
-		fst_call_dispatcher ( jfst->fst, effGetParamName, ml->param, 0, name, 0 );
+		fst_get_param_name( jfst->fst, ml->param, name );
 		log_info("MIDIMAP CC: %d => %s", ml->cc, name);
 	}
 
@@ -159,7 +160,7 @@ bool jfst_init( JFST* jfst ) {
 	int32_t max_out = def.maxOuts;
 
 	// Set client name (if user did not provide own)
-	if (!jfst->client_name) jfst->client_name = fst->handle->name;
+	if (!jfst->client_name) jfst->client_name = fst_name(fst);
 
 	// Jack Audio
 	jfst->numIns = (max_in >= 0 && max_in < fst_num_ins(fst)) ? max_in : fst_num_ins(fst);
@@ -175,11 +176,6 @@ bool jfst_init( JFST* jfst ) {
 		jfst_set_aliases ( jfst, FST_PORT_IN );
 		jfst_set_aliases ( jfst, FST_PORT_OUT );
 	}
-
-	// Lock our crucial memory ( which is used in process callback )
-	// TODO: this is not all
-	mlock ( jfst, sizeof(JFST) );
-	mlock ( fst, sizeof(FST) );
 
 	// Set block size / sample rate
 	fst_configure( fst, jfst->sample_rate, jfst->buffer_size );
@@ -226,7 +222,7 @@ bool jfst_session_handler( JFST* jfst, jack_session_event_t* event ) {
 	log_info("session callback");
 
 	// Save state
-	char filename[MAX_PATH];
+	char filename[PATH_MAX];
 	snprintf( filename, sizeof(filename), "%sstate.fps", event->session_dir );
 	if ( ! jfst_save_state( jfst, filename ) ) {
 		log_error("SAVE ERROR");
@@ -253,11 +249,11 @@ bool jfst_session_handler( JFST* jfst, jack_session_event_t* event ) {
 
 void jfst_bypass(JFST* jfst, bool bypass) {
 	if ( bypass && !jfst->bypassed ) {
-		jfst->bypassed = TRUE;
+		jfst->bypassed = true;
 		fst_call ( jfst->fst, SUSPEND );
 	} else if ( !bypass && jfst->bypassed ) {
 		fst_call ( jfst->fst, RESUME );
-		jfst->bypassed = FALSE;
+		jfst->bypassed = false;
 	}
 }
 
@@ -292,8 +288,8 @@ Changes jfst_detect_changes( JFST* jfst, ChangesLast* L ) {
 		ret |= CHANGE_CHANNEL;
 	}
 
-	if ( L->editor != (bool) jfst->fst->window ) {
-		L->editor = (bool) jfst->fst->window;
+	if ( L->editor != fst_has_window(jfst->fst) ) {
+		L->editor = fst_has_window(jfst->fst);
 		ret |= CHANGE_EDITOR;
 	}
 
@@ -326,7 +322,7 @@ bool jfst_load (JFST* jfst, const char* plug_spec, bool state_can_fail, FST_THRE
 	if ( ! jfst->fst ) return false;
 
 	/* bind Jack to Audio Master Callback */
-	jfstamc_init ( jfst, &( jfst->fst->amc ) );
+	jfstamc_init ( jfst );
 
 	return true;
 }

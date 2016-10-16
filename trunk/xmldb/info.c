@@ -6,6 +6,7 @@
 
 #include "info.h"
 #include "log/log.h"
+#include "fst/fst_int.h"
 
 #ifdef __x86_64__
 #define ARCH "64"
@@ -52,11 +53,11 @@ static void fst_add2db(FST* fst, xmlNode *xml_rn) {
 
 	fst_node = xmlNewChild(xml_rn, NULL,BAD_CAST "fst", NULL);
 
-	xmlNewProp(fst_node,BAD_CAST "file",BAD_CAST fst->handle->name);
-	xmlNewProp(fst_node,BAD_CAST "path",BAD_CAST fst->handle->path);
+	xmlNewProp(fst_node,BAD_CAST "file",BAD_CAST fst_name(fst));
+	xmlNewProp(fst_node,BAD_CAST "path",BAD_CAST fst_path(fst));
 	xmlNewProp(fst_node,BAD_CAST "arch",BAD_CAST ARCH);
 
-	xmlNewChild(fst_node, NULL,BAD_CAST "name", BAD_CAST fst->name);
+	xmlNewChild(fst_node, NULL,BAD_CAST "name", BAD_CAST fst_name(fst));
 	xmlNewChild(fst_node, NULL,BAD_CAST "uniqueID", int2str(tmpstr,sizeof tmpstr,fst->plugin->uniqueID));
 	xmlNewChild(fst_node, NULL,BAD_CAST "version", int2str(tmpstr,sizeof tmpstr,fst->plugin->version));
 	xmlNewChild(fst_node, NULL,BAD_CAST "vst_version", int2str(tmpstr,sizeof tmpstr,fst->vst_version));

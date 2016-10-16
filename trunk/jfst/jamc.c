@@ -1,6 +1,7 @@
 #include <math.h>
 
 #include "jfst.h"
+#include "fst/amc.h"
 #include "log/log.h"
 
 static void jfstamc_automate ( AMC* amc, int32_t param ) {
@@ -141,7 +142,7 @@ static bool jfstamc_process_events ( AMC* amc, VstEvents* events ) {
 	return true;
 }
 
-static intptr_t jfstamc_tempo ( struct _AMC* amc, int32_t location ) {
+static intptr_t jfstamc_tempo ( AMC* amc, int32_t location ) {
 	JFST* jfst = (JFST*) amc->user_ptr;
 	
 	jack_position_t jack_pos;
@@ -150,37 +151,29 @@ static intptr_t jfstamc_tempo ( struct _AMC* amc, int32_t location ) {
 	return (jack_pos.beats_per_minute) ? jack_pos.beats_per_minute : 120;
 }
 
-static void jfstamc_need_idle ( struct _AMC* amc ) {
+static void jfstamc_window_resize ( AMC* amc, int32_t width, int32_t height ) {
 	JFST* jfst = (JFST*) amc->user_ptr;
-	FST* fst = jfst->fst;
-	fst->wantIdle = TRUE;
-}
+	fst_editor_resize(jfst->fst, width, height);
 
-static void jfstamc_window_resize ( struct _AMC* amc, int32_t width, int32_t height ) {
-	JFST* jfst = (JFST*) amc->user_ptr;
-	FST* fst = jfst->fst;
-	fst->width = width;
-	fst->height = height;
-	fst_call ( fst, EDITOR_RESIZE );
 	/* Resize also GTK window in popup (embedded) mode */
 	if ( jfst->gui_resize )
 		jfst->gui_resize( jfst );
 }
 
 /* return true if editor is opened */
-static bool jfstamc_update_display ( struct _AMC* amc ) {
+static bool jfstamc_update_display ( AMC* amc ) {
 	JFST* jfst = (JFST*) amc->user_ptr;
-	FST* fst = jfst->fst;
-	return ( fst->window ) ? true : false;
+	return fst_has_window(jfst->fst);
 }
 
-void jfstamc_init ( JFST* jfst, AMC* amc ) {
+void jfstamc_init ( JFST* jfst ) {
+	AMC* amc		= fst_amc(jfst->fst);
 	amc->user_ptr		= jfst;
 	amc->Automate		= &jfstamc_automate;
 	amc->GetTime		= &jfstamc_get_time;
 	amc->ProcessEvents	= &jfstamc_process_events;
 	amc->TempoAt		= &jfstamc_tempo;
-	amc->NeedIdle		= &jfstamc_need_idle;
+//	amc->NeedIdle		= &jfstamc_need_idle;
 	amc->SizeWindow		= &jfstamc_window_resize;
 	amc->UpdateDisplay	= &jfstamc_update_display;
 }
