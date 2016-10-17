@@ -42,7 +42,7 @@ jfst_lash_save(JFST *jfst) {
 	void *chunk;
 	MidiLearn* ml = &jfst->midi_learn;
 
-	for( i=0; i<jfst->fst->plugin->numParams; i++ ) {
+	for( i=0; i < fst_num_params(jfst->fst); i++ ) {
 	    char buf[10];
 	    float param;
 	    
@@ -51,7 +51,7 @@ jfst_lash_save(JFST *jfst) {
 	    config = lash_config_new_with_key( buf );
 
 	    fst_lock(jfst->fst);
-	    param = jfst->fst->plugin->getParameter( jfst->fst->plugin, i ); 
+	    param = fst_get_param(jfst->fst, i); 
 	    fst_unlock(jfst->fst);
 
 	    lash_config_set_value_double(config, param);
@@ -69,17 +69,10 @@ jfst_lash_save(JFST *jfst) {
 	    //lash_config_destroy( config );
 	}
 
-	if ( jfst->fst->plugin->flags & effFlagsProgramChunks ) {
-	    // TODO: calling from this thread is wrong.
-	    //       is should move it to fst gui thread.
+	if ( fst_has_chunks(jfst->fst) ) {
 	    printf( "getting chunk...\n" );
 
-	    // XXX: alternative. call using the lock
-	    // fst_lock(jfst->fst);
-	    //bytelen = jfst->fst->plugin->dispatcher( jfst->fst->plugin, 23, 0, 0, &chunk, 0 );
-	    // fst_unlock(jfst->fst);
-
-	    bytelen = fst_call_dispatcher( jfst->fst, effGetChunk, 0, 0, &chunk, 0 );
+	    bytelen = fst_get_chunk( jfst->fst, FXBANK, &chunk );
 	    printf( "got tha chunk..\n" );
 	    if( bytelen ) {
 		if( bytelen < 0 ) {
@@ -102,7 +95,7 @@ jfst_lash_restore(lash_config_t *config, JFST *jfst ) {
 	    short cc = atoi( key+strlen("midi_map") );
 	    int param = lash_config_get_value_int( config );
 
-	    if( cc < 0 || cc>=128 || param<0 || param>=jfst->fst->plugin->numParams ) 
+	    if( cc < 0 || cc >= 128 || param < 0 || param >= fst_num_params(jfst->fst) ) 
 		return;
 
 	    MidiLearn* ml = &jfst->midi_learn;
@@ -110,16 +103,14 @@ jfst_lash_restore(lash_config_t *config, JFST *jfst ) {
 	    return;
 	}
 
-	if ( jfst->fst->plugin->flags & effFlagsProgramChunks) {
+	if ( fst_has_chunks(jfst->fst) ) {
 	    if (strcmp(key, "bin_chunk") == 0) {
-		fst_call_dispatcher( jfst->fst, effSetChunk, 0, lash_config_get_value_size( config ), 
-			(void *) lash_config_get_value( config ), 0 );
-		return;
+		fst_set_chunk( jfst->fst, FXBANK, lash_config_get_value_size(config),
+			(void*) lash_config_get_value(config) );
 	    } 
 	} else {
 	    fst_lock(jfst->fst);
-	    jfst->fst->plugin->setParameter( jfst->fst->plugin, atoi( key ), 
-		lash_config_get_value_double( config ) );
+	    fst_set_param( jfst->fst, atoi(key), lash_config_get_value_double(config) );
 	    fst_unlock(jfst->fst);
 	}
 }
