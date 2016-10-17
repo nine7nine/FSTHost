@@ -94,50 +94,54 @@ static void jfstamc_get_time ( AMC* amc, int32_t mask ) {
 	// FIXME: not supported yet (acctually do we need this ?)
 }
 
-static void
-queue_midi_message(JFST* jfst, uint8_t status, uint8_t d1, uint8_t d2, jack_nframes_t delta ) {
-	uint8_t statusHi = (status >> 4) & 0xF;
-	uint8_t statusLo = status & 0xF;
+static inline void
+queue_midi_message(JFST* jfst, struct MidiMessage* mm) {
+	uint8_t statusHi = (mm->status >> 4) & 0xF;
+	uint8_t statusLo = mm->status & 0xF;
 
-	log_debug("queue_new_message: sHi %d sLo %d, d1 %d, d2 %d", statusHi, statusLo, d1, d2);
-
-	struct  MidiMessage ev;
-	ev.data[0] = status;
-	ev.data[1] = d1;
-	ev.data[2] = d2;
+	log_debug("queue_new_message: sHi %d sLo %d, d1 %d, d2 %d", statusHi, statusLo, mm->d1, mm->d2);
 
 	if (statusHi == 0xC || statusHi == 0xD) {
-		ev.len = 2;
+		mm->len = 2;
 	} else if (statusHi == 0xF) {
 		if (statusLo == 0 || statusLo == 2)
-			ev.len = 3;
+			mm->len = 3;
 		else if (statusLo == 1 || statusLo == 3)
-			ev.len = 2;
-		else ev.len = 1;
-	} else ev.len = 3;
+			mm->len = 2;
+		else mm->len = 1;
+	} else mm->len = 3;
 
-	ev.time = jack_frame_time(jfst->client) + delta;
+	// Change delta to jack time
+	mm->time += jack_frame_time(jfst->client);
+	size_t size = sizeof(struct MidiMessage);
 
 	jack_ringbuffer_t* ringbuffer = jfst->ringbuffer;
-	if (jack_ringbuffer_write_space(ringbuffer) < sizeof(ev)) {
+	if ( jack_ringbuffer_write_space(ringbuffer) < size ) {
 		log_error("Not enough space in the ringbuffer, NOTE LOST.");
 		return;
 	}
 
-	size_t written = jack_ringbuffer_write(ringbuffer, (char*)&ev, sizeof(ev));
-	if (written != sizeof(ev)) log_error("jack_ringbuffer_write failed, NOTE LOST.");
+	size_t written = jack_ringbuffer_write(ringbuffer, (char*) mm, size);
+	if (written != size) log_error("jack_ringbuffer_write failed, NOTE LOST.");
 }
 
 static bool jfstamc_process_events ( AMC* amc, VstEvents* events ) {
 	JFST* jfst = (JFST*) amc->user_ptr;
 
-	int32_t numEvents = events->numEvents;
 	int32_t i;
-	for (i = 0; i < numEvents; i++) {
+	for (i = 0; i < events->numEvents; i++) {
 		VstMidiEvent* event = (VstMidiEvent*) events->events[i];
 		//log_debug( "delta = %d\n", event->deltaFrames );
-		char* midiData = event->midiData;
-		queue_midi_message(jfst, midiData[0], midiData[1], midiData[2], event->deltaFrames);
+
+		struct MidiMessage mm = {
+			.status = event->midiData[0],
+			.time   = event->deltaFrames,
+			.len    = 0, // Will be computed in queu_midi_message
+			.d1     = event->midiData[1],
+			.d2     = event->midiData[2]
+		};
+
+		queue_midi_message(jfst, &mm);
 	}
 	return true;
 }

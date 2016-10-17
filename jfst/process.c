@@ -22,9 +22,6 @@ extern void jfst_apply_volume ( JFST* jfst, jack_nframes_t nframes, float** outs
 static inline void process_midi_output(JFST* jfst, jack_nframes_t nframes) {
 	if (! fst_want_midi_out(jfst->fst) ) return;
 
-	// Do not process anything if MIDI OUT port is not connected
-	if (! jack_port_connected ( jfst->midi_outport ) ) return;
-
 	/* This jack ringbuffer consume code was largely taken from jack-keyboard */
 	/* written by Edward Tomasz Napierala <trasz@FreeBSD.org>                 */
 	void *port_buffer = jack_port_get_buffer(jfst->midi_outport, nframes);
@@ -34,15 +31,15 @@ static inline void process_midi_output(JFST* jfst, jack_nframes_t nframes) {
 	jack_nframes_t last_frame_time = jack_last_frame_time(jfst->client);
 	jack_ringbuffer_t* ringbuffer = jfst->ringbuffer;
 	while (jack_ringbuffer_read_space(ringbuffer)) {
-		struct MidiMessage ev;
-		int read = jack_ringbuffer_peek(ringbuffer, (char*)&ev, sizeof(ev));
-		if (read != sizeof(ev)) {
+		struct MidiMessage mm;
+		int read = jack_ringbuffer_peek(ringbuffer, (char*)&mm, sizeof(mm));
+		if (read != sizeof(mm)) {
 			log_error("Short read from the ringbuffer, possible note loss.");
 			jack_ringbuffer_read_advance(ringbuffer, read);
 			continue;
 		}
 
-		int t = ev.time + nframes - last_frame_time;
+		jack_nframes_t t = mm.time + nframes - last_frame_time;
 
 		/* If computed time is too much into the future, we'll send it later. */
 		if (t >= nframes) return;
@@ -50,9 +47,10 @@ static inline void process_midi_output(JFST* jfst, jack_nframes_t nframes) {
 		/* If computed time is < 0, we missed a cycle because of xrun. */
 		if (t < 0) t = 0;
 
-		jack_ringbuffer_read_advance(ringbuffer, sizeof(ev));
+		jack_ringbuffer_read_advance(ringbuffer, sizeof(mm));
 
-		if ( jack_midi_event_write(port_buffer, t, ev.data, ev.len) )
+		jack_midi_data_t data[3] = { mm.status, mm.d1, mm.d2 };
+		if ( jack_midi_event_write(port_buffer, t, data, mm.len) )
 			log_error("queue: jack_midi_event_write failed, NOTE LOST.");
 	}
 }

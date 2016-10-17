@@ -29,7 +29,9 @@ enum WantState {
 struct MidiMessage {
 	jack_nframes_t		time;
 	uint8_t			len; /* Length of MIDI message, in bytes. */
-	jack_midi_data_t	data[3];
+	jack_midi_data_t	status;
+	jack_midi_data_t	d1;
+	jack_midi_data_t	d2;
 };
 
 typedef struct {
