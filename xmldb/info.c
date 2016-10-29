@@ -99,22 +99,30 @@ static void scandirectory( const char *dir, xmlNode *xml_rn ) {
 		return;
 	}
 
-	char fullname[PATH_MAX];
+	size_t d_len = strlen(dir);
+
 	while ( (entry = readdir( d )) ) {
+		// Filter unnedded results
 		if (entry->d_type & DT_DIR) {
 			/* Do not processing self and our parent */
-			if (! strcmp (entry->d_name, "..") || ! strcmp (entry->d_name, "."))
-				continue;
+			if (!strcmp (entry->d_name, "..")
+			 || !strcmp (entry->d_name, ".")
+			) continue;
+		} else if (entry->d_type & DT_REG) {
+			if (!strstr( entry->d_name, ".dll" )
+			 && !strstr( entry->d_name, ".DLL" )
+			) continue;
+		}
 
-			snprintf( fullname, PATH_MAX, "%s/%s", dir, entry->d_name );
+		// Processing entry
+		size_t f_len = d_len + 2 + strlen(entry->d_name);
+		char fullname[f_len];
 
+		snprintf( fullname, f_len, "%s/%s", dir, entry->d_name );
+
+		if (entry->d_type & DT_DIR) {
 			scandirectory(fullname, xml_rn);
 		} else if (entry->d_type & DT_REG) {
-			if (! strstr( entry->d_name, ".dll" ) && ! strstr( entry->d_name, ".DLL" ))
-				continue;
-
-			snprintf( fullname, PATH_MAX, "%s/%s", dir, entry->d_name );
-    
 			fst_get_info(fullname, xml_rn);
 		}
 	}
