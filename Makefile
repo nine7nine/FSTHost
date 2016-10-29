@@ -5,8 +5,7 @@ PLAT               := 32
 GTK                := 3
 VUMETER            := 0
 LBITS              := $(shell getconf LONG_BIT)
-LASH_EXISTS        := $(shell if pkg-config --exists lash-1.0; then echo yes; else echo no; fi)
-#LAST_EXISTS := 'no'
+LASH               := $(shell pkg-config --exists lash-1.0 && echo 1 || echo 0 )
 
 # Modules
 PKG_CONFIG_MODULES := jack
@@ -20,7 +19,7 @@ ifeq ($(GTK),2)
 override VUMETER = 0
 endif
 
-ifeq ($(LASH_EXISTS),yes)
+ifeq ($(LASH),1)
 PKG_CONFIG_MODULES += lash-1.0
 endif
 
@@ -32,7 +31,7 @@ ifeq ($(VUMETER),1)
 CEXTRA             += -DVUMETER
 endif
 
-ifeq ($(LASH_EXISTS),yes)
+ifeq ($(LASH),1)
 CEXTRA             += -DHAVE_LASH
 endif
 
@@ -92,7 +91,7 @@ C_SRCS             += $(wildcard xmldb/*.c)
 C_SRCS             += $(wildcard log/*.c)
 
 # LASH
-ifeq ($(LASH_EXISTS),yes)
+ifeq ($(LASH),1)
 C_SRCS             += $(wildcard lash/*.c)
 endif
 
