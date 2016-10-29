@@ -56,7 +56,7 @@ Obviouslly you need 32 bit versions for build fsthost32 on AMD64.
 
 3) Type 'make GTK=2' to force GTK+2 GUI or 'make GTK=0' for exclude GTK code
 
-4) Type 'make LASH_EXISTS=no' to build without lash.
+4) Type 'make LASH=0' to build without lash.
    This is default if lash libs are not available
 
 5) Type 'make PLAT=64' to build only 64bit version and respectively
