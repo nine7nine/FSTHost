@@ -120,7 +120,6 @@ have_dll: ;
 	GetModuleFileName(dll, (LPSTR) &buf, sizeof(buf));
 	INF("GetModuleFileName: %s", buf);
 */
-
 	main_entry_t main_entry = fst_get_main_entry(dll);
 	if (! main_entry) {	
 		FreeLibrary (dll);
@@ -128,12 +127,16 @@ have_dll: ;
 	}
 
 	char* fullpath = realpath(mypath,NULL);
-	if (! fullpath) fullpath = strdup(mypath);
+	if (! fullpath) {
+		ERR("Can't get realpath for %s", mypath);
+		FreeLibrary (dll);
+		return NULL;
+	}
 
 	char* ext = strstr(base, ".dll");
 	if (!ext) ext = strstr(base, ".DLL");
 	char* name = (ext) ? strndup(base, ext - base) : strdup(base);
-	
+
 	FSTHandle* fhandle;
 	fhandle = malloc(sizeof(FSTHandle));
 	fhandle->dll = dll;
