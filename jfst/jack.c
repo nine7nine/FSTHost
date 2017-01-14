@@ -189,6 +189,20 @@ static int process_callback ( jack_nframes_t nframes, void* data) {
 	return 0;
 }
 
+static int buffer_size_callback( jack_nframes_t new_buf_size, void *arg ) {
+	JFST* jfst = (JFST*) arg;
+	jfst->buffer_size = new_buf_size;
+	fst_configure( jfst->fst, jfst->sample_rate, jfst->buffer_size );
+	return 0;
+}
+
+static int srate_callback ( jack_nframes_t new_srate, void *arg ) {
+	JFST* jfst = (JFST*) arg;
+	jfst->sample_rate = new_srate;
+	fst_configure( jfst->fst, jfst->sample_rate, jfst->buffer_size );
+	return 0;
+}
+
 static void jfst_log(const char *msg) { log_error( "JACK: %s", msg); }
 
 bool jfst_jack_init( JFST* jfst, bool want_midi_out ) {
@@ -215,6 +229,8 @@ bool jfst_jack_init( JFST* jfst, bool want_midi_out ) {
 	jack_set_process_callback ( jfst->client, (JackProcessCallback) process_callback, jfst );
 	jack_set_session_callback ( jfst->client, session_callback, jfst );
 	jack_set_graph_order_callback ( jfst->client, graph_order_callback, jfst );
+	jack_set_buffer_size_callback ( jfst->client, buffer_size_callback, jfst );
+	jack_set_sample_rate_callback ( jfst->client, srate_callback, jfst );
 
 	/* set rate and blocksize */
 	jfst->sample_rate = jack_get_sample_rate ( jfst->client );
