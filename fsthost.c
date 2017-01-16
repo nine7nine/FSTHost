@@ -27,7 +27,7 @@
 #include "jfst/node.h"
 #include "xmldb/info.h"
 
-#ifndef NO_GTK
+#ifdef HAVE_GTK
 #include <glib.h>
 #include "gtk/gjfst.h"
 GMainLoop* g_main_loop;
@@ -72,7 +72,7 @@ struct plugin {
 
 void fsthost_quit() {
 	quit = true;
-#ifndef NO_GTK
+#ifdef HAVE_GTK
 	if (gtk_gui) {
 		gjfst_quit();
 	} else {
@@ -172,7 +172,7 @@ static void usage(char* appname) {
 	fprintf(stderr, fmt, "-L", "List plugins from XML info DB.");
 	fprintf(stderr, fmt, "-d xml_db_path", "Custom path to XML DB");
 	fprintf(stderr, fmt, "-b", "Start in bypass mode");
-#ifndef NO_GTK
+#ifdef HAVE_GTK
 	fprintf(stderr, fmt, "-n", "Disable GTK GUI");
 #endif
 	fprintf(stderr, fmt, "-N", "Notify changes by SysEx");
@@ -303,7 +303,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 		}
 	}
 
-#ifdef NO_GTK
+#ifndef HAVE_GTK
 	gtk_gui = false;
 #endif
 
@@ -387,9 +387,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 			fst_set_window_close_callback( jn->jfst->fst, edit_close_handler, jn->jfst );
 	}
 
-#ifdef NO_GTK
-	main_loop();
-#else
+#ifdef HAVE_GTK
 	g_timeout_add_full(G_PRIORITY_DEFAULT_IDLE, LOOP_INT, (GSourceFunc) fsthost_idle, NULL, NULL);
 	if (gtk_gui) {
 		log_info( "Start GUI" );
@@ -407,6 +405,8 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 		g_main_loop = g_main_loop_new(NULL, TRUE);
 		g_main_loop_run(g_main_loop);
 	}
+#else
+	main_loop();
 #endif
 	ret = 0;
 	log_info( "Game Over" );
