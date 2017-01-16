@@ -51,6 +51,9 @@ Obviouslly you need 32 bit versions for build fsthost32 on AMD64.
      For LASH
         lash-1.0
 
+NOTE: the simplest form to compile && install is just ( and you can skip points 2 - 5 ;-)
+make install
+
 2) Type 'make'. If everything works correctly this should create an
    executable file called 'fsthost32' and optionaly 'fsthost64'
 
@@ -59,23 +62,21 @@ Obviouslly you need 32 bit versions for build fsthost32 on AMD64.
 4) Type 'make LASH=0' to build without lash.
    This is default if lash libs are not available
 
-5) Type 'make PLAT=64' to build only 64bit version and respectively
-        'make PLAT=32' to build only 32bit version
+5) Type 'make fsthost64' to build only 64bit version and respectively
+        'make fsthost32' to build only 32bit version
 
 6) To run your vst plugins:
-   
-      ./fsthost32 /path/to/someplugin.dll
-   or
-      ./fsthost64 /path/to/someplugin.dll
 
-you can also use multiple plugins or load plugins with some "state".
+   for VST32
+      ./fsthost32 /path/to/someplugin.dll other_plugin.dll ...
+   or for VST64
+      ./fsthost64 /path/to/someplugin.dll other_plugin.dll ...
 
-7) To install type 'make install'
+you can load multiple plugins or load plugins with some "state".
 
-Note: you can build/install all at once, just like that ;-)
-make install
+7) To install type 'make install' ( there are also install32 and install64 targets respectively )
 
-XML Database and simple plugin menu
+XML Database and simple plugins menu
 -----
 
 You can build XML Database, and update it later by such command
