@@ -16,7 +16,12 @@ PLAT               := 32
 endif
 
 # Modules / Features
-ifeq ($(GTK),2)
+ifneq ($(GTK),0)
+D_CEXTRA           += -DHAVE_GTK
+PKG_CONFIG_MODULES += gtk+-$(GTK).0
+endif
+
+ifneq ($(GTK),3)
 override VUMETER   := 0
 endif
 
@@ -30,12 +35,6 @@ endif
 
 ifeq ($(EE),1)
 D_CEXTRA           += -DEMBEDDED_EDITOR
-endif
-
-ifeq ($(GTK),0)
-D_CEXTRA           += -DNO_GTK
-else
-PKG_CONFIG_MODULES += gtk+-$(GTK).0
 endif
 
 ifeq ($(LASH),1)
