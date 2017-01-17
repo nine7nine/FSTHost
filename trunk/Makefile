@@ -158,7 +158,7 @@ fsthost64_install: fsthost64
 	install -Dm 0644 $<.so $(DESTDIR)$(LIB64_INST_PATH)/$<.so
 	install -Dm 0755 $< $(DESTDIR)$(BIN_INST_PATH)/$<
 
-install: $(EXES)_install install-noarch install-man install-icon
+install: $(EXES:=_install) install-noarch install-man install-icon
 	ln -fs fsthost32 $(DESTDIR)$(BIN_INST_PATH)/fsthost
 
 install32: fsthost32_install install-noarch install-man install-icon
