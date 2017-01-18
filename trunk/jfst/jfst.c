@@ -178,6 +178,7 @@ bool jfst_init( JFST* jfst ) {
 	}
 
 	// Set block size / sample rate
+	// - if jack didn't call buffer/sample callback yet
 	fst_configure( fst, jfst->sample_rate, jfst->buffer_size );
 
 	jfst_sysex_gen_random_id ( jfst );
