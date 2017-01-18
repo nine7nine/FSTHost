@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 #include <libxml/parser.h>
 #include <libxml/tree.h>
 
@@ -33,28 +34,36 @@ int fst_info_list(const char* dbpath, const char* arch) {
 	xmlNode* xml_rn = xmlDocGetRootElement(xml_db);
 	xmlNode* n;
 	for (n = xml_rn->children; n; n = n->next) {
-		if (xmlStrcmp(n->name, BAD_CAST "fst")) continue;
-
-		xmlChar* p = xmlGetProp(n, BAD_CAST "path");
-		xmlChar* a = xmlGetProp(n, BAD_CAST "arch");
-		xmlChar* f = NULL;
-
-		if ( arch != NULL && xmlStrcmp(a, BAD_CAST arch) != 0 )
+		if (xmlStrcmp(n->name, BAD_CAST "fst") !=0)
 			continue;
 
+		xmlChar* a = xmlGetProp(n, BAD_CAST "arch");
+		if ( !a ) continue;
+
+		bool arch_ok = arch == NULL || xmlStrcmp(a, BAD_CAST arch) == 0;
+		if ( ! arch_ok ) goto free_a_cont;
+
+		xmlChar* p = xmlGetProp(n, BAD_CAST "path");
+		if ( !p ) goto free_a_cont;
+
+		xmlChar* f = NULL;
 		xmlNode* nn;
 		for (nn = n->children; nn; nn = nn->next) {
-			if (xmlStrcmp(nn->name, BAD_CAST "name") == 0) {
-				f = nn->children->content;
-				break;
-			}
-		}
-		if ( f == NULL ) continue;
+			if (xmlStrcmp(nn->name, BAD_CAST "name") != 0)
+				continue;
 
-		if ( arch == NULL )
-			printf("%s|%s|%s\n", f, a, p);
-		else
-			printf("%s|%s\n", f, p);
+			f = nn->children->content;
+			if ( f == NULL ) break;
+
+			if ( arch == NULL )
+				printf("%s|%s|%s\n", f, a, p);
+			else
+				printf("%s|%s\n", f, p);
+			break;
+		}
+
+		xmlFree( p );
+free_a_cont:	xmlFree( a );
 	}
 
 	xmlFreeDoc(xml_db);
