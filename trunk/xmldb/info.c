@@ -129,7 +129,7 @@ static void scandirectory( const char *dir, xmlNode *xml_rn ) {
 	closedir(d);
 }
 
-char* fst_info_get_plugin_path(const char* dbpath, const char* plug_spec) {
+static char* fst_info_get_plugin_path(const char* dbpath, const char* plug_spec) {
 	xmlDoc* xml_db = fst_info_read_xmldb ( dbpath );
 	if (!xml_db) return NULL;
 
@@ -142,13 +142,25 @@ char* fst_info_get_plugin_path(const char* dbpath, const char* plug_spec) {
 	xmlNode* xml_rn = xmlDocGetRootElement(xml_db);
 	xmlNode* n;
 	for (n = xml_rn->children; n; n = n->next) {
-		if (xmlStrcmp(n->name, BAD_CAST "fst")) continue;
+		if (xmlStrcmp(n->name, BAD_CAST "fst") != 0) /* is fst node ? */
+			continue;
+
+		/* Check ARCH */
+		xmlChar* a = xmlGetProp(n, BAD_CAST "arch");
+		if ( a ) {
+			bool arch_ok = xmlStrcmp(a, BAD_CAST ARCH) == 0;
+			xmlFree ( a );
+			if ( ! arch_ok ) continue;
+		}
 
 		xmlChar* p = xmlGetProp(n, BAD_CAST "path");
 		if ( !p ) continue;
 
 		xmlChar* f = xmlGetProp(n, BAD_CAST "file");
-		if ( !f ) goto free_p_cont; /* broken node ? */
+		if ( !f ) { /* broken node ? */
+			xmlFree( p );
+			continue;
+		}
 
 		if ( !xmlStrcmp(f, BAD_CAST fname) || !xmlStrcmp(f, BAD_CAST base) ) {
 			path = (char*) xmlStrdup ( p );
@@ -159,16 +171,17 @@ char* fst_info_get_plugin_path(const char* dbpath, const char* plug_spec) {
 		/* Lookup for name node */
 		xmlNode* nn;
 		for (nn = n->children; nn; nn = nn->next) {
-			if (xmlStrcmp(nn->name, BAD_CAST "name")) continue;
+			if (xmlStrcmp(nn->name, BAD_CAST "name") != 0)
+				continue;
+
 			xmlChar* name = xmlNodeGetContent ( nn );
-			if ( !xmlStrcmp(name, BAD_CAST plug_spec ) ) {
+			if ( xmlStrcmp(name, BAD_CAST plug_spec ) == 0 ) {
 				path = (char*) xmlStrdup ( p );
 				found = true;
 			}
 			xmlFree ( name );
 		}
-
-free_p_cont:	xmlFree ( p );
+		xmlFree ( p );
 
 		if ( found ) break;
 	}
