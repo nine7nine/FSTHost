@@ -224,6 +224,10 @@ bool jfst_jack_init( JFST* jfst, bool want_midi_out ) {
 		log_info("Jack change our name to %s", jfst->client_name);
 	}
 
+	/* set rate and blocksize */
+	jfst->sample_rate = jack_get_sample_rate ( jfst->client );
+	jfst->buffer_size = jack_get_buffer_size ( jfst->client );
+
 	// Set client callbacks
 	jack_set_thread_creator (wine_thread_create);
 	jack_set_process_callback ( jfst->client, (JackProcessCallback) process_callback, jfst );
@@ -231,10 +235,6 @@ bool jfst_jack_init( JFST* jfst, bool want_midi_out ) {
 	jack_set_graph_order_callback ( jfst->client, graph_order_callback, jfst );
 	jack_set_buffer_size_callback ( jfst->client, buffer_size_callback, jfst );
 	jack_set_sample_rate_callback ( jfst->client, srate_callback, jfst );
-
-	/* set rate and blocksize */
-	jfst->sample_rate = jack_get_sample_rate ( jfst->client );
-	jfst->buffer_size = jack_get_buffer_size ( jfst->client );
 
 	// Register/allocate audio ports
 	jfst->inports  = jack_audio_port_init ( jfst->client, "in",  JackPortIsInput,  jfst->numIns );

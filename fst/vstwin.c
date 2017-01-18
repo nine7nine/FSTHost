@@ -357,6 +357,15 @@ void fst_set_program (FST *fst, int32_t program) {
 }
 
 void fst_configure (FST *fst, float sample_rate, intptr_t block_size) {
+	// Don't call plugin for same values
+	AMC* amc = &fst->amc;
+	if ( amc->block_size == block_size
+	  || amc->sample_rate == sample_rate
+	) {
+		DEBUG("FST: skip configure for same values BS: %d SR: %g", block_size, sample_rate);
+		return;
+	}
+
 	FSTCall call = {
 		.type = CONFIGURE,
 		.block_size = block_size,
@@ -648,8 +657,8 @@ static void fst_event_handler (FST* fst, FSTCall* call) {
 		fst_process_unlock ( fst );
 		break;
 	case CONFIGURE:
-		amc->block_size = call->val;
-		amc->sample_rate = call->opt;
+		amc->block_size = call->block_size;
+		amc->sample_rate = call->sample_rate;
 		INF("Sample Rate: %g | Block Size: %d", amc->sample_rate, amc->block_size);
 		plugin->dispatcher( plugin, effSetSampleRate, 0, 0, NULL, amc->sample_rate );
 		plugin->dispatcher( plugin, effSetBlockSize, 0, amc->block_size, NULL, 0.0f );
