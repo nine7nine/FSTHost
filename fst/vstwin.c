@@ -360,7 +360,7 @@ void fst_configure (FST *fst, float sample_rate, intptr_t block_size) {
 	// Don't call plugin for same values
 	AMC* amc = &fst->amc;
 	if ( amc->block_size == block_size
-	  || amc->sample_rate == sample_rate
+	  && amc->sample_rate == sample_rate
 	) {
 		DEBUG("FST: skip configure for same values BS: %d SR: %g", block_size, sample_rate);
 		return;
