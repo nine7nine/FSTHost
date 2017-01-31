@@ -362,6 +362,13 @@ bool jfst_load_state (JFST* jfst, const char* filename) {
 
 	case JFST_FILE_TYPE_FXP:
 	case JFST_FILE_TYPE_FXB:
+		;
+		int32_t uuid = fst_get_fxfile_uuid( filename );
+		if ( uuid ) {
+			char s_uuid[16];
+			snprintf(s_uuid, sizeof(s_uuid), "%d", uuid);
+			jfst->fst = fst_info_load_open( jfst->dbinfo_file, s_uuid, jfst->fst_thread );
+		}
 		if (! jfst->fst) break;
 		success = fst_load_fxfile (jfst->fst, filename);
 		break;

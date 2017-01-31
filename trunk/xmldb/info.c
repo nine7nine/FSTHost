@@ -168,18 +168,19 @@ static char* fst_info_get_plugin_path(const char* dbpath, const char* plug_spec)
 		}
 		xmlFree ( f );
 
-		/* Lookup for name node */
+		/* Lookup for name/uuid nodes */
 		xmlNode* nn;
 		for (nn = n->children; nn; nn = nn->next) {
-			if (xmlStrcmp(nn->name, BAD_CAST "name") != 0)
-				continue;
+			if ( xmlStrcmp(nn->name, BAD_CAST "name")     != 0
+			  && xmlStrcmp(nn->name, BAD_CAST "uniqueID") != 0
+			) continue;
 
-			xmlChar* name = xmlNodeGetContent ( nn );
-			if ( xmlStrcmp(name, BAD_CAST plug_spec ) == 0 ) {
+			xmlChar* content = xmlNodeGetContent ( nn );
+			if ( xmlStrcmp(content, BAD_CAST plug_spec ) == 0 ) {
 				path = (char*) xmlStrdup ( p );
 				found = true;
 			}
-			xmlFree ( name );
+			xmlFree ( content );
 		}
 		xmlFree ( p );
 
@@ -196,7 +197,7 @@ FST* fst_info_load_open ( const char* dbpath, const char* plug_spec, FST_THREAD*
 	FST* fst = fst_load_open ( plug_spec, fst_th );
 	if ( fst ) return fst;
 
-	log_info ( "Try load using XML DB (%s)", dbpath );
+	log_info ( "Try load using XML DB" );
 	char *p = fst_info_get_plugin_path ( dbpath, plug_spec );
 	if (!p) return NULL;
 

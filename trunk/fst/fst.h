@@ -133,6 +133,7 @@ int32_t fst_get_chunk(FST* fst, enum FxFileType type, void* chunk);
 
 /* Support for FXB/FXP files (fxb.c) */
 int fst_load_fxfile (FST *fst, const char *filename);
+int32_t fst_get_fxfile_uuid ( const char* filename );
 int fst_save_fxfile (FST *fst, const char *filename, enum FxFileType fileType);
 
 #endif /* __fst_h__ */
