@@ -67,13 +67,13 @@ static void INF_TYPE ( int32_t type ) {
 
 static void fx_load_chunk ( FST *fst, FILE *fxfile, enum FxFileType chunkType )
 {
-	size_t chunkSize;
+	int32_t chunkSize;
 	size_t br;
 
-	br = fread (&chunkSize, sizeof(size_t), 1, fxfile);
+	br = fread (&chunkSize, sizeof(chunkSize), 1, fxfile);
 	if (br != 1) return; // This should never happend
 	chunkSize = endian_swap(chunkSize);
-	INF("Chunk size: %zu", chunkSize);
+	INF("Chunk size: %d", chunkSize);
 
 	// FIXME: are we should call this also for regular bank ? if not then why there is numElements ?
 	VstPatchChunkInfo chunkInfo;
@@ -164,39 +164,57 @@ static void fx_load_program ( FST *fst, FILE *fxfile, short programNumber )
 	}
 }
 
-int fst_load_fxfile ( FST *fst, const char *filename )
-{
-        size_t br;
-
-	FILE *fxfile = fopen( filename, "rb" );
+static FILE* read_fxheader ( const char* filename, FXHeader* fxHeader ) {
+	FILE* fxfile = fopen( filename, "rb" );
 
 	if (! fxfile) {
 		ERR("Can't open file: %s", filename);
 		return 0;
 	}
 
-	FXHeader fxHeader;
-	br = fread ( &fxHeader, sizeof(FXHeader), 1, fxfile );
+	size_t br = fread ( fxHeader, sizeof(FXHeader), 1, fxfile );
 	if (br != 1) {
 		ERR("FX File is corupted - can not load header. Loaded only: %zu", br);
 		fclose(fxfile);
 		return 0; // This should never happend
 	}
-        fxHeader.fxID = endian_swap( fxHeader.fxID );
-	fxHeader.numPrograms = endian_swap( fxHeader.numPrograms );
-	fxHeader.chunkMagic = endian_swap( fxHeader.chunkMagic );
-	fxHeader.fxMagic = endian_swap( fxHeader.fxMagic );
-	fxHeader.version = endian_swap( fxHeader.version );
+        fxHeader->fxID = endian_swap( fxHeader->fxID );
+	fxHeader->numPrograms = endian_swap( fxHeader->numPrograms );
+	fxHeader->chunkMagic = endian_swap( fxHeader->chunkMagic );
+	fxHeader->fxMagic = endian_swap( fxHeader->fxMagic );
+	fxHeader->version = endian_swap( fxHeader->version );
 
-	ERR("Numprograms: %d", fxHeader.numPrograms);
+	INF("Numprograms: %d", fxHeader->numPrograms);
 
-	if (fxHeader.chunkMagic != cMagic) {
-		ERR("FX File is corupted - wrong magic (%d != %d)", fxHeader.chunkMagic, cMagic);
+	if (fxHeader->chunkMagic != cMagic) {
+		ERR("FX File is corupted - wrong magic (%d != %d)", fxHeader->chunkMagic, cMagic);
 		fclose(fxfile);
 		return 0;
 	}
 
-	INF("Compare: Plugin UniqueID (%d) to Bank fxID (%d)", fst_uid(fst), fxHeader.fxID);
+	return fxfile;
+}
+
+int32_t fst_get_fxfile_uuid ( const char* filename ) {
+
+	FXHeader fxHeader;
+	FILE* fxfile = read_fxheader( filename, &fxHeader );
+	if ( ! fxfile ) return 0;
+
+	int32_t uuid = fxHeader.fxID;
+	INF("FX File ID (%d)", uuid);
+	fclose( fxfile );
+
+	return uuid;
+}
+
+int fst_load_fxfile ( FST *fst, const char *filename )
+{
+	FXHeader fxHeader;
+	FILE* fxfile = read_fxheader( filename, &fxHeader );
+	if ( ! fxfile ) return 0;
+
+	INF("Compare: Plugin UniqueID (%d) to FX File ID (%d)", fst_uid(fst), fxHeader.fxID);
 	if (fst_uid(fst) != fxHeader.fxID) {
 		ERR( "Error: Plugin UniqID not match");
 		fclose( fxfile );
@@ -288,10 +306,10 @@ int fst_save_fxfile ( FST *fst, const char *filename, enum FxFileType fileType )
 	fxHeader.byteSize = headerSize;
 
         void* chunk = NULL;
-	int chunkSize;
+	int32_t chunkSize;
 	if (isChunk) {
 		chunkSize = fst_get_chunk(fst, chunkType, &chunk);
-		INF("Got chunk %zu B", (size_t) chunkSize);
+		INF("Got chunk %d B", chunkSize);
 		fxHeader.byteSize += chunkSize + sizeof(chunkSize);
 	} else {
 		fxHeader.byteSize += (isBank) ? fst_num_presets(fst) * programSize : paramSize;
