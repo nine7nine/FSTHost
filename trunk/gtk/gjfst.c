@@ -148,7 +148,7 @@ enum VTYPE {
 GtkWidget* add_entry(GtkWidget* hpacker, void* value, enum VTYPE vtype,int len, const char* tooltip) {
 	GtkWidget *entry = gtk_entry_new();
 
-	char buf[4];
+	char buf[5];
 	if ( vtype == VTYPE_UINT8 ) {
 		uint8_t* vp = (uint8_t*) value;
 		snprintf(buf, sizeof buf, "%d", *vp);

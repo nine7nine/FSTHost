@@ -353,7 +353,7 @@ void fsthost_proto_dispatch ( ServClient* serv_client, CMD* cmd ) {
 }
 
 static JFST_NODE* jfst_node_get_by_name( const char* name ) {
-	if ( name == '\0' ) return NULL;
+	if ( name[0] == '\0' ) return NULL;
 
 	JFST_NODE* jn = jfst_node_get_first();
 	for ( ; jn; jn = jn->next ) {
