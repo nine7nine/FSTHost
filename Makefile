@@ -4,7 +4,7 @@ LINK               := winegcc
 SRCDIR             := .
 GTK                := 3
 VUMETER            := 0
-LBITS              := getconf LONG_BIT
+LBITS              != getconf LONG_BIT
 LASH               != pkg-config --exists lash-1.0 && echo 1 || echo 0
 D_CEXTRA           :=
 PKG_CONFIG_MODULES := jack libxml-2.0
@@ -109,7 +109,7 @@ DEFINCL = $(INCLUDE_PATH) $(DEFINES) $(OPTIONS)
 ALL_OBJS = $(C_SRCS:.c=_*.o)
 CLEAN_FILES = fsthost_menu.1 *.dbg.c y.tab.c y.tab.h lex.yy.c core *.orig *.rej fsthost.exe* \\\#*\\\# *~ *% .\\\#*
 clean:
-	$(RM) $(CLEAN_FILES) $(ALL_OBJS) $(EXES:=.dbg.o) $(EXES:=.so) $(EXES:.exe=)
+	$(RM) $(CLEAN_FILES) $(ALL_OBJS) $(EXES:=.dbg.o) $(EXES:=.so) $(EXES)
 
 # Do not remove intermediate files
 .SECONDARY: $(ALL_OBJS)
