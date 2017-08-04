@@ -4,8 +4,11 @@ LINK               := winegcc
 SRCDIR             := .
 GTK                := 3
 VUMETER            := 0
+PKG_CONFIG_PATH32  := /usr/lib32/pkgconfig
+PKG_CONFIG_PATH64  :=
+PKGCP              :=
 LBITS              != getconf LONG_BIT
-LASH               != pkg-config --exists lash-1.0 && echo 1 || echo 0
+LASH                = $(shell PKG_CONFIG_PATH=$(PKGCP) pkg-config --exists lash-1.0 && echo 1 || echo 0)
 D_CEXTRA           :=
 PKG_CONFIG_MODULES := jack libxml-2.0
 
@@ -44,14 +47,13 @@ D_CEXTRA           += -DHAVE_LASH
 endif
 
 # Shared GCC flags
-CEXTRA             != pkg-config --cflags $(PKG_CONFIG_MODULES)
+CEXTRA              = $(shell PKG_CONFIG_PATH=$(PKGCP) pkg-config --cflags $(PKG_CONFIG_MODULES))
 CEXTRA             += -g -O2 -Wall -fPIC -Wno-deprecated-declarations -Wno-multichar -march=native -mfpmath=sse
 CEXTRA             += $(D_CEXTRA)
 
 # Shared LDFlags
-LDFLAGS            := -mwindows
-LIBRARIES          != pkg-config --libs $(PKG_CONFIG_MODULES)
-LIBRARIES          += -lpthread -lX11
+LDFLAGS             = $(shell PKG_CONFIG_PATH=$(PKGCP) pkg-config --libs $(PKG_CONFIG_MODULES))
+LDFLAGS            += -lpthread -lX11 -mwindows
 
 # Shared include / install paths
 INCLUDE_PATH       := -I. -I/usr/include -I/usr/include/wine -I/usr/include/wine/windows -I/usr/include/x86_64-linux-gnu
@@ -64,12 +66,12 @@ LIB64_INST_PATH    := $(PREFIX)/lib/x86_64-linux-gnu/wine
 BIN_INST_PATH      := $(PREFIX)/bin
 
 # Platform specific GCC flags
-CEXTRA32           := -m32 $(CEXTRA)
-CEXTRA64           := -m64 $(CEXTRA)
+CEXTRA32            = -m32 $(CEXTRA)
+CEXTRA64            = -m64 $(CEXTRA)
 
 # Platform specific LDFLAGS
-LDFLAGS32          := -m32 $(LDFLAGS) -L/usr/lib/i386-linux-gnu/wine
-LDFLAGS64          := -m64 $(LDFLAGS)
+LDFLAGS32           = -m32 $(LDFLAGS) -L/usr/lib/i386-linux-gnu/wine
+LDFLAGS64           = -m64 $(LDFLAGS)
 
 ### Global source lists
 C_SRCS             := fsthost.c cpuusage.c proto.c
@@ -88,6 +90,10 @@ endif
 C_SRCS             += $(wildcard $(C_SRCS_DIRS:=/*.c))
 
 EXES               := $(PLAT:%=fsthost%) fsthost_list
+
+# PKG_CONFIG_PATH for 32/64bit versions respectively
+fsthost32: PKGCP=$(PKG_CONFIG_PATH32)
+fsthost64: PKGCP=$(PKG_CONFIG_PATH64)
 
 ### Generic targets
 all: $(EXES)
@@ -152,10 +158,8 @@ install64: fsthost64_install install-noarch install-man install-icon
 fsthost_list: xmldb/list_$(LBITS).o
 	gcc flist.c $< $(shell pkg-config --cflags --libs libxml-2.0) -O3 -g -I. -o $@
 
-fsthost32: PKGCP := /usr/lib32/pkgconfig
-
 fsthost%: $(C_SRCS:.c=_%.o)
-	$(LINK) -o $@ $^ $(LDFLAGS$*) $(LIBRARIES)
+	$(LINK) -o $@ $^ $(LDFLAGS$*)
 	mv $@.exe $@		# Fix script name
 	mv $@.exe.so $@.so	# Fix library name
 
