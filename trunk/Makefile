@@ -132,8 +132,7 @@ install-man: man
 install-icon:
 	install -Dm 0644 gtk/fsthost.xpm $(DESTDIR)$(ICONDIR)/fsthost.xpm
 
-install-noarch: fsthost_list
-	install -Dm 0755 fsthost_list $(DESTDIR)$(BIN_INST_PATH)/fsthost_list
+install-noarch:
 	install -Dm 0755 perl/fsthost_menu.pl $(DESTDIR)$(BIN_INST_PATH)/fsthost_menu
 	install -Dm 0755 perl/fsthost_ctrl.pl $(DESTDIR)$(BIN_INST_PATH)/fsthost_ctrl
 
@@ -143,6 +142,9 @@ fsthost32_install: fsthost32
 
 fsthost64_install: fsthost64
 	install -Dm 0644 $<.so $(DESTDIR)$(LIB64_INST_PATH)/$<.so
+	install -Dm 0755 $< $(DESTDIR)$(BIN_INST_PATH)/$<
+
+fsthost_list_install: fsthost_list
 	install -Dm 0755 $< $(DESTDIR)$(BIN_INST_PATH)/$<
 
 install: $(EXES:=_install) install-noarch install-man install-icon
