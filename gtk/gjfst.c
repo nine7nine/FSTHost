@@ -608,13 +608,14 @@ static void
 editor_handler (GtkToggleButton *but, gpointer ptr) {
 	GJFST* gjfst = (GJFST*) ptr;
 	JFST* jfst = gjfst->jfst;
+	FST* fst = jfst->fst;
 
 	if (gtk_toggle_button_get_active (but)) {
 #ifndef EMBEDDED_EDITOR
-		fst_run_editor(jfst->fst, false); // popup = false
+		fst_run_editor(fst, false); // popup = false
 #else
 		bool popup = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(gjfst->editor_checkbox));
-		if (! fst_run_editor(jfst->fst, popup)) return;
+		if (! fst_run_editor(fst, popup)) return;
 		if (! popup) return;
 
 		// Create GTK Socket (Widget)
@@ -626,21 +627,21 @@ editor_handler (GtkToggleButton *but, gpointer ptr) {
 		gtk_container_add(GTK_CONTAINER(socket_align), gtk_socket);
 		gtk_box_pack_start (GTK_BOX(vpacker), socket_align, TRUE, FALSE, 0);
 
-		gtk_widget_set_size_request(gtk_socket, jfst->fst->width, jfst->fst->height);
-		gtk_socket_add_id (GTK_SOCKET (gtk_socket), GDK_POINTER_TO_XID (jfst->fst->xid) );
+		gtk_widget_set_size_request(gtk_socket, fst_width(fst), fst_height(fst));
+		gtk_socket_add_id (GTK_SOCKET(gtk_socket), GDK_POINTER_TO_XID(fst_xid(fst)) );
 
 #ifdef MOVING_WINDOWS_WORKAROUND
 		g_signal_connect (G_OBJECT(window), "configure-event", G_CALLBACK(configure_handler), jfst);
 #endif
-		fst_show_editor(jfst->fst);
+		fst_show_editor(fst);
 		gtk_widget_show(socket_align);
 		gtk_widget_show(gtk_socket);
-	} else if ( jfst->fst->editor_popup ) {
+	} else if ( fst_has_popup_editor(fst) ) {
 		// For some reason window was closed before we reach this function
 		// That's mean GtkSocket is already destroyed
-		if ( jfst->fst->window ) {
+		if ( fst_has_window(fst) ) {
 			gtk_widget_hide(gtk_socket);
-			fst_call ( jfst->fst, EDITOR_CLOSE );
+			fst_call ( fst, EDITOR_CLOSE );
 			gtk_widget_set_size_request(gtk_socket, -1, -1);
 			gtk_widget_destroy(gtk_socket);
 		}
@@ -648,7 +649,7 @@ editor_handler (GtkToggleButton *but, gpointer ptr) {
 		gtk_window_resize(GTK_WINDOW(window), 1, 1);
 #endif /* EMBEDDED_EDITOR */
 	} else {
-		fst_call ( jfst->fst, EDITOR_CLOSE );
+		fst_call ( fst, EDITOR_CLOSE );
 	}
 }
 
@@ -775,8 +776,8 @@ idle_cb(GJFST *gjfst) {
 // Editor Window is embedded and want resize window
 static void gtk_gui_resize ( JFST* jfst ) {
 	FST* fst = jfst->fst;
-	if ( fst->editor_popup && fst->window )
-		gtk_widget_set_size_request(gtk_socket, fst->width, fst->height);
+	if ( fst_has_popup_editor(fst) && fst_has_window(fst) )
+		gtk_widget_set_size_request(gtk_socket, fst_width(fst), fst_height(fst));
 }
 #endif
 
