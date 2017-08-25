@@ -88,9 +88,11 @@ int32_t	fst_max_port_name	(FST* fst);
 bool	fst_has_chunks		(FST* fst);
 bool	fst_has_window		(FST* fst);
 bool	fst_has_editor		(FST* fst);
+bool	fst_has_popup_editor	(FST* fst);
 int	fst_width		(FST* fst);
 int	fst_height		(FST* fst);
 AMC*	fst_amc			(FST* fst);
+void*	fst_xid			(FST* fst);
 
 const char* fst_name (FST* fst);
 const char* fst_path (FST* fst);

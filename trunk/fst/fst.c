@@ -64,6 +64,8 @@ int32_t	fst_max_port_name ( FST* fst ) { return kVstMaxLabelLen; }
 int	fst_width (FST* fst) { return fst->width; }
 int	fst_height (FST* fst) { return fst->height; }
 AMC*	fst_amc (FST* fst) { return &fst->amc; }
+void*	fst_xid (FST* fst) { return fst->xid; }
+bool	fst_has_popup_editor ( FST* fst ) { return fst->editor_popup; }
 
 const char* fst_name (FST* fst) { return fst->handle->name; }
 const char* fst_path (FST* fst) { return fst->handle->path; }
