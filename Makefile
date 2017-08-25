@@ -4,9 +4,10 @@ LINK               := winegcc
 SRCDIR             := .
 GTK                := 3
 VUMETER            := 0
-PKG_CONFIG_PATH32  := /usr/lib32/pkgconfig
-PKG_CONFIG_PATH64  :=
-PKGCP              :=
+PKG_CONFIG_PATH32   = $(LIBDIR32)/pkgconfig
+PKG_CONFIG_PATH64   =
+PKGCP               =
+LIBDIR              =
 LBITS              != getconf LONG_BIT
 LASH                = $(shell PKG_CONFIG_PATH=$(PKGCP) pkg-config --exists lash-1.0 && echo 1 || echo 0)
 D_CEXTRA           :=
@@ -54,6 +55,7 @@ CEXTRA             += $(D_CEXTRA)
 # Shared LDFlags
 LDFLAGS             = $(shell PKG_CONFIG_PATH=$(PKGCP) pkg-config --libs $(PKG_CONFIG_MODULES))
 LDFLAGS            += -lpthread -lX11 -mwindows
+LDFLAGS            += -L$(LIBDIR_WINE)
 
 # Shared include / install paths
 INCLUDE_PATH       := -I. -I/usr/include -I/usr/include/wine -I/usr/include/wine/windows -I/usr/include/x86_64-linux-gnu
@@ -61,17 +63,18 @@ DESTDIR            :=
 PREFIX             := /usr
 MANDIR             := $(PREFIX)/man/man1
 ICONDIR            := $(PREFIX)/share/icons/hicolor/32x32/apps
-LIB32_INST_PATH    := $(PREFIX)/lib/i386-linux-gnu/wine
-LIB64_INST_PATH    := $(PREFIX)/lib/x86_64-linux-gnu/wine
-BIN_INST_PATH      := $(PREFIX)/bin
+LIBDIR32           := $(PREFIX)/lib/i386-linux-gnu
+LIBDIR64           := $(PREFIX)/lib/x86_64-linux-gnu
+BINDIR             := $(PREFIX)/bin
+LIBDIR_WINE       = $(LIBDIR)/wine
 
 # Platform specific GCC flags
-CEXTRA32            = -m32 $(CEXTRA)
-CEXTRA64            = -m64 $(CEXTRA)
+CEXTRA32           := -m32
+CEXTRA64           := -m64 
 
 # Platform specific LDFLAGS
-LDFLAGS32           = -m32 $(LDFLAGS) -L/usr/lib/i386-linux-gnu/wine
-LDFLAGS64           = -m64 $(LDFLAGS)
+LDFLAGS32          := -m32
+LDFLAGS64          := -m64
 
 ### Global source lists
 C_SRCS             := fsthost.c cpuusage.c proto.c
@@ -91,9 +94,18 @@ C_SRCS             += $(wildcard $(C_SRCS_DIRS:=/*.c))
 
 EXES               := $(PLAT:%=fsthost%) fsthost_list
 
-# PKG_CONFIG_PATH for 32/64bit versions respectively
-fsthost32: PKGCP=$(PKG_CONFIG_PATH32)
-fsthost64: PKGCP=$(PKG_CONFIG_PATH64)
+# Variables for 32/64bit versions respectively
+fsthost32: PKGCP    = $(PKG_CONFIG_PATH32)
+fsthost64: PKGCP    = $(PKG_CONFIG_PATH64)
+
+fsthost32: LDFLAGS += $(LDFLAGS32)
+fsthost64: LDFLAGS += $(LDFLAGS64)
+
+fsthost32: CEXTRA  += $(CEXTRA32)
+fsthost64: CEXTRA  += $(CEXTRA64)
+
+fsthost32: LIBDIR   = $(LIBDIR32)
+fsthost64: LIBDIR   = $(LIBDIR64)
 
 ### Generic targets
 all: $(EXES)
@@ -105,11 +117,8 @@ all: $(EXES)
 .SUFFIXES: _64.o _32.o
 DEFINCL = $(INCLUDE_PATH) $(DEFINES) $(OPTIONS)
 
-.c_32.o:
-	$(CC) -c $(CFLAGS) $(CEXTRA32) $(DEFINCL) -o $@ $<
-
-.c_64.o:
-	$(CC) -c $(CFLAGS) $(CEXTRA64) $(DEFINCL) -o $@ $<
+.c_64.o .c_32.o:
+	$(CC) -c $(CFLAGS) $(CEXTRA) $(DEFINCL) -o $@ $<
 
 # Rules for cleaning
 ALL_OBJS = $(C_SRCS:.c=_*.o)
@@ -133,42 +142,42 @@ install-icon:
 	install -Dm 0644 gtk/fsthost.xpm $(DESTDIR)$(ICONDIR)/fsthost.xpm
 
 install-noarch:
-	install -Dm 0755 perl/fsthost_menu.pl $(DESTDIR)$(BIN_INST_PATH)/fsthost_menu
-	install -Dm 0755 perl/fsthost_ctrl.pl $(DESTDIR)$(BIN_INST_PATH)/fsthost_ctrl
+	install -Dm 0755 perl/fsthost_menu.pl $(DESTDIR)$(BINDIR)/fsthost_menu
+	install -Dm 0755 perl/fsthost_ctrl.pl $(DESTDIR)$(BINDIR)/fsthost_ctrl
 
 fsthost32_install: fsthost32
-	install -Dm 0644 $<.so $(DESTDIR)$(LIB32_INST_PATH)/$<.so
-	install -Dm 0755 $< $(DESTDIR)$(BIN_INST_PATH)/$<
+	install -Dm 0644 $<.so $(DESTDIR)$(LIBDIR_WINE)/$<.so
+	install -Dm 0755 $< $(DESTDIR)$(BINDIR)/$<
 
 fsthost64_install: fsthost64
-	install -Dm 0644 $<.so $(DESTDIR)$(LIB64_INST_PATH)/$<.so
-	install -Dm 0755 $< $(DESTDIR)$(BIN_INST_PATH)/$<
+	install -Dm 0644 $<.so $(DESTDIR)$(LIBDIR_WINE)/$<.so
+	install -Dm 0755 $< $(DESTDIR)$(BINDIR)/$<
 
 fsthost_list_install: fsthost_list
-	install -Dm 0755 $< $(DESTDIR)$(BIN_INST_PATH)/$<
+	install -Dm 0755 $< $(DESTDIR)$(BINDIR)/$<
 
 install: $(EXES:=_install) install-noarch install-man install-icon
-	ln -fs fsthost32 $(DESTDIR)$(BIN_INST_PATH)/fsthost
+	ln -fs fsthost32 $(DESTDIR)$(BINDIR)/fsthost
 
 install32: fsthost32_install install-noarch install-man install-icon
-	ln -fs fsthost32 $(DESTDIR)$(BIN_INST_PATH)/fsthost
+	ln -fs fsthost32 $(DESTDIR)$(BINDIR)/fsthost
 
 install64: fsthost64_install install-noarch install-man install-icon
-	ln -fs fsthost64 $(DESTDIR)$(BIN_INST_PATH)/fsthost
+	ln -fs fsthost64 $(DESTDIR)$(BINDIR)/fsthost
 
 # Compile
 fsthost_list: xmldb/list_$(LBITS).o
 	gcc flist.c $< $(shell pkg-config --cflags --libs libxml-2.0) -O3 -g -I. -o $@
 
 fsthost%: $(C_SRCS:.c=_%.o)
-	$(LINK) -o $@ $^ $(LDFLAGS$*)
+	$(LINK) -o $@ $^ $(LDFLAGS)
 	mv $@.exe $@		# Fix script name
 	mv $@.exe.so $@.so	# Fix library name
 
 	# Script postprocessing
 	sed -i -e 's|-n "$$appdir"|-r "$$appdir/$$appname"|' \
 		-e 's|.exe.so|.so|' \
-		-e '3i export WINEPATH="$(LIB$(1)_INST_PATH)"' \
+		-e '3i export WINEPATH="$(LIBDIR_WINE)"' \
 		-e '3i export WINE_SRV_RT=$${WINE_SRV_RT:-15}' \
 		-e '3i export WINE_RT=$${WINE_RT:-10}' \
 		-e '3i export STAGING_RT_PRIORITY_SERVER=$${STAGING_RT_PRIORITY_SERVER:-15}' \

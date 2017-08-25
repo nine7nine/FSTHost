@@ -65,6 +65,8 @@ make install
 5) Type 'make fsthost64' to build only 64bit version and respectively
         'make fsthost32' to build only 32bit version
 
+6) Set correct libdir if needed e.g. 'make LIBDIR32=/usr/lib32 LIBDIR64=/usr/lib'
+
 6) To run your vst plugins:
 
    for VST32
