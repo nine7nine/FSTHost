@@ -3,6 +3,7 @@
 #include <libgen.h>
 #include <limits.h>
 #include <unistd.h>
+#include <stdatomic.h>
 #include <sys/syscall.h>
 #include <windows.h>
 
@@ -13,7 +14,7 @@
 #define DEBUG log_debug
 #define ERR log_error
 
-static bool WindowClassRegistered = FALSE;
+static atomic_bool WindowClassRegistered = false;
 
 static void fst_event_handler(FST* fst, FSTCall* call);
 
@@ -28,7 +29,7 @@ fst_new () {
 	//fst->current_program = 0; - calloc done this
 	pthread_mutex_init (&(fst->event_call.lock), NULL);
 	pthread_cond_init (&(fst->event_call.called), NULL);
-//	fst->editor_popup = TRUE;
+//	fst->editor_popup = true;
 
 	return fst;
 }
@@ -154,7 +155,7 @@ bool fst_unload (FSTHandle* fhandle) {
 	free (fhandle->name);
 	free (fhandle);
 
-	return TRUE;
+	return true;
 }
 
 /*************************** Editor window routines *****************************************/
@@ -191,10 +192,12 @@ my_window_proc (HWND w, UINT msg, WPARAM wp, LPARAM lp) {
 
 static bool
 register_window_class() {
+	if ( WindowClassRegistered ) return true;
+
 	HMODULE hInst;
 	if ((hInst = GetModuleHandleA (NULL)) == NULL) {
 		ERR ("can't get module handle");
-		return FALSE;
+		return false;
 	}
 
 	WNDCLASSEX wclass;
@@ -215,11 +218,11 @@ register_window_class() {
 
 	if (!RegisterClassExA(&wclass)){
 		ERR( "Class register failed :(" );
-		return FALSE;
+		return false;
 	}
-	WindowClassRegistered = TRUE;
+	WindowClassRegistered = true;
 
-	return TRUE;
+	return true;
 }
 
 static void fst_resize_editor (FST *fst) {
@@ -239,14 +242,14 @@ static void fst_resize_editor (FST *fst) {
 bool fst_show_editor (FST *fst) {
 	if (!fst->window) {
 		ERR("no window to show");
-		return FALSE;
+		return false;
 	}
 	
 	fst_resize_editor(fst);
 	ShowWindowAsync(fst->window, SW_SHOWNORMAL);
 //	UpdateWindow(fst->window);
 
-	return TRUE;
+	return true;
 }
 
 /*************************** Event call internal routines ********************************/
@@ -392,7 +395,7 @@ intptr_t fst_call_dispatcher (FST *fst, int32_t opcode, int32_t index,
 }
 
 bool fst_run_editor (FST* fst, bool popup) {
-	if (fst->window) return FALSE;
+	if (fst->window) return false;
 
 	fst->editor_popup = popup;
 	fst_call (fst, EDITOR_OPEN);
@@ -400,9 +403,9 @@ bool fst_run_editor (FST* fst, bool popup) {
 	// Check is we really created some window ;-)
 	if (!fst->window) {
 		ERR ("no window created for VST plugin editor");
-		return FALSE;
+		return false;
 	} else {
-		return TRUE;
+		return true;
 	}
 }
 
@@ -457,7 +460,7 @@ bool fst_set_program_name (FST *fst, const char* name) {
 
 	fst_call_dispatcher(fst, effSetProgramName, 0, 0, nname, 0.0f);
 
-	return TRUE;
+	return true;
 }
 
 static bool fst_thread_add (FST_THREAD* th, FST* fst);
@@ -522,17 +525,17 @@ static bool fst_create_editor (FST* fst) {
 	/* "guard point" to trap errors that occur during plugin loading */
 	if (!(plugin->flags & effFlagsHasEditor)) {
 		ERR ("Plugin \"%s\" has no editor", fst->handle->name);
-		return FALSE;
+		return false;
 	}
 
 	HMODULE hInst;
 	if ((hInst = GetModuleHandleA (NULL)) == NULL) {
 		ERR ("can't get module handle");
-		return FALSE;
+		return false;
 	}
 
-	if ( ! WindowClassRegistered && ! register_window_class() )
-		return FALSE;
+	if ( ! register_window_class() )
+		return false;
 
 	HWND window;
 	if ((window = CreateWindowA ("FST", fst->handle->name, (fst->editor_popup) ? 
@@ -543,7 +546,7 @@ static bool fst_create_editor (FST* fst) {
 		NULL, NULL, hInst, NULL)) == NULL)
 	{
 		ERR ("cannot create editor window");
-		return FALSE;
+		return false;
 	}
 	fst->window = window;
 
@@ -571,7 +574,7 @@ static bool fst_create_editor (FST* fst) {
 	fst->xid = GetPropA (window, "__wine_x11_whole_window");
 //	ERR("And xid = %p", fst->xid );
 
-	return TRUE;
+	return true;
 }
 
 static inline void fst_destroy_editor ( FST* fst ) {
