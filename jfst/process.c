@@ -196,40 +196,70 @@ void jfst_process( JFST* jfst, jack_nframes_t nframes ) {
 
 no_midi_in: ;
 	/* Process AUDIO */
-	float* ins[ fst_num_ins(fst) ];
-	float* outs[ fst_num_outs(fst) ];
+	float swap_in[jfst->buffer_size];
+	float swap_out[jfst->buffer_size];
+	size_t channel_size = sizeof(float) * jfst->buffer_size;
+	uint8_t mbn = 0; // mix buffer number - 0 or 1
 
-	// swap area ( nonused ports )
-	float swap[jfst->buffer_size];
-	memset ( swap, 0, jfst->buffer_size * sizeof(float) );
+	/* TODO afts -> fst */
+	/* TODO bypass support */
+	FST_THREAD_FOREACH( afst, jfst->fst_thread ) {
+		bool first_fst = ( afst == fst_thread_fst_first(jfst->fst_thread) );
+		bool last_fst = ( afst == fst_thread_fst_last(jfst->fst_thread) );
 
-	// Get addresses of input buffers
-	for (i = 0; i < fst_num_ins(fst); ++i)
-		ins[i] = ( i < jfst->numIns ) ? (float*) jack_port_get_buffer(jfst->inports[i],nframes) : swap;
-
-	// Initialize output buffers
-	for (i = 0; i < fst_num_outs(fst); ++i) {
-		if ( i < jfst->numOuts ) {
-			// Get address
-			outs[i]  = (float*) jack_port_get_buffer (jfst->outports[i], nframes);
-	
-			// If bypassed then copy In's to Out's
-			if ( jfst->bypassed && i < jfst->numIns ) {
-				memcpy ( outs[i], ins[i], sizeof (float) * nframes );
-			// Zeroing output buffers
+		// Setup input buffers
+		float** ins  = fst_get_ports( afst, FST_PORT_IN );
+		memset ( swap_in,  0, channel_size );
+		int32_t ch;
+		for (ch = 0; ch < fst_num_ins(afst); ++ch) {
+			if ( first_fst ) {
+				ins[ch] = ( ch < jfst->numIns )
+				       ? (float*) jack_port_get_buffer(jfst->inports[ch],nframes)
+				       : swap_in;
 			} else {
-				memset ( outs[i], 0, sizeof (float) * nframes );
+				/* TODO Previous plugin mono ?? */
+				ins[ch] = ( ch < MIX_CHANNELS )
+				       ? jfst->mix_buffer[mbn][ch]
+				       : swap_in;
 			}
-		} else {
-			outs[i] = swap;
 		}
+
+		// Setup output buffers
+		float** outs = fst_get_ports( afst, FST_PORT_OUT );
+		memset ( swap_out, 0, channel_size );
+		mbn++;
+		if ( mbn >= 2 ) mbn = 0;
+		for (ch = 0; ch < fst_num_outs(afst); ++ch) {
+			if ( last_fst ) {
+				if ( ch < jfst->numOuts ) {
+					outs[ch]  = (float*) jack_port_get_buffer (jfst->outports[ch], nframes);
+	
+					// If bypassed then copy In's to Out's
+//					if ( jfst->bypassed && ch < jfst->numIns ) {
+//						memcpy ( outs[ch], ins[ch], sizeof (float) * nframes );
+					// Zeroing output buffers
+//					} else {
+//						memset ( outs[ch], 0, sizeof (float) * nframes );
+//					}
+//
+				} else {
+					outs[ch] = swap_out;
+				}
+			} else {
+				memset ( jfst->mix_buffer[mbn][ch], 0, channel_size );
+				outs[ch] = ( ch < MIX_CHANNELS )
+					? jfst->mix_buffer[mbn][ch]
+					: swap_out;
+			}
+		}
+
+		// Bypass - because all audio jobs are done  - simply return
+//		if (jfst->bypassed) continue;
+
+		// Deal with plugin
+		fst_process( afst, ins, outs, nframes );
 	}
 
-	// Bypass - because all audio jobs are done  - simply return
-	if (jfst->bypassed) goto midi_out;
-
-	// Deal with plugin
-	fst_process( fst, ins, outs, nframes );
 #ifdef VUMETER
 	/* Compute output level for VU Meter */
 	float avg_level = 0;
@@ -240,7 +270,7 @@ no_midi_in: ;
 	jfst->out_level = avg_level * 100;
 	if (jfst->out_level > 100) jfst->out_level = 100;
 #endif
-	jfst_apply_volume ( jfst, nframes, outs );
+//	jfst_apply_volume ( jfst, nframes, outs );
 
 midi_out:
 	// Process MIDI Output

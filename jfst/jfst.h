@@ -15,6 +15,8 @@
 #define JFST_STR_NO_CONNECT "!"
 #define CTRLAPP "FHControl"
 
+#define MIX_CHANNELS 2
+
 enum MidiPC {
 	MIDI_PC_SELF,
 	MIDI_PC_PLUG
@@ -94,6 +96,7 @@ typedef struct _JFST {
 	jack_port_t*	ctrl_outport;
 	jack_port_t**	inports;
 	jack_port_t**	outports;
+	float**		mix_buffer[2];
 	bool		bypassed;
 	bool		want_port_aliases;
 	bool		want_auto_midi_physical;
@@ -137,10 +140,10 @@ static inline void jfst_set_gui_resize_cb ( JFST* jfst, void (*f) ) {
 
 /* jfst.c */
 JFST_DEFAULTS* jfst_get_defaults();
-JFST* jfst_new( const char* appname );
+JFST* jfst_new( const char* appname, FST_THREAD* fst_th );
 bool jfst_init( JFST* jfst );
-bool jfst_load(JFST* jfst, const char* plug_spec, bool state_can_fail, FST_THREAD* fst_th);
-bool jfst_load_state(JFST* jfst, const char * filename);
+bool jfst_load(JFST* jfst, const char* plug_spec, bool state_can_fail );
+FST* jfst_load_state(JFST* jfst, const char * filename);
 bool jfst_save_state(JFST* jfst, const char * filename);
 bool jfst_session_callback( JFST* jfst, const char* appname );
 void jfst_close ( JFST* jfst );
