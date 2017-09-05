@@ -1,6 +1,7 @@
 #ifndef __fst_h__
 #define __fst_h__
 
+#include <stddef.h>
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -9,6 +10,10 @@
 
 /* VST standard (kVstMaxParamStrLen) says it is 8 bytes but some plugs use more characters */
 #define FST_MAX_PARAM_NAME 32
+
+#define FST_THREAD_FOREACH(iter,th) \
+	FST* iter = fst_thread_fst_first(th); \
+	for( ; iter; iter = fst_next( iter ) )
 
 /**
  * Display FST error message.
@@ -107,12 +112,15 @@ void fst_unlock ( FST* fst );
 void fst_set_thread_priority ( const char* th_name, int class, int priority );
 void fst_show_thread_info ( const char* th_name );
 FST_THREAD* fst_thread_new( const char* name, bool fake );
+FST* fst_thread_fst_first( FST_THREAD* th );
+FST* fst_thread_fst_last( FST_THREAD* th );
 
 FSTHandle* fst_load (const char * path );
 bool fst_unload (FSTHandle*);
 FST* fst_open (FSTHandle* fhandle, FST_THREAD* th);
 FST* fst_load_open ( const char* path, FST_THREAD* th );
 void fst_close (FST*);
+FST* fst_next( FST* fst );
 
 void fst_event_loop();
 bool fst_event_callback();
@@ -132,6 +140,8 @@ bool fst_show_editor (FST *fst);
 
 void fst_set_chunk(FST* fst, enum FxFileType type, int size, void* chunk);
 int32_t fst_get_chunk(FST* fst, enum FxFileType type, void* chunk);
+
+float** fst_get_ports( FST* fst, FSTPortType type );
 
 /* Support for FXB/FXP files (fxb.c) */
 int fst_load_fxfile (FST *fst, const char *filename);

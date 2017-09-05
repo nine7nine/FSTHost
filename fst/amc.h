@@ -2,6 +2,7 @@
 #define __amc_h__
 
 #include <stdbool.h>
+#include "fst.h"
 #include "vestige/aeffectx.h"
 
 typedef struct AMC {
@@ -19,6 +20,7 @@ typedef struct AMC {
 	bool		(*UpdateDisplay)( struct AMC* );
 	bool		need_idle;
 	void*		user_ptr;
+	FST*		fst;
 } AMC;
 
 intptr_t VSTCALLBACK amc_callback ( AEffect*, int32_t, int32_t, intptr_t, void*, float );

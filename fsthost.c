@@ -25,6 +25,7 @@
 
 #include "log/log.h"
 #include "jfst/node.h"
+#include "fst/fst_int.h"
 #include "xmldb/info.h"
 
 #ifdef HAVE_GTK
@@ -125,8 +126,13 @@ bool fsthost_idle () {
 	if ( open_editor ) {
 		open_editor = false;
 		JFST_NODE* jn;
-		for ( jn = jfst_node_get_first(); jn; jn = jn->next )
-			fst_run_editor( jn->jfst->fst, false );
+		for ( jn = jfst_node_get_first(); jn; jn = jn->next ) {
+			FST* fst = jn->jfst->fst;
+			while ( fst ) {
+				fst_run_editor( fst, false );
+				fst = fst->next;
+			}
+		}
 	}
 
 	return true;
@@ -208,29 +214,36 @@ main_loop() {
 	}
 }
 
+static JFST_NODE*
+rack_new( FST_THREAD* fst_one_th ) {
+	FST_THREAD* fst_th = (fst_one_th) ? fst_one_th : fst_thread_new("GUI/Event (Sep)", false);
+
+	return jfst_node_new(APPNAME, fst_th);
+}
+
 static bool
-new_plugin( struct plugin* plug, FST_THREAD* fst_one_th ) {
-	JFST_NODE* jn = jfst_node_new(APPNAME);
+rack_init( JFST_NODE* jn ) {
+	// Init Jack
+	return jfst_init( jn->jfst );
+}
+
+static bool
+rack_add_plugin( JFST_NODE* jn, struct plugin* plug ) {
 	JFST* jfst = jn->jfst;
+	/* TODO: shared ??
 	jfst->default_state_file = plug->state;
 	jfst->uuid = (char*) plug->uuid;
 	jfst->client_name = (char*) plug->client_name;
-
-	FST_THREAD* fst_th = (fst_one_th) ? fst_one_th : fst_thread_new("GUI/Event (Sep)", false);
+	*/
 
 	if ( plug->path != NULL && !strcmp(plug->path,"-") )
 		plug->path = NULL;
 
 	/* Load plugin - in this thread or dedicated */
-	bool loaded = jfst_load ( jfst, plug->path, sigusr1_save_state, fst_th );
+	bool loaded = jfst_load ( jfst, plug->path, sigusr1_save_state );
 
 	/* Well .. Are we loaded plugin ? */
-	if (! loaded) return false;
-
-	// Init Jack
-	if ( ! jfst_init(jfst) )
-		return false;
-	return true;
+	return loaded;
 }
 
 int WINAPI
@@ -339,14 +352,16 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	}
 
 	/* Init JFST Nodes aka plugins */
+	JFST_NODE* rack = rack_new( fst_one_thread );
 	for ( pc = 0; pc < MAX_PLUGS; pc++ ) {
 		if ( ! plugins[pc].path && ! plugins[pc].state )
 			break;
 
-		if ( ! new_plugin(&plugins[pc],fst_one_thread) )
+		if ( ! rack_add_plugin(rack, &plugins[pc]) )
 			goto game_over;
 	}
 	if ( pc == 0 ) goto game_over; // no any plugin loaded
+	rack_init( rack );
 
 #ifdef HAVE_LASH
 	JFST_NODE* jnf = jfst_node_get_first();

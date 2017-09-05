@@ -52,6 +52,7 @@ bool fst_process_trylock ( FST* fst ) { return ( pthread_mutex_trylock ( &(fst->
 void fst_process_lock ( FST* fst ) { pthread_mutex_lock ( &(fst->process_lock) ); }
 void fst_process_unlock ( FST* fst ) { pthread_mutex_unlock ( &(fst->process_lock) ); }
 
+FST*	fst_next	( FST* fst ) { return fst->next; }
 int32_t	fst_num_params	( FST* fst ) { return fst->plugin->numParams; }
 int32_t	fst_num_presets	( FST* fst ) { return fst->plugin->numPrograms; }
 int32_t	fst_num_ins	( FST* fst ) { return fst->plugin->numInputs; }
@@ -60,15 +61,23 @@ int32_t	fst_uid 	( FST* fst ) { return fst->plugin->uniqueID; }
 int32_t	fst_version 	( FST* fst ) { return fst->plugin->version; }
 bool	fst_has_chunks	( FST* fst ) { return fst->plugin->flags & effFlagsProgramChunks; }
 bool	fst_has_window	( FST* fst ) { return fst->window; }
-int32_t	fst_max_port_name ( FST* fst ) { return kVstMaxLabelLen; }
-int	fst_width (FST* fst) { return fst->width; }
-int	fst_height (FST* fst) { return fst->height; }
-AMC*	fst_amc (FST* fst) { return &fst->amc; }
-void*	fst_xid (FST* fst) { return fst->xid; }
+int	fst_width	( FST* fst ) { return fst->width; }
+int	fst_height	( FST* fst ) { return fst->height; }
+AMC*	fst_amc		( FST* fst ) { return &fst->amc; }
+void*	fst_xid		( FST* fst ) { return fst->xid; }
 bool	fst_has_popup_editor ( FST* fst ) { return fst->editor_popup; }
+int32_t	fst_max_port_name ( FST* fst ) { return kVstMaxLabelLen; }
 
 const char* fst_name (FST* fst) { return fst->handle->name; }
 const char* fst_path (FST* fst) { return fst->handle->path; }
+
+float** fst_get_ports( FST* fst, FSTPortType type ) {
+	switch ( type ) {
+		case FST_PORT_IN:  return fst->inports;
+		case FST_PORT_OUT: return fst->outports;
+	}
+	return NULL; // Only for calm compiler
+}
 
 void fst_get_param_name ( FST* fst, int32_t param, char* name ) {
 	fst_call_dispatcher ( fst, effGetParamName, param, 0, (void*) name, 0 );
@@ -77,3 +86,16 @@ void fst_get_param_name ( FST* fst, int32_t param, char* name ) {
 bool fst_has_editor ( FST* fst ) {
 	return fst->plugin->flags & effFlagsHasEditor;
 }
+
+FST* fst_thread_fst_first( FST_THREAD* th ) {
+	return th->first;
+}
+
+FST* fst_thread_fst_last( FST_THREAD* th ) {
+	FST* fst = th->first;
+	while ( fst->next ) {
+		fst = fst->next;
+	}
+	return fst;
+}
+
