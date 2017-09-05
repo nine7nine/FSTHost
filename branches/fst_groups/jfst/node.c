@@ -7,9 +7,9 @@ JFST_NODE* jfst_node_get_first() {
 	return jfst_node_first;
 }
 
-JFST_NODE* jfst_node_new( const char* appname ) {
+JFST_NODE* jfst_node_new( const char* appname, FST_THREAD* fst_th ) {
 	JFST_NODE* n = calloc ( 1, sizeof(JFST_NODE) );
-	n->jfst = jfst_new( appname );
+	n->jfst = jfst_new( appname, fst_th );
 
 	/* Link to list */
 	if ( jfst_node_first ) {

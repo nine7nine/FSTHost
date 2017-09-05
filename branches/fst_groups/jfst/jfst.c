@@ -12,7 +12,7 @@ extern bool fps_save(JFST* jfst, const char* filename);
 extern bool fps_load(JFST* jfst, const char* filename);
 
 /* jackamc.c */
-extern void jfstamc_init ( JFST* jfst );
+extern void jfstamc_init ( JFST* jfst, FST* fst );
 
 /* sysex.c */
 extern void jfst_sysex_init ( JFST* jfst );
@@ -42,7 +42,7 @@ JFST_DEFAULTS* jfst_get_defaults() {
 	return &def;
 }
 
-JFST* jfst_new( const char* appname ) {
+JFST* jfst_new( const char* appname, FST_THREAD* fst_th ) {
 	JFST* jfst = calloc (1, sizeof (JFST));
 
 	jfst->appname = appname;
@@ -52,6 +52,7 @@ JFST* jfst_new( const char* appname ) {
 
 	event_queue_init ( &jfst->event_queue );
 
+	jfst->fst_thread = fst_th;
 	jfst->want_port_aliases = def.want_port_aliases;
 	jfst->bypassed = def.bypassed;
 	jfst->dbinfo_file = (char*) def.dbinfo_file;
@@ -163,8 +164,9 @@ bool jfst_init( JFST* jfst ) {
 	if (!jfst->client_name) jfst->client_name = fst_name(fst);
 
 	// Jack Audio
-	jfst->numIns = (max_in >= 0 && max_in < fst_num_ins(fst)) ? max_in : fst_num_ins(fst);
-	jfst->numOuts = (max_out >= 0 && max_out < fst_num_outs(fst)) ? max_out : fst_num_outs(fst);
+//	jfst->numIns = (max_in >= 0 && max_in < fst_num_ins(fst)) ? max_in : fst_num_ins(fst);
+//	jfst->numOuts = (max_out >= 0 && max_out < fst_num_outs(fst)) ? max_out : fst_num_outs(fst);
+	jfst->numIns = jfst->numOuts = 2;
 	log_info("Port Layout (FSTHost/plugin) IN: %d/%d OUT: %d/%d", 
 		jfst->numIns, fst_num_ins(fst), jfst->numOuts, fst_num_outs(fst));
 
@@ -181,11 +183,31 @@ bool jfst_init( JFST* jfst ) {
 	// - if jack didn't call buffer/sample callback yet
 	fst_configure( fst, jfst->sample_rate, jfst->buffer_size );
 
+	/* TODO move to separate func and re-setup in callback */
+	size_t channel_size = sizeof(float) * jfst->buffer_size;
+	size_t header_size = sizeof(float*) * MIX_CHANNELS;
+	size_t data_size = channel_size * MIX_CHANNELS;
+	size_t buffer_size = header_size + data_size;
+	uint8_t b;
+	for ( b = 0; b < 2; b++ ) {
+		float** buffer = malloc( buffer_size );
+		mlock( buffer, buffer_size );
+		float* data_addr = (float*)buffer + header_size;
+		uint8_t ch;
+		for ( ch=0; ch < MIX_CHANNELS; ch++ ) {
+			float* channel_addr = data_addr + ch * channel_size;
+			buffer[ch] = channel_addr;
+		}
+		jfst->mix_buffer[b] = buffer;
+	}
+
 	jfst_sysex_gen_random_id ( jfst );
 
 	// Activate plugin
-	if (! jfst->bypassed)
-		fst_call ( jfst->fst, RESUME );
+	if (! jfst->bypassed) {
+		FST_THREAD_FOREACH( fst, jfst->fst_thread )
+			fst_call ( fst, RESUME );
+	}
 
 	log_info( "Jack Activate" );
 	jack_activate(jfst->client);
@@ -199,6 +221,7 @@ bool jfst_init( JFST* jfst ) {
 	return true;
 }
 
+/* Fix unload */
 void jfst_close ( JFST* jfst ) {
 	log_info( "Jack Close (%s)", jfst->client_name );
 	if ( jfst->client ) {
@@ -207,11 +230,19 @@ void jfst_close ( JFST* jfst ) {
 		jack_client_close ( jfst->client );
 	}
 
-	if ( jfst->fst ) {
-		fst_close(jfst->fst);
-		free ( jfst->inports );
-		free ( jfst->outports );
+	while ( true ) {
+		FST* fst = fst_thread_fst_first(jfst->fst_thread);
+		if ( ! fst ) break;
+
+		fst_close(fst);
 	}
+
+	free ( jfst->inports );
+	free ( jfst->outports );
+
+	uint8_t b;
+	for ( b = 0; b < 2; b++ )
+		free( jfst->mix_buffer[b] );
 
 	// Cleanup
 	midi_filter_cleanup( &jfst->filters, true );
@@ -251,9 +282,11 @@ bool jfst_session_handler( JFST* jfst, jack_session_event_t* event ) {
 void jfst_bypass(JFST* jfst, bool bypass) {
 	if ( bypass && !jfst->bypassed ) {
 		jfst->bypassed = true;
-		fst_call ( jfst->fst, SUSPEND );
+		FST_THREAD_FOREACH( fst, jfst->fst_thread )
+			fst_call ( fst, SUSPEND );
 	} else if ( !bypass && jfst->bypassed ) {
-		fst_call ( jfst->fst, RESUME );
+		FST_THREAD_FOREACH( fst, jfst->fst_thread )
+			fst_call ( fst, RESUME );
 		jfst->bypassed = false;
 	}
 }
@@ -304,26 +337,30 @@ Changes jfst_detect_changes( JFST* jfst, ChangesLast* L ) {
 }
 
 /* plug_spec could be path, dll name or eff/plug name */
-bool jfst_load (JFST* jfst, const char* plug_spec, bool state_can_fail, FST_THREAD* fst_th) {
+bool jfst_load (JFST* jfst, const char* plug_spec, bool state_can_fail) {
 	log_info( "yo... lets see..." );
 
-	jfst->fst_thread = fst_th;
-
 	/* Try load directly */
+	FST* fst = NULL;
 	if ( plug_spec )
-		jfst->fst = fst_info_load_open( jfst->dbinfo_file, plug_spec, jfst->fst_thread );
+		fst = fst_info_load_open( jfst->dbinfo_file, plug_spec, jfst->fst_thread );
 
 	/* load state if requested - state file may contain plugin path
 	   NOTE: it can call jfst_load */
 	if ( jfst->default_state_file) {
-		bool state_loaded = jfst_load_state(jfst, NULL);
-		if ( ! state_can_fail && ! state_loaded )
+		fst = jfst_load_state(jfst, NULL);
+		if ( ! state_can_fail && ! fst )
 			return false;
 	}
-	if ( ! jfst->fst ) return false;
+	if ( ! fst ) return false;
+
+	/* TODO - if first */
+	if ( ! jfst->fst ) {
+		jfst->fst = fst;
+	}
 
 	/* bind Jack to Audio Master Callback */
-	jfstamc_init ( jfst );
+	jfstamc_init ( jfst, fst );
 
 	return true;
 }
@@ -347,7 +384,8 @@ static JFST_FileType get_file_type ( const char * filename ) {
 	return JFST_FILE_TYPE_UNKNOWN;
 }
 
-bool jfst_load_state (JFST* jfst, const char* filename) {
+FST* jfst_load_state (JFST* jfst, const char* filename) {
+	FST* fst = NULL;
 	bool success = false;
 
 	if ( ! filename ) {
@@ -367,10 +405,10 @@ bool jfst_load_state (JFST* jfst, const char* filename) {
 		if ( uuid ) {
 			char s_uuid[16];
 			snprintf(s_uuid, sizeof(s_uuid), "%d", uuid);
-			jfst->fst = fst_info_load_open( jfst->dbinfo_file, s_uuid, jfst->fst_thread );
+			fst = fst_info_load_open( jfst->dbinfo_file, s_uuid, jfst->fst_thread );
 		}
-		if (! jfst->fst) break;
-		success = fst_load_fxfile (jfst->fst, filename);
+		if (! fst) break;
+		success = fst_load_fxfile (fst, filename);
 		break;
 
 	case JFST_FILE_TYPE_UNKNOWN:;
@@ -382,7 +420,7 @@ bool jfst_load_state (JFST* jfst, const char* filename) {
 		log_error("Unable to load file %s", filename);
 	}
 
-	return success;
+	return fst;
 }
 
 bool jfst_save_state (JFST* jfst, const char * filename) {

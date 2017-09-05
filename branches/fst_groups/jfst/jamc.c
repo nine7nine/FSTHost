@@ -157,7 +157,7 @@ static intptr_t jfstamc_tempo ( AMC* amc, int32_t location ) {
 
 static void jfstamc_window_resize ( AMC* amc, int32_t width, int32_t height ) {
 	JFST* jfst = (JFST*) amc->user_ptr;
-	fst_editor_resize(jfst->fst, width, height);
+	fst_editor_resize(amc->fst, width, height);
 
 	/* Resize also GTK window in popup (embedded) mode */
 	if ( jfst->gui_resize )
@@ -166,12 +166,11 @@ static void jfstamc_window_resize ( AMC* amc, int32_t width, int32_t height ) {
 
 /* return true if editor is opened */
 static bool jfstamc_update_display ( AMC* amc ) {
-	JFST* jfst = (JFST*) amc->user_ptr;
-	return fst_has_window(jfst->fst);
+	return fst_has_window(amc->fst);
 }
 
-void jfstamc_init ( JFST* jfst ) {
-	AMC* amc		= fst_amc(jfst->fst);
+void jfstamc_init ( JFST* jfst, FST* fst ) {
+	AMC* amc		= fst_amc(fst);
 	amc->user_ptr		= jfst;
 	amc->Automate		= &jfstamc_automate;
 	amc->GetTime		= &jfstamc_get_time;
