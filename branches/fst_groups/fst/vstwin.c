@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <stdatomic.h>
 #include <sys/syscall.h>
+#include <sys/mman.h>
 #include <windows.h>
 
 #include "log/log.h"
@@ -30,6 +31,8 @@ fst_new () {
 	pthread_mutex_init (&(fst->event_call.lock), NULL);
 	pthread_cond_init (&(fst->event_call.called), NULL);
 //	fst->editor_popup = true;
+	fst->amc.fst = fst;
+	fst->inports = fst->outports = NULL;
 
 	return fst;
 }
@@ -481,6 +484,15 @@ FST* fst_open (FSTHandle* fhandle, FST_THREAD* th) {
 		return NULL;
 	}
 
+	// Allocate audio buffers ptr
+	size_t buffer_len = sizeof(float*) * fst->plugin->numInputs;
+	fst->inports  = malloc( buffer_len );
+	mlock( fst->inports, buffer_len );
+
+	buffer_len = sizeof(float*) * fst->plugin->numOutputs;
+	fst->outports = malloc( buffer_len );
+	mlock( fst->outports, buffer_len );
+
 	fst_call( fst, OPEN );
 
 	return fst;
@@ -510,11 +522,14 @@ FST* fst_load_open ( const char* path, FST_THREAD* th ) {
 }
 
 void fst_close (FST* fst) {
+	INF("Closing plugin");
 	fst_call ( fst, CLOSE );	
 	fst_thread_remove(fst);
 
 	fst_unload(fst->handle);
 	free(fst->name);
+	free(fst->inports);
+	free(fst->outports);
 	free(fst);
 }
 

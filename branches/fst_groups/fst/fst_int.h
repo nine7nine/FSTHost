@@ -122,6 +122,10 @@ struct FST {
 	bool			canReceiveVstMidiEvent;
 	bool			canSendVstEvents;
 	bool			canSendVstMidiEvent;
+
+	/* Audio buffers ptr */
+	float**			inports;
+	float**			outports;
 };
 
 intptr_t fst_call_dispatcher (FST *fst, int32_t opcode, int32_t index, intptr_t val, void *ptr, float opt );
