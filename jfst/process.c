@@ -227,8 +227,7 @@ no_midi_in: ;
 		// Setup output buffers
 		float** outs = fst_get_ports( afst, FST_PORT_OUT );
 		memset ( swap_out, 0, channel_size );
-		mbn++;
-		if ( mbn >= 2 ) mbn = 0;
+		if ( ++mbn >= 2 ) mbn = 0;
 		for (ch = 0; ch < fst_num_outs(afst); ++ch) {
 			if ( last_fst ) {
 				if ( ch < jfst->numOuts ) {
@@ -246,10 +245,12 @@ no_midi_in: ;
 					outs[ch] = swap_out;
 				}
 			} else {
-				memset ( jfst->mix_buffer[mbn][ch], 0, channel_size );
-				outs[ch] = ( ch < MIX_CHANNELS )
-					? jfst->mix_buffer[mbn][ch]
-					: swap_out;
+				if ( ch < MIX_CHANNELS ) {
+					memset ( jfst->mix_buffer[mbn][ch], 0, channel_size );
+					outs[ch] = jfst->mix_buffer[mbn][ch];
+				} else {
+					outs[ch] = swap_out;
+				}
 			}
 		}
 
