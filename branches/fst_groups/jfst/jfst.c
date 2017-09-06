@@ -155,6 +155,43 @@ static void jfst_idle( void* data ) {
 	}
 }
 
+static void jfst_mix_buffers_free( JFST* jfst ) {
+	uint8_t b;
+	for ( b = 0; b < 2; b++ ) {
+		uint8_t ch;
+		for ( ch=0; ch < MIX_CHANNELS; ch++ )
+			free( jfst->mix_buffer[b][ch] );
+
+		free( jfst->mix_buffer[b] );
+	}
+}
+
+static void jfst_mix_buffers_alloc( JFST* jfst ) {
+	size_t channel_size = jfst->buffer_size * sizeof(float);
+
+	uint8_t b;
+	for ( b = 0; b < 2; b++ ) {
+		float** buffer = calloc( MIX_CHANNELS, sizeof(float*) );
+
+		uint8_t ch;
+		for ( ch=0; ch < MIX_CHANNELS; ch++ )
+			buffer[ch] = malloc( channel_size );
+
+		jfst->mix_buffer[b] = buffer;
+	}
+}
+
+void jfst_mix_buffers_realloc( JFST* jfst ) {
+	size_t channel_size = jfst->buffer_size * sizeof(float);
+
+	uint8_t b;
+	for ( b = 0; b < 2; b++ ) {
+		uint8_t ch;
+		for ( ch=0; ch < MIX_CHANNELS; ch++ )
+			realloc( jfst->mix_buffer[b][ch], channel_size );
+	}
+}
+
 bool jfst_init( JFST* jfst ) {
 	FST* fst = jfst->fst;
 	int32_t max_in = def.maxIns;
@@ -183,23 +220,7 @@ bool jfst_init( JFST* jfst ) {
 	// - if jack didn't call buffer/sample callback yet
 	fst_configure( fst, jfst->sample_rate, jfst->buffer_size );
 
-	/* TODO move to separate func and re-setup in callback */
-	size_t channel_size = sizeof(float) * jfst->buffer_size;
-	size_t header_size = sizeof(float*) * MIX_CHANNELS;
-	size_t data_size = channel_size * MIX_CHANNELS;
-	size_t buffer_size = header_size + data_size;
-	uint8_t b;
-	for ( b = 0; b < 2; b++ ) {
-		float** buffer = malloc( buffer_size );
-		mlock( buffer, buffer_size );
-		float* data_addr = (float*)buffer + header_size;
-		uint8_t ch;
-		for ( ch=0; ch < MIX_CHANNELS; ch++ ) {
-			float* channel_addr = data_addr + ch * channel_size;
-			buffer[ch] = channel_addr;
-		}
-		jfst->mix_buffer[b] = buffer;
-	}
+	jfst_mix_buffers_alloc( jfst );
 
 	jfst_sysex_gen_random_id ( jfst );
 
@@ -240,9 +261,7 @@ void jfst_close ( JFST* jfst ) {
 	free ( jfst->inports );
 	free ( jfst->outports );
 
-	uint8_t b;
-	for ( b = 0; b < 2; b++ )
-		free( jfst->mix_buffer[b] );
+	jfst_mix_buffers_free(jfst);
 
 	// Cleanup
 	midi_filter_cleanup( &jfst->filters, true );
