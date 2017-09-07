@@ -168,30 +168,28 @@ static void jfst_mix_buffers_free( JFST* jfst ) {
 	}
 }
 
-static void jfst_mix_buffers_alloc( JFST* jfst ) {
+void jfst_mix_buffers_alloc_channels( JFST* jfst ) {
 	size_t channel_size = jfst->buffer_size * sizeof(float);
 
+	// NOTE: on first run buf[ch] will be NULL
+	//       realloc then is like malloc
 	uint8_t b;
 	for ( b = 0; b < 2; b++ ) {
-		float** buffer = calloc( MIX_CHANNELS, sizeof(float*) );
-
+		float** buf = jfst->mix_buffer[b];
 		uint8_t ch;
 		for ( ch=0; ch < MIX_CHANNELS; ch++ )
-			buffer[ch] = malloc( channel_size );
-
-		jfst->mix_buffer[b] = buffer;
+			buf[ch] = realloc( buf[ch], channel_size );
 	}
 }
 
-void jfst_mix_buffers_realloc( JFST* jfst ) {
-	size_t channel_size = jfst->buffer_size * sizeof(float);
 
+static void jfst_mix_buffers_alloc( JFST* jfst ) {
 	uint8_t b;
 	for ( b = 0; b < 2; b++ ) {
-		float** buff = jfst->mix_buffer[b];
-		uint8_t ch;
-		for ( ch=0; ch < MIX_CHANNELS; ch++ )
-			buff[ch] = realloc( buff[ch], channel_size );
+		float** buf = calloc( MIX_CHANNELS, sizeof(float*) );
+		jfst->mix_buffer[b] = buf;
+
+		jfst_mix_buffers_alloc_channels( jfst );
 	}
 }
 
