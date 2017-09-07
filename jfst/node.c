@@ -1,3 +1,4 @@
+#include <assert.h>
 #include "node.h"
 #include "log/log.h"
 
@@ -9,6 +10,8 @@ JFST_NODE* jfst_node_get_first() {
 
 JFST_NODE* jfst_node_new( const char* appname, FST_THREAD* fst_th ) {
 	JFST_NODE* n = calloc ( 1, sizeof(JFST_NODE) );
+	assert( n );
+
 	n->jfst = jfst_new( appname, fst_th );
 
 	/* Link to list */

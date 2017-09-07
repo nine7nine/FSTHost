@@ -399,8 +399,11 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 		open_editor = true;
 
 		JFST_NODE* jn;
-		for ( jn = jfst_node_get_first() ; jn; jn = jn->next )
-			fst_set_window_close_callback( jn->jfst->fst, edit_close_handler, jn->jfst );
+		for ( jn = jfst_node_get_first() ; jn; jn = jn->next ) {
+			/* FIXME: one closed window closing entire app ?? */
+			FST_THREAD_FOREACH( fst, jn->jfst->fst_thread )
+				fst_set_window_close_callback( fst, edit_close_handler, NULL );
+		}
 	}
 
 #ifdef HAVE_GTK

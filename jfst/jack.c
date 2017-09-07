@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <assert.h>
 #include <semaphore.h>
 #include <errno.h>
 #include <sys/mman.h>
@@ -164,6 +165,7 @@ void jfst_connect_to_ctrl_app(JFST* jfst) {
 
 static jack_port_t** jack_audio_port_init ( jack_client_t* client, const char* prefix, unsigned long flags, int32_t num ) {
 	jack_port_t** ports = malloc( sizeof(jack_port_t*) * num );
+	assert( ports );
 	mlock ( ports, sizeof(jack_port_t*) * num );
 
 	int32_t i;

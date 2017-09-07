@@ -1,4 +1,5 @@
 #include <math.h>
+#include <assert.h>
 #include "log/log.h"
 #include "jfst.h"
 
@@ -174,9 +175,11 @@ void jfst_process( JFST* jfst, jack_nframes_t nframes ) {
 	if ( num_jackevents > 2 )
 		size += (num_jackevents - 2) * sizeof(VstEvent*);
 	VstEvents* events = alloca ( size );
+	assert( events );
 
 	// VstEvents
 	VstMidiEvent* event_array = alloca ( num_jackevents * sizeof(VstMidiEvent) );
+	assert( event_array );
 	memset ( event_array, 0, num_jackevents * sizeof(VstMidiEvent) );
 
 	events->numEvents = 0;

@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <assert.h>
 #include <string.h>
 #include <libgen.h>
 #include <limits.h>
@@ -143,6 +144,8 @@ have_dll: ;
 
 	FSTHandle* fhandle;
 	fhandle = malloc(sizeof(FSTHandle));
+	assert( fhandle );
+
 	fhandle->dll = dll;
 	fhandle->main_entry = main_entry;
 	fhandle->path = fullpath;
@@ -487,10 +490,14 @@ FST* fst_open (FSTHandle* fhandle, FST_THREAD* th) {
 	// Allocate audio buffers ptr
 	size_t buffer_len = sizeof(float*) * fst->plugin->numInputs;
 	fst->inports  = malloc( buffer_len );
+	assert( fst->inports );
+
 	mlock( fst->inports, buffer_len );
 
 	buffer_len = sizeof(float*) * fst->plugin->numOutputs;
 	fst->outports = malloc( buffer_len );
+	assert( fst->outports );
+
 	mlock( fst->outports, buffer_len );
 
 	fst_call( fst, OPEN );
@@ -792,14 +799,12 @@ fst_event_thread ( LPVOID lpParam ) {
 
 FST_THREAD* fst_thread_new( const char* name, bool fake ) {
 	FST_THREAD* th = malloc( sizeof(FST_THREAD) );
-	if ( ! th ) {
-		ERR ( "Can't create thread (1)" );
-		return NULL;
-	}
+	assert( th );
 
 	pthread_mutex_init (&th->lock, NULL);
 	th->fake = fake;
 	th->first = NULL;
+	th->idle_cb = NULL;
 	snprintf( th->name, sizeof(th->name), "%s", name );
 
 	if ( fake ) {
@@ -811,7 +816,7 @@ FST_THREAD* fst_thread_new( const char* name, bool fake ) {
 	
 	if ( ! th->handle ) {
 		free(th);
-		ERR ( "Can't create thread (2)" );
+		ERR ( "Can't create thread" );
 		return NULL;
 	}
 

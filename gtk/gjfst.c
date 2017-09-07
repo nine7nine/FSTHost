@@ -1,4 +1,5 @@
 #include <gtk/gtk.h>
+#include <assert.h>
 #include <strings.h>
 
 #if (GTK_MAJOR_VERSION < 3)
@@ -271,6 +272,7 @@ filter_addrow(GtkWidget* vpacker, MIDIFILTER **filters, MIDIFILTER *filter) {
 
 	GtkWidget* button_remove = gtk_button_new_from_stock(GTK_STOCK_DELETE);
 	struct RemoveFilterData* rbd = malloc( sizeof (struct RemoveFilterData) );
+	assert( rbd );
 	rbd->filters = filters;
 	rbd->toRemove = filter;
 	rbd->hpacker = hpacker;
@@ -433,6 +435,7 @@ save_handler (GtkToggleButton *but, gpointer ptr) {
 		selected = gtk_file_chooser_get_filename (GTK_FILE_CHOOSER(dialog));
 
 		filename = alloca (strlen (selected) + 5);
+		assert( filename );
 		strcpy (filename, selected);
 
 		last4 = selected + strlen(selected) - 4;
@@ -803,6 +806,8 @@ make_img_button(const gchar *stock_id, const gchar *tooltip, bool toggle,
 
 static GJFST* gjfst_new ( JFST* jfst ) {
 	GJFST* gjfst = malloc ( sizeof(GJFST) );
+	assert( gjfst );
+
 	gjfst->jfst = jfst;
 	jfst->user_ptr = gjfst;
 
