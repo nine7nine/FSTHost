@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <assert.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <limits.h>
@@ -44,6 +45,7 @@ JFST_DEFAULTS* jfst_get_defaults() {
 
 JFST* jfst_new( const char* appname, FST_THREAD* fst_th ) {
 	JFST* jfst = calloc (1, sizeof (JFST));
+	assert( jfst );
 
 	jfst->appname = appname;
 
@@ -177,8 +179,10 @@ void jfst_mix_buffers_alloc_channels( JFST* jfst ) {
 	for ( b = 0; b < 2; b++ ) {
 		float** buf = jfst->mix_buffer[b];
 		uint8_t ch;
-		for ( ch=0; ch < MIX_CHANNELS; ch++ )
+		for ( ch=0; ch < MIX_CHANNELS; ch++ ) {
 			buf[ch] = realloc( buf[ch], channel_size );
+			assert( buf[ch] );
+		}
 	}
 }
 
@@ -186,11 +190,11 @@ void jfst_mix_buffers_alloc_channels( JFST* jfst ) {
 static void jfst_mix_buffers_alloc( JFST* jfst ) {
 	uint8_t b;
 	for ( b = 0; b < 2; b++ ) {
-		float** buf = calloc( MIX_CHANNELS, sizeof(float*) );
-		jfst->mix_buffer[b] = buf;
-
-		jfst_mix_buffers_alloc_channels( jfst );
+		jfst->mix_buffer[b] = calloc( MIX_CHANNELS, sizeof(float*) );
+		assert( jfst->mix_buffer[b] );
 	}
+
+	jfst_mix_buffers_alloc_channels( jfst );
 }
 
 bool jfst_init( JFST* jfst ) {
