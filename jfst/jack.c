@@ -17,7 +17,7 @@
 extern bool jfst_sysex_jack_init ( JFST* jfst );
 
 /* jfst */
-extern void jfst_mix_buffers_realloc( JFST* jfst );
+extern void jfst_mix_buffers_alloc_channels( JFST* jfst );
 
 void jfst_set_volume(JFST* jfst, short volume) {
 	if (jfst->volume != -1) jfst->volume = powf(volume / 63.0f, 2);
@@ -195,7 +195,7 @@ static int process_callback ( jack_nframes_t nframes, void* data) {
 static int buffer_size_callback( jack_nframes_t new_buf_size, void *arg ) {
 	JFST* jfst = (JFST*) arg;
 	jfst->buffer_size = new_buf_size;
-	jfst_mix_buffers_realloc( jfst );
+	jfst_mix_buffers_alloc_channels( jfst );
 	fst_configure( jfst->fst, jfst->sample_rate, jfst->buffer_size );
 	return 0;
 }
