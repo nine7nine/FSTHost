@@ -75,12 +75,16 @@ typedef struct {
 } FSTEventCall;
 
 struct FST_THREAD {
-	char name[24];
-	HANDLE handle;
-	DWORD id;
-	bool fake;
-	pthread_mutex_t	lock;
-	FST* first;
+	char			name[24];
+	HANDLE			handle;
+	DWORD			id;
+	bool			fake;
+	pthread_mutex_t		lock;
+	FST*			first;
+
+	/* Idle Callback */
+	FSTIdleCallback		idle_cb;
+	void*			idle_cb_data;
 };
 
 struct FST {
@@ -108,10 +112,6 @@ struct FST {
 	/* Window Close Callback */
 	FSTWindowCloseCallback	window_close_cb;
 	void*			window_close_cb_data;
-
-	/* Idle Callback */
-	FSTIdleCallback		idle_cb;
-	void*			idle_cb_data;
 
 	int32_t			current_program;
 

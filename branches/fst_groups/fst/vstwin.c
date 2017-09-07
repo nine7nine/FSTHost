@@ -725,19 +725,10 @@ void fst_show_thread_info ( const char* th_name ) {
 	);
 }
 
-void fst_set_thread_priority ( const char* th_name, int class, int priority ) {
-	HANDLE* h_thread = GetCurrentThread ();
-	SetPriorityClass ( h_thread, class );
-	SetThreadPriority ( h_thread, priority );
-	fst_show_thread_info ( th_name );
-}
-
-void fst_set_idle_callback ( FST* fst, FSTIdleCallback f, void* ptr ) {
-	// Lock thread for sure
-	pthread_mutex_lock (&fst->thread->lock);
-	fst->idle_cb = f;
-	fst->idle_cb_data = ptr;
-	pthread_mutex_unlock (&fst->thread->lock);
+void fst_thread_set_priority ( FST_THREAD* th, int class, int priority ) {
+	SetPriorityClass ( th->handle, class );
+	SetThreadPriority ( th->handle, priority );
+	fst_show_thread_info ( th->name );
 }
 
 static void fst_event_dispatcher(FST_THREAD* th) {
@@ -745,8 +736,8 @@ static void fst_event_dispatcher(FST_THREAD* th) {
 	FST* fst;
 	for (fst = th->first; fst; fst = fst->next) {
 		if ( fst->opened ) {
-			if ( fst->idle_cb )
-				fst->idle_cb( fst->idle_cb_data );
+			if ( th->idle_cb )
+				th->idle_cb( th->idle_cb_data );
 
 			fst_plugin_idle ( fst );
 			fst_update_current_program ( fst );
@@ -762,11 +753,19 @@ static void fst_event_dispatcher(FST_THREAD* th) {
 	pthread_mutex_unlock (&th->lock);
 }
 
+void fst_thread_set_idle_callback ( FST_THREAD* th, FSTIdleCallback f, void* ptr ) {
+	// Lock thread for sure
+	pthread_mutex_lock (&th->lock);
+	th->idle_cb = f;
+	th->idle_cb_data = ptr;
+	pthread_mutex_unlock (&th->lock);
+}
+
 static DWORD WINAPI
 fst_event_thread ( LPVOID lpParam ) {
 	FST_THREAD* th = (FST_THREAD*) lpParam;
 
-	fst_set_thread_priority ( th->name, ABOVE_NORMAL_PRIORITY_CLASS, THREAD_PRIORITY_ABOVE_NORMAL );
+	fst_thread_set_priority ( th, ABOVE_NORMAL_PRIORITY_CLASS, THREAD_PRIORITY_ABOVE_NORMAL );
 
 	register_window_class();
 
