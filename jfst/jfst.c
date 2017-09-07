@@ -117,6 +117,7 @@ static void jfst_idle( void* data ) {
 			jfst_bypass( jfst, ev->value );
 			break;
 		case EVENT_PC:
+			/* TODO change rack program */
 			// Self Program change support
 			if (jfst->midi_pc == MIDI_PC_SELF)
 				fst_set_program(jfst->fst, ev->value);
@@ -136,6 +137,7 @@ static void jfst_idle( void* data ) {
 		}
 	}
 
+	/* TODO multiple fst support */
 	// MIDI learn support
 	MidiLearn* ml = &jfst->midi_learn;
 	if ( ml->wait && ml->cc >= 0 && ml->param >= 0 ) {
@@ -186,28 +188,29 @@ void jfst_mix_buffers_realloc( JFST* jfst ) {
 
 	uint8_t b;
 	for ( b = 0; b < 2; b++ ) {
+		float** buff = jfst->mix_buffer[b];
 		uint8_t ch;
 		for ( ch=0; ch < MIX_CHANNELS; ch++ )
-			realloc( jfst->mix_buffer[b][ch], channel_size );
+			buff[ch] = realloc( buff[ch], channel_size );
 	}
 }
 
 bool jfst_init( JFST* jfst ) {
-	FST* fst = jfst->fst;
 	int32_t max_in = def.maxIns;
 	int32_t max_out = def.maxOuts;
 
 	// Set client name (if user did not provide own)
-	if (!jfst->client_name) jfst->client_name = fst_name(fst);
+	if (!jfst->client_name) jfst->client_name = fst_name(jfst->fst);
 
 	// Jack Audio
 //	jfst->numIns = (max_in >= 0 && max_in < fst_num_ins(fst)) ? max_in : fst_num_ins(fst);
 //	jfst->numOuts = (max_out >= 0 && max_out < fst_num_outs(fst)) ? max_out : fst_num_outs(fst);
 	jfst->numIns = jfst->numOuts = 2;
 	log_info("Port Layout (FSTHost/plugin) IN: %d/%d OUT: %d/%d", 
-		jfst->numIns, fst_num_ins(fst), jfst->numOuts, fst_num_outs(fst));
+		jfst->numIns, fst_num_ins(jfst->fst), jfst->numOuts, fst_num_outs(jfst->fst));
 
-	bool want_midi_out = fst_want_midi_out ( jfst->fst );
+	FST* fst_last = fst_thread_fst_last( jfst->fst_thread );
+	bool want_midi_out = fst_want_midi_out ( fst_last );
 	if ( ! jfst_jack_init ( jfst, want_midi_out ) ) return false;
 
 	// Port aliases
@@ -218,7 +221,8 @@ bool jfst_init( JFST* jfst ) {
 
 	// Set block size / sample rate
 	// - if jack didn't call buffer/sample callback yet
-	fst_configure( fst, jfst->sample_rate, jfst->buffer_size );
+	FST_THREAD_FOREACH( fst, jfst->fst_thread )
+		fst_configure( fst, jfst->sample_rate, jfst->buffer_size );
 
 	jfst_mix_buffers_alloc( jfst );
 
@@ -236,8 +240,8 @@ bool jfst_init( JFST* jfst ) {
 	// Autoconnect AUDIO on start
 	jfst_connect_audio(jfst, def.connect_to);
 
-	/* Set jfst_idle to call from plugin thread */
-	fst_set_idle_callback( jfst->fst, jfst_idle, jfst );
+	/* Call jfst_idle from plugin thread */
+	fst_thread_set_idle_callback( jfst->fst_thread, jfst_idle, jfst );
 
 	return true;
 }
@@ -246,7 +250,7 @@ bool jfst_init( JFST* jfst ) {
 void jfst_close ( JFST* jfst ) {
 	log_info( "Jack Close (%s)", jfst->client_name );
 	if ( jfst->client ) {
-		fst_set_idle_callback( jfst->fst, NULL, NULL );
+		fst_thread_set_idle_callback( jfst->fst_thread, NULL, NULL );
 		jack_deactivate ( jfst->client );
 		jack_client_close ( jfst->client );
 	}
@@ -418,8 +422,7 @@ FST* jfst_load_state (JFST* jfst, const char* filename) {
 		break;
 
 	case JFST_FILE_TYPE_FXP:
-	case JFST_FILE_TYPE_FXB:
-		;
+	case JFST_FILE_TYPE_FXB: ;
 		int32_t uuid = fst_get_fxfile_uuid( filename );
 		if ( uuid ) {
 			char s_uuid[16];

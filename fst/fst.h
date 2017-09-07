@@ -109,7 +109,8 @@ void fst_error (const char *fmt, ...);
 void fst_lock ( FST* fst );
 void fst_unlock ( FST* fst );
 
-void fst_set_thread_priority ( const char* th_name, int class, int priority );
+void fst_thread_set_priority ( FST_THREAD* th, int class, int priority );
+void fst_thread_set_idle_callback ( FST_THREAD* fst, FSTIdleCallback f, void* ptr );
 void fst_show_thread_info ( const char* th_name );
 FST_THREAD* fst_thread_new( const char* name, bool fake );
 FST* fst_thread_fst_first( FST_THREAD* th );
@@ -124,7 +125,6 @@ FST* fst_next( FST* fst );
 
 void fst_event_loop();
 bool fst_event_callback();
-void fst_set_idle_callback ( FST* fst, FSTIdleCallback f, void* ptr );
 
 void fst_call (FST *fst, FSTEventTypes type);
 void fst_set_program (FST *fst, int32_t program);

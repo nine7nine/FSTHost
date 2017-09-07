@@ -376,9 +376,10 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	}
 } /* end of "parse" scope */
 
-	// Set Thread policy - usefull only with WineRT/LPA patch
-	//fst_set_thread_priority ( "Main", REALTIME_PRIORITY_CLASS, THREAD_PRIORITY_TIME_CRITICAL );
-	fst_set_thread_priority ( "Main", ABOVE_NORMAL_PRIORITY_CLASS, THREAD_PRIORITY_ABOVE_NORMAL );
+	// Do we need this for Main ??
+	// Set Thread policy - usefull only with Wine-staging
+	//fst_thread_set_priority ( "Main", REALTIME_PRIORITY_CLASS, THREAD_PRIORITY_TIME_CRITICAL );
+	//fst_thread_set_priority ( "Main", ABOVE_NORMAL_PRIORITY_CLASS, THREAD_PRIORITY_ABOVE_NORMAL );
 
 	// Handling signals
 	struct sigaction sa;
