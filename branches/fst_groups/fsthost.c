@@ -127,11 +127,8 @@ bool fsthost_idle () {
 		open_editor = false;
 		JFST_NODE* jn;
 		for ( jn = jfst_node_get_first(); jn; jn = jn->next ) {
-			FST* fst = jn->jfst->fst;
-			while ( fst ) {
+			FST_THREAD_FOREACH( fst, jn->jfst->fst_thread )
 				fst_run_editor( fst, false );
-				fst = fst->next;
-			}
 		}
 	}
 
