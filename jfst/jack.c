@@ -198,14 +198,16 @@ static int buffer_size_callback( jack_nframes_t new_buf_size, void *arg ) {
 	JFST* jfst = (JFST*) arg;
 	jfst->buffer_size = new_buf_size;
 	jfst_mix_buffers_alloc_channels( jfst );
-	fst_configure( jfst->fst, jfst->sample_rate, jfst->buffer_size );
+	FST_THREAD_FOREACH( fst, jfst->fst_thread )
+		fst_configure( fst, jfst->sample_rate, jfst->buffer_size );
 	return 0;
 }
 
 static int srate_callback ( jack_nframes_t new_srate, void *arg ) {
 	JFST* jfst = (JFST*) arg;
 	jfst->sample_rate = new_srate;
-	fst_configure( jfst->fst, jfst->sample_rate, jfst->buffer_size );
+	FST_THREAD_FOREACH( fst, jfst->fst_thread )
+		fst_configure( fst, jfst->sample_rate, jfst->buffer_size );
 	return 0;
 }
 
