@@ -85,23 +85,26 @@ JFST* jfst_new( const char* appname, FST_THREAD* fst_th ) {
 static void jfst_set_aliases ( JFST* jfst, FSTPortType type ) {
 	int32_t count;
 	jack_port_t** ports;
+	FST* fst;
 	switch ( type ) {
 	case FST_PORT_IN:
 		count = jfst->numIns;
 		ports = jfst->inports;
+		fst   = fst_thread_fst_first( jfst->fst_thread );
 		break;
 	case FST_PORT_OUT:
 		count = jfst->numOuts;
 		ports = jfst->outports;
+		fst   = fst_thread_fst_last( jfst->fst_thread );
 		break;
 	default: return;
 	}
 
 	// Set port alias
-	char name[ fst_max_port_name(jfst->fst) ];
+	char name[ fst_max_port_name(fst) ];
 	int32_t i;
 	for ( i=0; i < count; i++ )
-		if ( fst_get_port_name ( jfst->fst, i, type, name ) )
+		if ( fst_get_port_name ( fst, i, type, name ) )
 			jack_port_set_alias ( ports[i], name );
 }
 
