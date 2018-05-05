@@ -5,7 +5,10 @@
 #include <jack/jack.h>
 #include <jack/midiport.h>
 #include <jack/thread.h>
+#include <windows.h>
+#include "vestige/aeffectx.h"
 
+#include "log/log.h"
 #include "fst/fst.h"
 #include "xmldb/info.h"
 
@@ -235,7 +238,7 @@ WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR cmdline, int cmdshow) {
 	int loaded = 0;
 	int fst_count = argc - 1;
 	for ( i=0; i < fst_count; i++ ) {
-		fst[i] = fst_info_load_open ( NULL, argv[i+1] );
+		fst[i] = fst_info_load_open ( NULL, argv[i+1], NULL );
 		if (! fst[i]) goto exit;
 
 		fst_run_editor(fst[i], false);
