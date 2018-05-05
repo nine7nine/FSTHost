@@ -21,7 +21,7 @@ BIN_INST_PATH         =
 
 ### multi.exe sources and settings
 multi_MODULE        = fsthost_multi
-multi_C_SRCS        = $(wildcard fst/*.c) $(wildcard xmldb/*.c) unused/multi.c
+multi_C_SRCS        = $(wildcard log/*.c) $(wildcard fst/*.c) $(wildcard xmldb/*.c) unused/multi.c
 multi_LDFLAGS       = -m32 -mwindows $(shell pkg-config --libs libxml-2.0 jack)
 multi_DLL_PATH      =
 multi_DLLS          = 

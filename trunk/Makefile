@@ -66,7 +66,7 @@ ICONDIR            := $(PREFIX)/share/icons/hicolor/32x32/apps
 LIBDIR32           := $(PREFIX)/lib/i386-linux-gnu
 LIBDIR64           := $(PREFIX)/lib/x86_64-linux-gnu
 BINDIR             := $(PREFIX)/bin
-LIBDIR_WINE       = $(LIBDIR)/wine
+LIBDIR_WINE         = $(LIBDIR)/wine
 
 # Platform specific GCC flags
 CEXTRA32           := -m32
