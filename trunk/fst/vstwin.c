@@ -454,8 +454,8 @@ void fst_get_program_name (FST *fst, int32_t program, char* name, size_t size) {
 }
 
 bool fst_set_program_name (FST *fst, const char* name) {
-	char nname[kVstMaxProgNameLen];
-	strncpy ( nname, name, sizeof ( nname ) );
+	char nname[kVstMaxProgNameLen + 1];
+	strncpy ( nname, name, sizeof(nname) - 1 );
 	valid_program_name ( nname, sizeof nname );
 
 	fst_call_dispatcher(fst, effSetProgramName, 0, 0, nname, 0.0f);
